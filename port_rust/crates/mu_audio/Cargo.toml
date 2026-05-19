@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+bevy = { workspace = true }
 camino.workspace = true
 mu_gameplay = { path = "../mu_gameplay" }
 mu_assets = { path = "../mu_assets" }

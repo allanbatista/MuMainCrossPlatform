@@ -1177,6 +1177,7 @@ dependencies = [
 name = "mu_audio"
 version = "0.1.0"
 dependencies = [
+ "bevy",
  "camino",
  "mu_assets",
  "mu_gameplay",

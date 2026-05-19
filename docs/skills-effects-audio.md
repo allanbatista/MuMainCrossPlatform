@@ -28,11 +28,16 @@ presentation cues used by the gameplay layer.
   pure events for render/audio consumers.
 - `SkillEffectCue::None` and `SkillAudioCue::None` are ignored by the queues.
 
+## Runtime Wrapper
+
+- `mu_audio::AudioRuntime` loads validated converted audio assets, keeps the
+  persisted volume settings, and drains queued skill-audio events into a
+  runtime-ready diagnostics snapshot.
+
 ## Rust Code Locations
 
 - `port_rust/crates/mu_gameplay/src/skills.rs`
 - `port_rust/crates/mu_gameplay/src/lib.rs`
 - `port_rust/crates/mu_render/src/effects.rs`
 - `port_rust/crates/mu_render/src/lib.rs`
-- `port_rust/crates/mu_audio/src/events.rs`
-- `port_rust/crates/mu_audio/src/lib.rs`
+- `port_rust/crates/mu_audio/src/{diagnostics.rs,events.rs,lib.rs,runtime.rs}`

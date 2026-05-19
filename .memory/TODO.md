@@ -54,3 +54,9 @@ release artifact/checksum/log, Linux CI packaging smoke, and final e2e
 validation are the remaining gates before the Rust client can be treated as
 releasable. Next step is to unblock the Actions artifact for `F1.S2.T2` and
 finish the release workflow.
+
+# [high] Start world/render/input parity slice
+
+`F7.S1.T1` through `F7.S2.T2` are still open after the audio runtime pass.
+Next concrete implementation work is the render asset loader, terrain/world
+stack, movement input, entity rendering, and particle/effects coverage.
