@@ -1243,7 +1243,9 @@ dependencies = [
 name = "mu_protocol"
 version = "0.1.0"
 dependencies = [
+ "mu_network",
  "proptest",
+ "tokio",
 ]
 
 [[package]]

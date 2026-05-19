@@ -40,6 +40,9 @@ pub fn illusion_temple_skill_request(
 #[cfg(test)]
 mod tests {
     use super::{illusion_temple_skill_request, pet_command_request, pet_info_request};
+    use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpStream;
 
     #[test]
     fn encodes_pet_packets() {
@@ -55,5 +58,30 @@ mod tests {
             illusion_temple_skill_request(0x1234, 5, 6).unwrap(),
             vec![0xC1, 0x08, 0xBF, 0x02, 0x12, 0x34, 5, 6]
         );
+    }
+
+    #[tokio::test]
+    async fn fake_server_receives_pet_requests() {
+        let command = pet_command_request(0, 3, 0x1234).unwrap();
+        let info = pet_info_request(1, 6, 0xFE).unwrap();
+
+        let server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .expect_packet(command.clone())
+                    .expect_packet(info.clone())
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let mut client = TcpStream::connect(server.address()).await.unwrap();
+        client.write_all(&command).await.unwrap();
+        client.write_all(&info).await.unwrap();
+        client.shutdown().await.unwrap();
+
+        server.finish().await.unwrap();
     }
 }

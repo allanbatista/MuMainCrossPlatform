@@ -7,4 +7,6 @@ publish.workspace = true
 [dependencies]
 
 [dev-dependencies]
+mu_network = { path = "../mu_network" }
 proptest = { workspace = true }
+tokio = { workspace = true }
