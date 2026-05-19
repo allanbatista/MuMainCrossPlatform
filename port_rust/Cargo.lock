@@ -1211,6 +1211,9 @@ dependencies = [
 [[package]]
 name = "mu_gameplay"
 version = "0.1.0"
+dependencies = [
+ "bevy",
+]
 
 [[package]]
 name = "mu_input"

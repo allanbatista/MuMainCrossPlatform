@@ -7,7 +7,9 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 
 - Inicializado como workspace Cargo isolado.
 - Incremental: o cliente legado continua sendo a referencia funcional.
-- Sem runtime jogavel, UI, assets, audio, editor ou gameplay em Rust nesta fase.
+- Sem runtime jogavel, UI, assets, audio ou editor completos em Rust nesta fase;
+  o crate `mu_gameplay` ja porta o estado isolado de duelo, mas ainda nao ha
+  loop de jogo jogavel.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; detalhes em `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes
