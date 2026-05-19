@@ -53,3 +53,7 @@ The migration plan in `.features/20260518-0000-rust-bevy-port/plan.md` is comple
 # [high] F5 protocol slices remaining
 
 `F5.S1.T5` through `F5.S1.T7` remain open after the item/vault/trade/player-shop packet work; next local protocol slice is combat/skills/pets.
+
+# [high] Session-state integration
+
+`F5.S2.T2` is now the next pending network slice after the async transport/fake-server work. It needs `port_rust/crates/mu_app/src/session_state.rs` and `port_rust/crates/mu_network/src/session.rs` with fake-server tests and logs.

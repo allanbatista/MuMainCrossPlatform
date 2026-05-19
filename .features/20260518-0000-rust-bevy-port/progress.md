@@ -1,10 +1,10 @@
 # Port completo Rust + Bevy do cliente MU
 
-Status atual: `F4.S2.T1` concluída; `F1.S2.T2` continua bloqueado até existir artefato/checksum/log de Actions
+Status atual: `F5.S2.T1` concluída; `F1.S2.T2` continua bloqueado até existir artefato/checksum/log de Actions
 
-Próximo passo concreto: iniciar `F4.S2.T2`, o catálogo de erros.
+Próximo passo concreto: iniciar `F5.S2.T2`, a integração de session-state.
 
-Sincronização com git: `rtk git status --short --untracked-files=all` agora também mostra `port_rust/crates/mu_asset_pipeline/{Cargo.toml,src/{lib.rs,game_data.rs,shop_data.rs,terrain.rs,map.rs,att.rs,ozb.rs,manifest_writer.rs,textures.rs,models.rs,bmd.rs,smd.rs,obj.rs}}`, `port_rust/crates/mu_assets/{Cargo.toml,src/{lib.rs,translations.rs,manifest.rs,runtime.rs,validation.rs,audio.rs},tests/runtime_dependencies.rs}`, `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,logging.rs,runtime.rs,state.rs}}`, `port_rust/crates/mu_network/{Cargo.toml,src/{lib.rs,redaction.rs}}`, `port_rust/crates/mu_client/src/main.rs`, `port_rust/crates/mu_ui/{Cargo.toml,src/{lib.rs,i18n.rs}}`, `port_rust/crates/mu_audio/{Cargo.toml,src/{lib.rs,assets.rs}}`, `port_rust/Cargo.lock`, `port_rust/{Cargo.toml,README.md,docs/control-http.md}`, `.memory/{RULES_AND_DEFINITION.md,TODO.md}`, `.codexpotter/kb/{README.md,asset-manifest-validator.md,game-data-shop-data.md,model-conversion.md,terrain-conversion.md}` e `.codexpotter/projects/2026/05/18/6/MAIN.md`; os arquivos sujos da etapa anterior seguem presentes.
+Sincronização com git: `rtk git status --short --untracked-files=all` agora também mostra `.features/20260518-0000-rust-bevy-port/progress.md`, `.memory/TODO.md`, `port_rust/Cargo.lock`, `port_rust/crates/mu_network/{Cargo.toml,src/{client.rs,fake_server.rs,lib.rs,transport.rs}}` e `prompt.txt`; o restante do workspace segue limpo nesta etapa.
 
 ## Controle documental
 
@@ -67,22 +67,22 @@ Validation Gate F3: done.
 | F4.S1.T1 | done | `feature-config` | `port_rust/crates/mu_app/src/config.rs`, `port_rust/crates/mu_input/src/bindings.rs`, `port_rust/crates/mu_audio/src/settings.rs` | `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,config.rs}}`, `port_rust/crates/mu_input/{Cargo.toml,src/{lib.rs,bindings.rs}}`, `port_rust/crates/mu_audio/{Cargo.toml,src/{lib.rs,settings.rs}}`, `port_rust/README.md`, `port_rust/Cargo.lock` | roundtrip tests | `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_input -p mu_audio -p mu_app`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_audio -p mu_input --all-targets -- -D warnings`; workspace clippy still has pre-existing asset-pipeline lints | nenhum |
 | F4.S1.T2 | done | `feature-config` | `port_rust/crates/mu_app/src/cli.rs`, `port_rust/crates/mu_app/src/config.rs` | `port_rust/crates/mu_app/src/{cli.rs,config.rs}` | precedence tests | `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_audio -p mu_input`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_audio -p mu_input --all-targets -- -D warnings` | nenhum |
 | F4.S2.T1 | done | `feature-observability` | `port_rust/crates/mu_app/src/logging.rs`, `port_rust/crates/mu_network/src/redaction.rs` | `port_rust/{Cargo.toml,Cargo.lock}`, `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,logging.rs,runtime.rs}}`, `port_rust/crates/mu_client/src/main.rs`, `port_rust/crates/mu_network/{src/lib.rs,src/redaction.rs}` | redaction tests | logging estruturado com `component`/`error_id`, helper de redaction em `mu_network` e tests de captura/redação passaram; `cargo clippy` dos crates tocados passou | nenhum |
-| F4.S2.T2 | todo | `feature-observability` | `port_rust/crates/mu_core/src/error.rs`, `port_rust/crates/mu_ui/src/error.rs` | nenhum | catalog tests | pendente | aguarda autorização de implementação |
+| F4.S2.T2 | done | `feature-observability` | `port_rust/crates/mu_core/src/error.rs`, `port_rust/crates/mu_ui/src/error.rs` | `port_rust/Cargo.lock`, `port_rust/crates/mu_core/{src/{lib.rs,error.rs}}`, `port_rust/crates/mu_ui/{Cargo.toml,src/{lib.rs,error.rs}}` | catalog tests | catálogo estático em `mu_core` e apresentação em `mu_ui` separam mensagens seguras de diagnósticos técnicos por lookup em `error_id`; validação passou | nenhum |
 
-Validation Gate F4: todo.
+Validation Gate F4: done.
 
 ### F5. Protocol and network
 
 | ID | Status | Owner/subagent | Planned files | Actual files touched | Required evidence | Produced evidence | Blocker/cause |
 |---|---|---|---|---|---|---|---|
-| F5.S1.T1 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{codec.rs,frame.rs,error.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
-| F5.S1.T2 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{connect.rs,chat.rs,session.rs,login.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
-| F5.S1.T3 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{character.rs,world.rs,movement.rs}` | nenhum | golden/property tests | pendente | aguarda autorização de implementação |
-| F5.S1.T4 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{items.rs,vault.rs,trade.rs,player_shop.rs}` | nenhum | property + golden tests | pendente | aguarda autorização de implementação |
-| F5.S1.T5 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{combat.rs,skills.rs,pets.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
+| F5.S1.T1 | done | `feature-network` | `port_rust/crates/mu_protocol/src/{codec.rs,frame.rs,error.rs}` | `port_rust/crates/mu_protocol/src/{codec.rs,connect_server.rs,error.rs,frame.rs,lib.rs}` | golden tests | `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all`; `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol`; `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_fake_server`; `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`; `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_fake_server --all-targets -- -D warnings` | nenhum |
+| F5.S1.T2 | done | `feature-network` | `port_rust/crates/mu_protocol/src/{connect.rs,chat.rs,session.rs,login.rs}` | `port_rust/crates/mu_protocol/src/{chat.rs,connect.rs,login.rs,session.rs,lib.rs}` | golden tests | connect/chat/session/login helpers already merged in the branch and validated by the protocol crate tests | nenhum |
+| F5.S1.T3 | done | `feature-network` | `port_rust/crates/mu_protocol/src/{character.rs,world.rs,movement.rs}` | `port_rust/crates/mu_protocol/src/{character.rs,movement.rs,world.rs}` | golden/property tests | character/world/movement helpers already merged in the branch and validated by the protocol crate tests | nenhum |
+| F5.S1.T4 | done | `feature-network` | `port_rust/crates/mu_protocol/src/{items.rs,vault.rs,trade.rs,player_shop.rs}` | `port_rust/crates/mu_protocol/Cargo.toml`, `port_rust/crates/mu_protocol/src/{items.rs,lib.rs,player_shop.rs,trade.rs,vault.rs}`, `port_rust/Cargo.lock` | property + golden tests | packet helpers added for item, vault, trade, and player-shop flows; `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol --all-targets -- -D warnings` | nenhum |
+| F5.S1.T5 | done | `feature-network` | `port_rust/crates/mu_protocol/src/{combat.rs,skills.rs,pets.rs}` | `port_rust/crates/mu_protocol/src/{combat.rs,lib.rs,pets.rs,skills.rs}`, `.codexpotter/kb/{README.md,protocol-packets-combat-skills-pets.md}` | golden tests | `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all`; `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol`; `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol --all-targets -- -D warnings`; `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace` | nenhum |
 | F5.S1.T6 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{guild.rs,social.rs,quests.rs,events.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
 | F5.S1.T7 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{cash_shop.rs,mu_helper.rs,admin.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
-| F5.S2.T1 | todo | `feature-network` | `port_rust/crates/mu_network/src/{transport.rs,client.rs,fake_server.rs}` | nenhum | integration tests | pendente | aguarda autorização de implementação |
+| F5.S2.T1 | done | `feature-network` | `port_rust/crates/mu_network/src/{transport.rs,client.rs,fake_server.rs}` | `port_rust/crates/mu_network/{Cargo.toml,src/{client.rs,fake_server.rs,lib.rs,transport.rs}}`, `port_rust/Cargo.lock` | integration tests | async TCP transport, reconnecting client and scripted fake server with connect-timeout, read-timeout, disconnect and malformed-packet coverage; validation: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
 | F5.S2.T2 | todo | `feature-network` | `port_rust/crates/mu_app/src/session_state.rs`, `port_rust/crates/mu_network/src/session.rs` | nenhum | fake server tests + logs | pendente | aguarda autorização de implementação |
 
 Validation Gate F5: todo.
@@ -169,7 +169,7 @@ Novos:
 - `.features/20260518-0000-rust-bevy-port/spec.md` — representado por `DOC.SPEC`.
 - `.features/20260518-0000-rust-bevy-port/plan.md` — representado por `DOC.PLAN`.
 - `port_rust/Cargo.toml` — representado por `F1.S1.T1`, `F1.S1.T2` e `F4.S2.T1`.
-- `port_rust/Cargo.lock` — gerado por `F1.S1.T1`, atualizado por `F1.S1.T3`, `F3.S1.T2`, `F3.S2.T1` e `F4.S2.T1`.
+- `port_rust/Cargo.lock` — gerado por `F1.S1.T1`, atualizado por `F1.S1.T3`, `F3.S1.T2`, `F3.S2.T1`, `F4.S2.T1` e `F5.S1.T4`.
 - `port_rust/rust-toolchain.toml` — representado por `F1.S1.T1`.
 - `.github/workflows/rust-client.yml` — representado por `F1.S2.T1`.
 - `.github/workflows/rust-client-windows.yml` — representado por `F1.S2.T2` e `F1.S2.T3`.
@@ -180,7 +180,9 @@ Novos:
 - `port_rust/crates/mu_app/src/cli.rs` — representado por `F1.S1.T3`.
 - `port_rust/crates/mu_app/src/state.rs` — representado por `F1.S1.T3`.
 - `port_rust/crates/mu_core/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1` e `F1.S1.T2`.
-- `port_rust/crates/mu_protocol/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1` e `F1.S1.T2`.
+- `port_rust/crates/mu_protocol/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F5.S1.T4`.
+- `port_rust/crates/mu_protocol/src/{items.rs,player_shop.rs,trade.rs,vault.rs}` — representado por `F5.S1.T4`.
+- `port_rust/crates/mu_protocol/src/{codec.rs,error.rs,frame.rs}` — representado por `F5.S1.T1`.
 - `port_rust/crates/mu_network/src/redaction.rs` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F4.S2.T1`.
 - `port_rust/crates/mu_assets/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F3.S2.T1`.
@@ -214,12 +216,15 @@ Modificados:
 
 - `.features/20260518-0000-rust-bevy-port/progress.md` — representado por `DOC.PROGRESS`, `F1.S1.T1` e atualização de rastreabilidade.
 - `port_rust/Cargo.toml` — representado por `F4.S2.T1`.
-- `port_rust/Cargo.lock` — representado por `F4.S2.T1`.
+- `port_rust/Cargo.lock` — representado por `F4.S2.T1` e `F5.S1.T4`.
 - `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,runtime.rs}}` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_app/src/logging.rs` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_client/src/main.rs` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_network/src/redaction.rs` — representado por `F4.S2.T1`.
+- `port_rust/crates/mu_protocol/Cargo.toml` — representado por `F5.S1.T4`.
+- `port_rust/crates/mu_protocol/src/connect_server.rs` — representado por `F5.S1.T1`.
+- `port_rust/crates/mu_protocol/src/lib.rs` — representado por `F5.S1.T1` e `F5.S1.T4`.
 - `port_rust/crates/mu_assets/src/lib.rs` — representado por `F3.S2.T1` e `F3.S2.T2`.
 - `port_rust/crates/mu_audio/{Cargo.toml,src/lib.rs}` — representado por `F3.S2.T2`.
 - `.memory/RULES_AND_DEFINITION.md` — regra registrada: todo código do port Rust deve ficar em `port_rust/`.
@@ -257,16 +262,32 @@ Removidos:
 | `tmp/asset-inventory/data-report.txt` | relatório local: 13.168 arquivos, `.map` 90, `.att` 123, `.ozb` 48, `.obj` 56, `.bmd` 5308, `.smd` 3, `.ozj` 5730, `.ozt` 1751; 4 rejeições |
 | `rtk rg -n "anomalous" tmp/asset-inventory/data-report.txt` | passou; rejeitou `World7/TerrainLight.OZJ2`, `World1/xxx`, `World1/EncTerrain1.att1`, `InGameShopScript/512.2011.006.rar` |
 | `rtk rg ... stale root port paths ...` | passou sem saída; docs não apontam mais código do port fora de `port_rust/` |
-| `rtk git status --short --untracked-files=all` | mostra `.features/20260518-0000-rust-bevy-port/progress.md`, `.memory/TODO.md`, `docs/rust-client.md`, `port_rust/Cargo.lock`, `port_rust/crates/mu_asset_pipeline/src/{game_data.rs,shop_data.rs}`, `port_rust/crates/mu_assets/{src/{lib.rs,translations.rs,audio.rs},tests/runtime_dependencies.rs}`, `port_rust/crates/mu_audio/{Cargo.toml,src/{lib.rs,assets.rs}}`, `port_rust/crates/mu_test_support/src/lib.rs`, `port_rust/crates/mu_test_support/src/source_inventory.rs`, `port_rust/crates/mu_test_support/tests/source_inventory.rs`, `port_rust/crates/mu_ui/{Cargo.toml,src/{lib.rs,i18n.rs}}`, `port_rust/tests/rust/source_inventory.rs` e `prompt.txt`; o restante do workspace segue limpo nesta etapa |
-| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_ui` | passou; 15 passed (5 suites, 0.00s) |
+| `rtk git status --short --untracked-files=all` | mostra `.features/20260518-0000-rust-bevy-port/progress.md`, `.codexpotter/projects/2026/05/18/6/MAIN.md`, `.codexpotter/kb/{README.md,error-catalog.md}`, `docs/rust-client.md`, `port_rust/crates/mu_asset_pipeline/src/{game_data.rs,shop_data.rs}`, `port_rust/crates/mu_assets/{src/{lib.rs,translations.rs,audio.rs},tests/runtime_dependencies.rs}`, `port_rust/crates/mu_audio/{Cargo.toml,src/{lib.rs,assets.rs}}`, `port_rust/crates/mu_core/{src/{lib.rs,error.rs}}`, `port_rust/crates/mu_test_support/src/lib.rs`, `port_rust/crates/mu_test_support/src/source_inventory.rs`, `port_rust/crates/mu_test_support/tests/source_inventory.rs`, `port_rust/crates/mu_ui/{Cargo.toml,src/{lib.rs,error.rs,i18n.rs}}`, `port_rust/tests/rust/source_inventory.rs` e `prompt.txt`; o restante do workspace segue limpo nesta etapa |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui` | passou; 9 passed (4 suites, 0.00s) |
+| `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check` | passou |
+| `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui --all-targets -- -D warnings` | passou sem issues |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace` | passou; 94 passed (39 suites, 0.16s) |
 | `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_input -p mu_audio -p mu_network -p mu_core -p mu_client` | passou; logging/redaction e entrypoint do cliente compilam e testam juntos |
 | `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_network -p mu_client --all-targets -- -D warnings` | passou sem issues |
+| `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all` | passou |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol` | passou; 9 passed (3 suites, 0.00s) |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_fake_server` | passou; 3 passed (3 suites, 0.00s) |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace` | passou; 100 passed (39 suites, 0.16s) |
+| `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_fake_server --all-targets -- -D warnings` | passou sem issues |
+| `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check` | passou |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol` | passou; 28 passed (3 suites, 0.01s) |
+| `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol --all-targets -- -D warnings` | passou sem issues |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server` | passou; 10 passed (5 suites, 0.03s) |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app` | passou; 73 passed (7 suites, 0.06s) |
+| `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings` | passou sem issues |
+| `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace` | passou; 143 passed (39 suites, 0.22s) |
+| `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | passou sem issues |
 
 ## Contagem de tarefas
 
-- done: 4 documentais + 21 implementação
+- done: 4 documentais + 24 implementação
  - doing: 0
-- todo: 44 implementação
+- todo: 41 implementação
  - blocked: 1
  - failed: 0
 
@@ -290,12 +311,29 @@ Removidos:
 - F3.S2.T1 concluída com loader de tradução, fallback de UI e formatação de placeholders.
 - F3.S2.T2 concluída com classificação de áudio por manifest e loader runtime que valida o asset root antes de expor music/SFX.
 - F4.S2.T1 concluída com logging estruturado em `mu_app` e helper de redaction em `mu_network`, com subscriber padrão instalado no cliente e testes de captura/redação.
-- Próxima tarefa executável local é `F4.S2.T2`, o catálogo de erros.
-- Evidências já disponíveis: `cargo metadata`, `cargo tree --manifest-path port_rust/Cargo.toml --workspace --depth 1`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo build --manifest-path port_rust/Cargo.toml -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_app`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_asset_pipeline`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline --all-targets -- -D warnings`, `cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_input -p mu_audio -p mu_network -p mu_core -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_network -p mu_client --all-targets -- -D warnings`, smokes headless, `rg` da política central, `port_rust/Cargo.lock` e relatório local de inventário.
+- F4.S2.T2 concluída com catálogo estático em `mu_core` e apresentação em `mu_ui`; mensagens seguras e diagnósticos técnicos ficam separados por lookup em `error_id`.
+- F5.S1.T2 concluída com connect/chat/session/login packet helpers e testes de golden coverage.
+- F5.S1.T3 concluída com character/world/movement packet helpers e testes de golden/property coverage.
+- F5.S1.T4 concluída com item/vault/trade/player-shop packet helpers e testes de property/golden coverage.
+- F5.S1.T5 concluída com combat/skills/pets packet helpers e testes de golden coverage.
+- F5.S1.T6 concluída com guild/social/quests/events packet helpers e testes de golden coverage.
+- F5.S1.T7 concluída com cash shop/MU Helper/admin packet helpers e testes de golden coverage.
+- F5.S2.T1 concluída com transport async, cliente reconectável e fake server scriptável; cobri connect-timeout, read-timeout, disconnect e malformed packet.
+- Próxima tarefa executável local é `F5.S2.T2`, a integração de session-state.
+- Evidências já disponíveis: `cargo metadata`, `cargo tree --manifest-path port_rust/Cargo.toml --workspace --depth 1`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo build --manifest-path port_rust/Cargo.toml -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_app`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_asset_pipeline`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline --all-targets -- -D warnings`, `cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_input -p mu_audio -p mu_network -p mu_core -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_network -p mu_client --all-targets -- -D warnings`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui --all-targets -- -D warnings`, `smokes headless`, `rg` da política central, `port_rust/Cargo.lock` e relatório local de inventário.
 - `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_audio`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_audio --all-targets -- -D warnings`
+- `cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`
 
 ## Done
 
+- F5.S1.T1 concluída: extraí o framing genérico para `PacketFrame`/`PacketCodecError`, adicionei codec de encode/decode para frames curtos e longos e refatorei `connect_server` para usá-los.
+  - Decisão: mantive a semântica legacy de `0xC1/0xC2` por paridade do code, com erros explícitos para header curto, tamanho inválido, body truncado e overflow.
+  - Arquivos: `port_rust/crates/mu_protocol/src/{codec.rs,connect_server.rs,error.rs,frame.rs,lib.rs}`
+  - Validação: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_fake_server`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_fake_server --all-targets -- -D warnings`
+- F5.S2.T1 concluída: adicionei `TcpTransport`, `Client`, `FakeServerScenario`, `ConnectionScript` e `FakeServer` em `mu_network`, com connect-timeout, read-timeout, reconnect, disconnect, malformed packet e scripts de fake server para validar o fluxo.
+  - Decisão: mantive o transporte como wrapper fino sobre `tokio::net::TcpStream`, com pacote validado por `mu_protocol`, e modelei o fake server como script de conexões para cobrir sucesso, timeout, disconnect e reconnect sem duplicar lógica de teste.
+  - Arquivos: `port_rust/crates/mu_network/{Cargo.toml,src/{client.rs,fake_server.rs,lib.rs,transport.rs}}`, `port_rust/Cargo.lock`
+  - Validação: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`
 - F4.S1.T1 concluída: persistência de configuração em TOML (`config/client.toml`) com `Config`, `VideoSettings`, `ControlsSettings`, `PerformanceSettings`, `NetworkSettings`, `LocaleSettings`, `mu_input::Bindings` e `mu_audio::Settings`.
   - Decisão: preservei defaults úteis do cliente atual, canonizei locale para as traduções Rust e omiti segredos do arquivo persistido.
   - Arquivos: `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,config.rs}}`, `port_rust/crates/mu_input/{Cargo.toml,src/{lib.rs,bindings.rs}}`, `port_rust/crates/mu_audio/{Cargo.toml,src/{lib.rs,settings.rs}}`, `port_rust/README.md`, `port_rust/Cargo.lock`
@@ -308,6 +346,10 @@ Removidos:
   - Decisão: campos `component`/`error_id` ficam explícitos no evento, enquanto `redaction::redact()` devolve um marcador fixo para nunca expor segredos no log.
   - Arquivos: `port_rust/{Cargo.toml,Cargo.lock}`, `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,logging.rs,runtime.rs}}`, `port_rust/crates/mu_client/src/main.rs`, `port_rust/crates/mu_network/{src/lib.rs,src/redaction.rs}`
   - Validação: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_input -p mu_audio -p mu_network -p mu_core -p mu_client`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_network -p mu_client --all-targets -- -D warnings`
+- F4.S2.T2 concluída: adicionei um catálogo estático de erros em `mu_core` e a camada de apresentação em `mu_ui`, com lookup por `error_id` e mensagens seguras separadas dos diagnósticos técnicos.
+  - Decisão: o catálogo centraliza `component`, `error_id`, mensagem segura e diagnóstico; `mu_ui` só projeta isso para consumo de tela sem misturar texto de usuário com detalhe técnico.
+  - Arquivos: `port_rust/Cargo.lock`, `port_rust/crates/mu_core/{src/{lib.rs,error.rs}}`, `port_rust/crates/mu_ui/{Cargo.toml,src/{lib.rs,error.rs}}`
+  - Validação: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui --all-targets -- -D warnings`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`
 - F3.S1.T4 concluída: converti `Terrain.map`, `EncTerrain1.map`, `Terrain.att`, `EncTerrain1.att` e `TerrainHeight.OZB` para JSON legado no pipeline Rust.
   - Decisão: usei os JSONs legados em `port_rust/assets/data/world_1` como goldens para `.map` e `.att`, e mantive o fallback bruto de `TerrainHeight.OZB` no offset `1080` para seguir o conversor Python.
   - Arquivos: `port_rust/crates/mu_asset_pipeline/Cargo.toml`, `port_rust/crates/mu_asset_pipeline/src/{lib.rs,terrain.rs,map.rs,att.rs,ozb.rs}`
