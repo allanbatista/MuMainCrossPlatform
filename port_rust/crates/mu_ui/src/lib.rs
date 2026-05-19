@@ -9,9 +9,11 @@ pub mod layout;
 pub mod login;
 pub mod messages;
 pub mod minimap;
+pub mod npc;
 pub mod options;
 pub mod routes;
 pub mod server_select;
+pub mod shop;
 pub mod widgets;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -36,6 +38,7 @@ pub use login::{login_screen, LoginAction, LoginField, LoginScreen, LoginScreenS
 pub use messages::{messages_screen, MessageAction, MessageSeverity, MessagesScreen};
 pub use minimap::{minimap_screen, MiniMapMarker, MiniMapMarkerKind, MiniMapScreen};
 pub use mu_assets::TranslationDomain;
+pub use npc::{npc_screen, NpcAction, NpcScreen, NpcScreenState};
 pub use options::{
     options_screen, OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle,
 };
@@ -46,4 +49,5 @@ pub use server_select::{
     server_select_screen, ServerEntry, ServerSelectAction, ServerSelectScreen,
     ServerSelectScreenState,
 };
+pub use shop::{shop_screen, ShopAction, ShopScreen, ShopScreenState};
 pub use widgets::{UiShellWidgetKind, UiShellWidgetSet};

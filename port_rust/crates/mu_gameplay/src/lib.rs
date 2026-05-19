@@ -8,6 +8,7 @@ pub mod experience;
 pub mod inventory;
 pub mod items;
 pub mod master_level;
+pub mod npc;
 pub mod party;
 pub mod skills;
 pub mod stats;
@@ -50,6 +51,7 @@ pub use items::{
     ItemRequirements, ItemSize, MAX_ITEM_INDEX, MAX_ITEM_SOCKETS, SOCKET_EMPTY,
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
+pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
     MAX_PARTY_MEMBERS, PARTY_INDEX_HERO, PARTY_INDEX_NOT_FOUND, PARTY_INDEX_UNSEARCHED,

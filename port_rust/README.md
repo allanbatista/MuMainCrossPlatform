@@ -30,6 +30,7 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   `docs/skills-effects-audio.md`.
 - A camada de items, inventory, equipment e vault esta documentada em
   `docs/inventory.md`.
+- A camada de NPC/dialog/shop esta documentada em `docs/npc-dialog-shop.md`.
 
 ## Validacao local prevista
 
@@ -81,6 +82,8 @@ Veja tambem:
   filas puras de efeitos/audio.
 - `docs/inventory.md` para o codec de item, as regras de inventory/equipment e
   o estado de vault.
+- `docs/npc-dialog-shop.md` para o estado de dialogo NPC, buy/sell e repair de
+  shop.
 
 ## Dependencias dos scripts de port
 
