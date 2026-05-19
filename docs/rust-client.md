@@ -1,7 +1,27 @@
-# Rust Client Evidence
+# Rust Client Difference Register
 
-This project keeps comparison evidence in a stable directory layout so CI,
-local smoke tests, and legacy-vs-Rust diffs are easy to find.
+This document has two jobs:
+
+1. record the approved or intentionally shipped differences between the legacy
+   client and the Rust client; and
+2. keep comparison evidence in a stable directory layout so CI, local smoke
+   tests, and legacy-vs-Rust diffs are easy to find.
+
+If a new user-visible difference appears, add it here with the reason and the
+approval or validation evidence before release.
+
+## Difference Register
+
+| Area | Rust client behavior | Why it differs | Evidence / notes |
+|---|---|---|---|
+| Runtime | The client boots through `mu_client` on Bevy instead of the legacy C++/C# runtime. | The product goal is a Rust + Bevy client, not a wrapper around the old runtime. | `port_rust/README.md`, `port_rust/crates/mu_client/src/main.rs`, workspace tests. |
+| Asset handling | The client requires converted assets and a valid manifest before entering gameplay. | Assets are converted ahead of runtime so the release client never runs the pipeline on the fly. | `docs/build-guide.md`, `port_rust/README.md`, `mu_assets` validation tests. |
+| Diagnostics | Structured `tracing` logs are redacted and use safe user-facing messages. | Release logs must not expose secrets or raw session data. | `port_rust/crates/mu_app/src/logging.rs`, `port_rust/crates/mu_network/src/redaction.rs`, tests. |
+| Configuration | Client settings persist in `config/client.toml`; passwords, tokens, and raw session IDs are never stored. | The Rust port uses a safer local config contract than the legacy client. | `port_rust/README.md`, `docs/player-rust-client.md`, config roundtrip tests. |
+| Control surface | A local control HTTP server exists for smoke tests and QA automation. | The port needs a deterministic state probe during development and CI. | `docs/control-http.md`, `mu_app` control HTTP tests. |
+
+No gameplay, economy, or permission difference is currently approved for
+release unless it is explicitly listed above with evidence.
 
 ## Layout
 

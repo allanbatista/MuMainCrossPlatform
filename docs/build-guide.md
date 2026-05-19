@@ -364,3 +364,23 @@ When CMake detects it's running on Linux (`CMAKE_HOST_SYSTEM_NAME == "Linux"`) a
 Paths used by CMake-native commands (`copy_if_different`, `DEPENDS`) stay as Linux paths.
 
 The guard `CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"` ensures `wslpath` is never called on native Windows (where it doesn't exist).
+
+---
+
+## Rust Client Workspace
+
+The Rust port lives in `port_rust/` and is built with Cargo instead of CMake.
+Use the commands below for local validation and smoke tests:
+
+```bash
+cargo fmt --manifest-path port_rust/Cargo.toml --all --check
+cargo test --manifest-path port_rust/Cargo.toml --workspace
+cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings
+cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless
+cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__
+```
+
+For player-facing usage and release-difference notes, see:
+
+- `docs/player-rust-client.md`
+- `docs/rust-client.md`

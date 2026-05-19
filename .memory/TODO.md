@@ -46,3 +46,11 @@ unimplemented gameplay UI.
 there is no matching Rust snapshot module yet. The next follow-up should port
 the legacy `CNewUISiegeWarfare` surface and document the behavior split before
 the route is treated as covered.
+
+# [high] Finish Rust release parity gates
+
+`F11.S1.T1`, `F11.S1.T2`, and `F11.S3.T1` are still open: the Windows x64
+release artifact/checksum/log, Linux CI packaging smoke, and final e2e
+validation are the remaining gates before the Rust client can be treated as
+releasable. Next step is to unblock the Actions artifact for `F1.S2.T2` and
+finish the release workflow.
