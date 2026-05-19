@@ -4,6 +4,7 @@ pub mod error;
 pub mod hotkeys;
 pub mod hud;
 pub mod i18n;
+pub mod inventory;
 pub mod layout;
 pub mod login;
 pub mod messages;
@@ -27,6 +28,9 @@ pub use fixture_routes::{fixture_routes, UiFixtureRoute};
 pub use hotkeys::{hotkeys_screen, HotkeyBinding, HotkeysScreen, HotkeysScreenState};
 pub use hud::{hud_screen, HudButton, HudButtonKind, HudGauge, HudGaugeKind, HudScreen};
 pub use i18n::Translator;
+pub use inventory::{
+    inventory_screen, InventoryAction, InventoryPanel, InventoryScreen, InventoryScreenState,
+};
 pub use layout::UiShellLayout;
 pub use login::{login_screen, LoginAction, LoginField, LoginScreen, LoginScreenState};
 pub use messages::{messages_screen, MessageAction, MessageSeverity, MessagesScreen};

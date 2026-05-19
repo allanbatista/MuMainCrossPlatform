@@ -6,3 +6,10 @@ publish.workspace = true
 
 [dependencies]
 bevy = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+mu_network = { path = "../mu_network" }
+mu_protocol = { path = "../mu_protocol" }
+proptest = { workspace = true }
+tokio = { workspace = true }

@@ -28,6 +28,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   `docs/combat-buffs-experience.md`.
 - A camada de skills, efeitos e audio esta documentada em
   `docs/skills-effects-audio.md`.
+- A camada de items, inventory, equipment e vault esta documentada em
+  `docs/inventory.md`.
 
 ## Validacao local prevista
 
@@ -77,6 +79,8 @@ Veja tambem:
   experiencia compartilhada.
 - `docs/skills-effects-audio.md` para o catalogo de skills, requisitos, delay e
   filas puras de efeitos/audio.
+- `docs/inventory.md` para o codec de item, as regras de inventory/equipment e
+  o estado de vault.
 
 ## Dependencias dos scripts de port
 

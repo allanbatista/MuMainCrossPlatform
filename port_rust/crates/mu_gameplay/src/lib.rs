@@ -3,11 +3,15 @@ pub mod characters;
 pub mod classes;
 pub mod combat;
 pub mod duel;
+pub mod equipment;
 pub mod experience;
+pub mod inventory;
+pub mod items;
 pub mod master_level;
 pub mod party;
 pub mod skills;
 pub mod stats;
+pub mod vault;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -27,6 +31,7 @@ pub use duel::{
     DuelChannelInfo, DuelCharacterSnapshot, DuelManager, DuelPlayerInfo, DuelPlugin,
     MAX_DUEL_CHANNELS, MAX_DUEL_PLAYERS, MAX_USERNAME_SIZE,
 };
+pub use equipment::{EquipmentError, EquipmentManager, EquipmentPlugin, MAX_EQUIPMENT_SLOTS};
 pub use experience::{
     next_experience_for_level as experience_next_experience_for_level,
     next_master_level_experience as experience_next_master_level_experience,
@@ -34,6 +39,15 @@ pub use experience::{
     MASTER_LEVEL_EXPERIENCE_OFFSET, MASTER_LEVEL_EXPONENT_BONUS, MASTER_LEVEL_EXPONENT_SCALE,
     MASTER_LEVEL_OVERFLOW_SCALE, NORMAL_EXPERIENCE_LEVEL_BONUS, NORMAL_EXPERIENCE_SCALE,
     OVERLEVEL_EXPERIENCE_SCALE, OVERLEVEL_EXPERIENCE_THRESHOLD,
+};
+pub use inventory::{
+    InventoryError, InventoryManager, InventoryPlugin, InventorySlot,
+    INVENTORY_EXTENSION_PAGE_COUNT, INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS,
+    INVENTORY_MAIN_PAGE_ROWS, INVENTORY_TOTAL_PAGE_COUNT,
+};
+pub use items::{
+    EquipmentSlot, Item, ItemError, ItemOptionFlags, ItemPacketData, ItemPacketError,
+    ItemRequirements, ItemSize, MAX_ITEM_INDEX, MAX_ITEM_SOCKETS, SOCKET_EMPTY,
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use party::{
@@ -51,3 +65,7 @@ pub use skills::{
     AT_SKILL_TRIPLE_SHOT_STR, AT_SKILL_UNDEFINED, MAX_SKILLS,
 };
 pub use stats::{base_class_attributes, ClassAttributes, BASE_CLASS_COUNT, CLASS_ATTRIBUTES};
+pub use vault::{
+    VaultError, VaultManager, VaultMoneyDirection, VaultPendingTransfer, VaultPlugin, VaultSlot,
+    VaultSyncOutcome, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,
+};
