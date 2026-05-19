@@ -28,18 +28,6 @@ should add `mu_gameplay::npc` and `mu_ui::{npc,shop}`.
 transaction/idempotency handling in `mu_gameplay::game_shop_transaction` and
 `mu_network::shop`, with redacted logs and duplicate-purchase coverage.
 
-# [high] Continue editor/admin parity
-
-`F10.S2.T1` and `F10.S2.T2` are complete. The next pending slice is
-`F10.S2.T3`, which should add the admin-editor documentation evidence on top
-of the new admin auth gate, core shell, console, dev editor, item editor, and
-skill editor surfaces.
-
-# [medium] Finish admin docs evidence
-
-`F10.S2.T3` still needs the admin-editor documentation review and screenshot
-evidence after the item and skill editor slices landed.
-
 # [high] Windows CI artifact pending
 
 `F1.S2.T2` still needs a GitHub Actions run to produce the Windows x64 release
