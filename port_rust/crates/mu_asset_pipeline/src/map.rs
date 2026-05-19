@@ -240,11 +240,7 @@ mod tests {
             .as_nanos()
     }
 
-    fn assert_map_conversion(
-        file_name: &str,
-        expected_map_number: u8,
-        expected_output_hash: &str,
-    ) {
+    fn assert_map_conversion(file_name: &str, expected_map_number: u8, expected_output_hash: &str) {
         let source_root = repo_root().join("src/bin/Data");
         let source = source_path(file_name);
         let output_root = temp_root(file_name);
