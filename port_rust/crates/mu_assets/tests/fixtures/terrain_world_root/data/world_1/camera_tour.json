@@ -1,0 +1,140 @@
+{
+  "waypoints": [
+    {
+      "index": 0,
+      "position": [
+        14700.0,
+        490.0,
+        12800.0
+      ],
+      "look_at": [
+        13095.641,
+        170.0,
+        12922.459
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 1,
+      "position": [
+        14143.503,
+        490.0,
+        14143.503
+      ],
+      "look_at": [
+        12922.459,
+        170.0,
+        13095.641
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 2,
+      "position": [
+        12800.0,
+        490.0,
+        14700.0
+      ],
+      "look_at": [
+        12677.541,
+        170.0,
+        13095.641
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 3,
+      "position": [
+        11456.497,
+        490.0,
+        14143.503
+      ],
+      "look_at": [
+        12504.359,
+        170.0,
+        12922.459
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 4,
+      "position": [
+        10900.0,
+        490.0,
+        12800.0
+      ],
+      "look_at": [
+        12504.359,
+        170.0,
+        12677.541
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 5,
+      "position": [
+        11456.497,
+        490.0,
+        11456.497
+      ],
+      "look_at": [
+        12677.541,
+        170.0,
+        12504.359
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 6,
+      "position": [
+        12800.0,
+        490.0,
+        10900.0
+      ],
+      "look_at": [
+        12922.459,
+        170.0,
+        12504.359
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    },
+    {
+      "index": 7,
+      "position": [
+        14143.503,
+        490.0,
+        11456.497
+      ],
+      "look_at": [
+        13095.641,
+        170.0,
+        12677.541
+      ],
+      "move_acceleration": 16.0,
+      "distance_level": 8.0,
+      "delay": 0.0
+    }
+  ],
+  "loop": true,
+  "blend_distance": 300.0,
+  "interpolation": "smooth",
+  "metadata": {
+    "generated_placeholder": true,
+    "reason": "cw_script*.cws not found",
+    "world": 1
+  }
+}

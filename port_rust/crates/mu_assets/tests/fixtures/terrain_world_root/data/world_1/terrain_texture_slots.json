@@ -1,0 +1,27 @@
+{
+  "world": 1,
+  "slots": {
+    "0": "data/world_1/TileGrass01.png",
+    "1": "data/world_1/TileGrass02.png",
+    "2": "data/world_1/TileGround01.png",
+    "3": "data/world_1/TileGround02.png",
+    "4": "data/world_1/TileGround03.png",
+    "5": "data/world_1/TileWater01.png",
+    "6": "data/world_1/TileWood01.png",
+    "7": "data/world_1/TileRock01.png",
+    "8": "data/world_1/TileRock02.png",
+    "9": "data/world_1/TileRock03.png",
+    "10": "data/world_1/TileRock04.png",
+    "11": "data/world_1/TileRock05.png",
+    "12": "data/world_1/TileRock06.png",
+    "13": "data/world_1/TileRock07.png",
+    "30": "data/world_1/TileGrass01.png",
+    "31": "data/world_1/TileGrass02.png",
+    "32": "data/world_1/TileGrass03.png"
+  },
+  "metadata": {
+    "generated": true,
+    "generator": "assets_convert.py",
+    "source": "muclient5.2_tile_slot_defaults"
+  }
+}

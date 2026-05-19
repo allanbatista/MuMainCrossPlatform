@@ -319,9 +319,13 @@ mod tests {
         .unwrap()
     }
 
+    fn fixture_asset_root() -> Utf8PathBuf {
+        repo_root().join("port_rust/crates/mu_assets/tests/fixtures/terrain_world_root")
+    }
+
     #[test]
     fn terrain_world_loader_reads_runtime_bundle() {
-        let asset_root = repo_root().join("port_rust/assets");
+        let asset_root = fixture_asset_root();
         let bundle = load_terrain_world_bundle(&asset_root, 1).unwrap();
 
         assert_eq!(bundle.world, 1);
@@ -348,7 +352,7 @@ mod tests {
 
     #[test]
     fn terrain_world_summary_matches_expected_snapshot() {
-        let asset_root = repo_root().join("port_rust/assets");
+        let asset_root = fixture_asset_root();
         let bundle = load_terrain_world_bundle(&asset_root, 1).unwrap();
         let summary: TerrainWorldSummary = bundle.summary();
 

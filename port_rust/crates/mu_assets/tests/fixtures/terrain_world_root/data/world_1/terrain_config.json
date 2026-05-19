@@ -1,0 +1,33 @@
+{
+  "size": {
+    "width": 256,
+    "depth": 256,
+    "scale": 100.0
+  },
+  "height_multiplier": 1.5,
+  "legacy_terrain_scale": 100.0,
+  "texture_layers": [
+    {
+      "id": "grass01",
+      "path": "data/world_1/tile_grass01.png",
+      "scale": 1.0
+    },
+    {
+      "id": "ground01",
+      "path": "data/world_1/tile_ground01.png",
+      "scale": 1.0
+    },
+    {
+      "id": "rock01",
+      "path": "data/world_1/tile_rock01.png",
+      "scale": 1.0
+    }
+  ],
+  "alpha_map": "data/world_1/alpha_tile01.png",
+  "lightmap": "data/world_1/terrain_light.png",
+  "metadata": {
+    "generated_placeholder": true,
+    "reason": "terrain_config.json missing in legacy data",
+    "world": 1
+  }
+}
