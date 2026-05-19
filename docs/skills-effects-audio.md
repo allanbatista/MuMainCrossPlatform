@@ -1,4 +1,4 @@
-# Skills, Effects and Audio
+# Skills, Effects, Particles and Audio
 
 This slice ports the legacy skill catalog, requirement checks, delay gating, and
 presentation cues used by the gameplay layer.
@@ -28,6 +28,17 @@ presentation cues used by the gameplay layer.
   pure events for render/audio consumers.
 - `SkillEffectCue::None` and `SkillAudioCue::None` are ignored by the queues.
 
+## Particle Projection
+
+- `mu_render::SkillParticleCue` maps the gameplay cue to representative
+  particle families such as `teleport-burst`, `projectile-trail`,
+  `summon-cloud`, and `magic-cast-glow`.
+- `mu_render::SkillParticleQueue` turns skill presentations or drained effect
+  events into render-ready particle events, ignores `SkillEffectCue::None`, and
+  keeps the snapshot as a Bevy resource.
+- The slice is still data-only; it models what should be rendered before any
+  sprite or mesh draw code is wired in.
+
 ## Runtime Wrapper
 
 - `mu_audio::AudioRuntime` loads validated converted audio assets, keeps the
@@ -38,6 +49,5 @@ presentation cues used by the gameplay layer.
 
 - `port_rust/crates/mu_gameplay/src/skills.rs`
 - `port_rust/crates/mu_gameplay/src/lib.rs`
-- `port_rust/crates/mu_render/src/effects.rs`
-- `port_rust/crates/mu_render/src/lib.rs`
+- `port_rust/crates/mu_render/src/{effects.rs,particles.rs,lib.rs}`
 - `port_rust/crates/mu_audio/src/{diagnostics.rs,events.rs,lib.rs,runtime.rs}`

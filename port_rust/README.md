@@ -30,7 +30,7 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   documentadas em `docs/character-progression.md`.
 - A camada compartilhada de combate, buffs e experiencia esta documentada em
   `docs/combat-buffs-experience.md`.
-- A camada de skills, efeitos e audio esta documentada em
+- A camada de skills, efeitos, particulas e audio esta documentada em
   `docs/skills-effects-audio.md`.
 - A camada de pets, summons e mounts esta documentada em
   `docs/pets-summons-mounts.md`.
@@ -111,8 +111,8 @@ Veja tambem:
   configuracao.
 - `docs/combat-buffs-experience.md` para os helpers de combate, buffs e
   experiencia compartilhada.
-- `docs/skills-effects-audio.md` para o catalogo de skills, requisitos, delay e
-  filas puras de efeitos/audio.
+- `docs/skills-effects-audio.md` para o catalogo de skills, requisitos, delay,
+  filas puras de efeitos/audio e a projecao de particulas.
 - `docs/pets-summons-mounts.md` para as regras de pets, summons, mounts e os
   helpers de packet do slice.
 - `docs/inventory.md` para o codec de item, as regras de inventory/equipment e

@@ -2,6 +2,27 @@ use std::collections::VecDeque;
 
 use mu_gameplay::skills::{SkillEffectCue, SkillId, SkillPresentation};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkillParticleCue {
+    LegacyEffect(u16),
+    TeleportBurst,
+    ProjectileTrail,
+    SummonCloud,
+    MagicCastGlow,
+}
+
+impl SkillParticleCue {
+    pub fn snapshot_label(self) -> String {
+        match self {
+            Self::LegacyEffect(effect_id) => format!("legacy-effect-{effect_id}"),
+            Self::TeleportBurst => "teleport-burst".to_string(),
+            Self::ProjectileTrail => "projectile-trail".to_string(),
+            Self::SummonCloud => "summon-cloud".to_string(),
+            Self::MagicCastGlow => "magic-cast-glow".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillEffectEvent {
     pub skill_id: SkillId,
@@ -24,6 +45,21 @@ impl SkillEffectEvent {
             effect: presentation.effect,
             target_id,
         })
+    }
+
+    pub fn particle_cue(&self) -> Option<SkillParticleCue> {
+        particle_cue_for_effect(self.effect)
+    }
+}
+
+pub fn particle_cue_for_effect(effect: SkillEffectCue) -> Option<SkillParticleCue> {
+    match effect {
+        SkillEffectCue::None => None,
+        SkillEffectCue::LegacyEffect(effect_id) => Some(SkillParticleCue::LegacyEffect(effect_id)),
+        SkillEffectCue::Teleport => Some(SkillParticleCue::TeleportBurst),
+        SkillEffectCue::Projectile => Some(SkillParticleCue::ProjectileTrail),
+        SkillEffectCue::Summon => Some(SkillParticleCue::SummonCloud),
+        SkillEffectCue::MagicCast => Some(SkillParticleCue::MagicCastGlow),
     }
 }
 
@@ -75,7 +111,7 @@ impl SkillEffectQueue {
 
 #[cfg(test)]
 mod tests {
-    use super::{SkillEffectEvent, SkillEffectQueue};
+    use super::{particle_cue_for_effect, SkillEffectEvent, SkillEffectQueue, SkillParticleCue};
     use mu_gameplay::skills::{SkillAudioCue, SkillEffectCue, SkillId, SkillPresentation};
 
     #[test]
@@ -104,5 +140,26 @@ mod tests {
 
         assert!(!queue.push_presentation(7 as SkillId, presentation, None));
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn effect_cues_map_to_representative_particle_cues() {
+        assert_eq!(
+            particle_cue_for_effect(SkillEffectCue::Teleport),
+            Some(SkillParticleCue::TeleportBurst)
+        );
+        assert_eq!(
+            particle_cue_for_effect(SkillEffectCue::Projectile),
+            Some(SkillParticleCue::ProjectileTrail)
+        );
+        assert_eq!(
+            particle_cue_for_effect(SkillEffectCue::Summon),
+            Some(SkillParticleCue::SummonCloud)
+        );
+        assert_eq!(
+            particle_cue_for_effect(SkillEffectCue::MagicCast),
+            Some(SkillParticleCue::MagicCastGlow)
+        );
+        assert_eq!(particle_cue_for_effect(SkillEffectCue::None), None);
     }
 }
