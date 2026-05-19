@@ -69,7 +69,7 @@ pub fn create_character(
 ) -> Result<Vec<u8>, EncodeError> {
     let mut payload = Vec::with_capacity(11);
     payload.extend_from_slice(&fixed_bytes::<10>(name));
-    payload.push(class_);
+    payload.push(class_ << 2);
     encode_short_packet_with_subcode(0xC1, 0xF3, 0x01, &payload)
 }
 
@@ -158,7 +158,7 @@ mod tests {
         );
         assert_eq!(
             create_character(b"Alice", 4).unwrap(),
-            vec![0xC1, 0x0F, 0xF3, 0x01, b'A', b'l', b'i', b'c', b'e', 0, 0, 0, 0, 0, 4]
+            vec![0xC1, 0x0F, 0xF3, 0x01, b'A', b'l', b'i', b'c', b'e', 0, 0, 0, 0, 0, 16]
         );
         assert_eq!(
             delete_character(b"Alice", b"1234").unwrap(),
