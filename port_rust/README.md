@@ -37,6 +37,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de items, inventory, equipment e vault esta documentada em
   `docs/inventory.md`.
 - A camada de NPC/dialog/shop esta documentada em `docs/npc-dialog-shop.md`.
+- A camada de gatekeeper/castle access esta documentada em
+  `docs/gatekeeper.md`.
 - A camada de trade, player shop e mail esta documentada em
   `docs/trade-player-shop-mail.md`.
 - A camada de friend e guild esta documentada em `docs/friend-guild.md`.
@@ -112,6 +114,8 @@ Veja tambem:
   o estado de vault.
 - `docs/npc-dialog-shop.md` para o estado de dialogo NPC, buy/sell e repair de
   shop.
+- `docs/gatekeeper.md` para o acesso gatekeeper, fee/public toggle e o fluxo
+  de entrada do castelo.
 - `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
 - `docs/friend-guild.md` para as snapshots de friend, letter e guild.
 - `docs/party-ui.md` para as snapshots de party info/list e o consumo do

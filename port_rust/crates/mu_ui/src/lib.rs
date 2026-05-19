@@ -9,6 +9,7 @@ pub mod error;
 pub mod events;
 pub mod friend;
 pub mod game_shop;
+pub mod gate;
 pub mod gens;
 pub mod guild;
 pub mod hotkeys;
@@ -57,6 +58,7 @@ pub use friend::{
     FriendScreenState, FriendSort, LetterEntry, LetterSort,
 };
 pub use game_shop::{game_shop_screen, GameShopAction, GameShopScreen, GameShopScreenState};
+pub use gate::{gate_screen, GateAction, GateScreen, GateScreenState};
 pub use gens::{gens_ranking_screen, GensAction, GensRankingScreen, GensRankingScreenState};
 pub use guild::{
     guild_screen, GuildAction, GuildMemberEntry, GuildMemberRole, GuildScreen, GuildScreenState,

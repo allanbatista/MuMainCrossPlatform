@@ -39,3 +39,10 @@ artifact, checksum, and log evidence for the workflow gate.
 missing concrete snapshot modules. Next pass should port the legacy friend
 surface and then the guild surface so the route catalog stops advertising
 unimplemented gameplay UI.
+
+# [medium] Port siege UI snapshot
+
+`port_rust/crates/mu_ui/src/routes.rs` still advertises the `siege` route, but
+there is no matching Rust snapshot module yet. The next follow-up should port
+the legacy `CNewUISiegeWarfare` surface and document the behavior split before
+the route is treated as covered.
