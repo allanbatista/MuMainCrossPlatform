@@ -36,6 +36,16 @@ como o shell do editor em si.
   o orbital re-semeia o trapezio de visao a partir da camera da cena principal.
 - `DevEditorGraphicsState` formata a string de debug copiada para a clipboard.
 
+## Item editor
+
+- `mu_editor_admin::ItemEditorState` modela as rows carregadas, a selecao atual,
+  o filtro de busca, o freeze de colunas, a visibilidade das colunas e o
+  historico de auditoria.
+- `mu_ui::admin_item_editor_screen` renderiza a rota `admin-item-editor` a
+  partir desse estado.
+- As snapshots cobrem os estados `empty`, `ready`, `dirty`, `saved`,
+  `cancelled` e `failed`, alem dos fluxos de save, exportacao e cancelamento.
+
 ## UI
 
 - `mu_ui::admin_screen` renderiza a rota `editor-admin` a partir do estado de
@@ -50,5 +60,4 @@ como o shell do editor em si.
 
 ## Proxima etapa
 
-- `admin-item-editor` e `admin-skill-editor` continuam a expansao do
-  editor/admin equivalente.
+- `admin-skill-editor` continua a expansao do editor/admin equivalente.

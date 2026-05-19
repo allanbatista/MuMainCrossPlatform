@@ -7,3 +7,4 @@ publish.workspace = true
 [dependencies]
 bevy = { workspace = true }
 mu_render = { path = "../mu_render" }
+mu_gameplay = { path = "../mu_gameplay" }
