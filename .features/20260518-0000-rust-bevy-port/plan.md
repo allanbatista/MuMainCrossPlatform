@@ -51,6 +51,7 @@ Arquivos planejados para implementação futura:
 - `docs/build-guide.md`
 - `docs/player-rust-client.md`
 - `docs/admin-editor-rust.md`
+- `docs/siege-warfare.md`
 - `port_rust/docs/inventory.md`
 - `port_rust/docs/script-dependencies.md`
 
@@ -290,8 +291,9 @@ Validation Gate F7: `cargo test --manifest-path port_rust/Cargo.toml -p mu_gamep
 | F8.S3.T1 Party/friend/guild/alliance | `feature-social` | `port_rust/crates/mu_gameplay/src/{party.rs,friend.rs,guild.rs}`, UI files | F5, F6 | party/friend/guild/alliance actions and denials visible | fake server tests |
 | F8.S3.T2 Quests/events/duel/gens | `feature-events` | `port_rust/crates/mu_gameplay/src/{quests.rs,events.rs,duel.rs,gens.rs}`, UI files | F7, F8.S1 | listed quest/event/duel/gens packet groups have UI/gameplay coverage | integration + e2e fixtures |
 | F8.S3.T3 Pets/summons/mounts | `feature-gameplay` | `port_rust/crates/mu_gameplay/src/{pets.rs,summons.rs,mounts.rs}` | F8.S1 | pet commands/info and visual states match fixtures | fake server + visual tests |
+| F8.S3.T4 Siege warfare | `feature-ui` | `port_rust/crates/mu_ui/src/siege.rs`, `port_rust/tests/rust/ui_fixtures/siege.snap`, `docs/siege-warfare.md` | F6, F8.S1, F8.S3.T1 | siege modes inactive/observer/soldier/commander and guild/battle controls are covered | visual snapshots + docs review |
 
-Validation Gate F8: `cargo test --manifest-path port_rust/Cargo.toml -p mu_gameplay -p mu_ui -p mu_protocol -p mu_render -p mu_audio`; fixtures `combat-items-npc-chat`, `social-events-pets`; e2e-validator validates gameplay surface.
+Validation Gate F8: `cargo test --manifest-path port_rust/Cargo.toml -p mu_gameplay -p mu_ui -p mu_protocol -p mu_render -p mu_audio`; fixtures `combat-items-npc-chat`, `social-events-pets`, `siege`; e2e-validator validates gameplay surface.
 
 ### F9. MU Helper and GameShop
 
@@ -335,7 +337,7 @@ Validation Gate F11: `cargo fmt --manifest-path port_rust/Cargo.toml --all --che
 - Source/dependency classification tests prove every legacy path is ported, replaced, fixture-only, reference-only or rejected before release.
 - Golden tests from legacy packet/function/data fixtures for protocol, formulas, assets and translations.
 - Integration tests with fake server for login, character, world, inventory, combat, NPC, chat, party/social, GameShop, MU Helper and editor/admin.
-- Visual/e2e snapshots for boot, login, character select, world, HUD, inventory, NPC/shop, options, audio diagnostics, GameShop, MU Helper and admin/editor.
+- Visual/e2e snapshots for boot, login, character select, world, HUD, inventory, NPC/shop, siege, options, audio diagnostics, GameShop, MU Helper and admin/editor.
 - CI Linux runs fast gates every PR; Windows x64 release workflow produces artifact evidence.
 - `e2e-validator` gates F3, F5, F6, F7, F8, F9, F10 and F11 when those phases expose user-visible or sensitive surfaces.
 
@@ -361,7 +363,7 @@ Validation Gate F11: `cargo fmt --manifest-path port_rust/Cargo.toml --all --che
 | AC-16 | F2.S1.T1-F2.S1.T5, F3-F10 | Evidencia: every inventory row and legacy path maps to test/evidence or explicit non-runtime classification |
 | AC-17 | F11.S2.T1 | Evidencia: approved difference register report |
 | AC-18 | F4.S2.T1-F4.S2.T2, F5.S2.T2, F9.S2.T2, F10.S2.T1-F10.S2.T2 | Evidencia: redaction tests and safe message screenshots/logs |
-| AC-19 | F3, F5, F6, F7, F8, F9, F10, F11.S3.T1 | Evidencia: intermediate and final e2e-validator reports |
+| AC-19 | F3, F5, F6, F7, F8, F9, F10, F11.S3.T1 | Evidencia: intermediate and final e2e-validator reports, including siege |
 | AC-20 | F10.S2.T3, F11.S2.T2 | Evidencia: final player/QA/dev/admin docs and smoke test following docs |
 
 ## Parallelization / Ownership
@@ -406,7 +408,7 @@ Validation Gate F11: `cargo fmt --manifest-path port_rust/Cargo.toml --all --che
 - Linux Rust workflow approved.
 - Windows x64 release workflow approved with artifact/checksum.
 - Current CMake/doctest gates approved while legacy coexists.
-- `e2e-validator` approved for boot, login, character, world, combat, inventory, NPC/shop, chat, options, audio, translations, social/events, MU Helper, GameShop, editor/admin, invalid assets and log redaction.
+- `e2e-validator` approved for boot, login, character, world, combat, inventory, NPC/shop, siege, chat, options, audio, translations, social/events, MU Helper, GameShop, editor/admin, invalid assets and log redaction.
 - Final docs approved for player, QA/dev and admin/editor.
 
 ## Definition of Done
