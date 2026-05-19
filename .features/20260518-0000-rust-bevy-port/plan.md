@@ -95,6 +95,12 @@ Arquivos planejados para implementação futura:
 
 Source classification rule: before any release gate can pass, every top-level legacy path under `ClientLibrary`, `src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` and `tests` must be classified as `ported`, `replaced`, `fixture-only`, `reference-only`, or `rejected`. Unclassified paths block AC-16 and F11.
 
+## Tooling / Support Inventory
+
+| Area | Legacy sources | Migration target |
+|---|---|---|
+| Port tooling and packaging scripts | `scripts/**` | `port_rust/docs/script-dependencies.md`, `feature-assets`, `feature-release`; support tooling stays outside runtime but must be planned with the port |
+
 ## Asset Inventory
 
 Legacy source root is `src/bin/Data`. The pipeline must inventory and convert at least these observed groups before release:
