@@ -22,6 +22,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   `manifest.muasset.json` e os assets convertidos com hashes coerentes; falhas
   de manifest ou checksum mantem o cliente em `asset-check-failed`.
 - Nenhum arquivo de implementacao legado deve ser movido para ca sem uma fase planejada.
+- A progressao de personagem e a curva de master level do port Rust estao
+  documentadas em `docs/character-progression.md`.
 
 ## Validacao local prevista
 
@@ -65,6 +67,8 @@ Veja tambem:
 
 - `docs/control-http.md` para o fluxo completo do servidor HTTP de controle.
 - `docs/face_server.md` para o fluxo completo do fake connect-server.
+- `docs/character-progression.md` para a tabela de classes e as curvas de
+  experiencia do personagem.
 
 ## Dependencias dos scripts de port
 
