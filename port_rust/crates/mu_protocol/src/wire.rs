@@ -75,9 +75,27 @@ pub(crate) fn encode_long_packet_with_subcode(
     Ok(packet)
 }
 
+pub(crate) fn encode_long_packet(
+    code: u8,
+    packet_type: u8,
+    payload: &[u8],
+) -> Result<Vec<u8>, PacketCodecError> {
+    let size = 4usize
+        .checked_add(payload.len())
+        .ok_or(PacketCodecError::PacketTooLarge { size: usize::MAX })?;
+    let size = u16::try_from(size).map_err(|_| PacketCodecError::PacketTooLarge { size })?;
+
+    let mut packet = Vec::with_capacity(usize::from(size));
+    packet.push(code);
+    packet.extend_from_slice(&size.to_be_bytes());
+    packet.push(packet_type);
+    packet.extend_from_slice(payload);
+    Ok(packet)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{fixed_bytes, xor3_encrypt};
+    use super::{encode_long_packet, fixed_bytes, xor3_encrypt};
 
     #[test]
     fn pads_and_truncates_fixed_bytes() {
@@ -94,5 +112,13 @@ mod tests {
         let mut shifted = [0u8; 3];
         xor3_encrypt(&mut shifted, 5);
         assert_eq!(shifted, [0xAB, 0xFC, 0xCF]);
+    }
+
+    #[test]
+    fn encodes_long_packets_without_subcode() {
+        assert_eq!(
+            encode_long_packet(0xC4, 0xC5, &[0x01, 0x02]).unwrap(),
+            vec![0xC4, 0x00, 0x06, 0xC5, 0x01, 0x02]
+        );
     }
 }
