@@ -16,6 +16,7 @@ const DEFAULT_FPS_LIMIT: u32 = 0;
 const DEFAULT_REDUCE_EFFECTS: bool = false;
 const DEFAULT_LAST_SERVER: &str = "127.127.127.127:44406";
 const DEFAULT_LANGUAGE: &str = "en";
+const DEFAULT_CAMERA_ZOOM: i32 = 1735;
 const MIN_WINDOW_DIMENSION: u32 = 1;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +28,7 @@ pub struct Config {
     pub performance: PerformanceSettings,
     pub network: NetworkSettings,
     pub locale: LocaleSettings,
+    pub camera: CameraSettings,
 }
 
 impl Config {
@@ -97,6 +99,7 @@ impl Config {
         self.performance = self.performance.normalized();
         self.network = self.network.normalized();
         self.locale = self.locale.normalized();
+        self.camera = self.camera.normalized();
         self
     }
 }
@@ -206,6 +209,26 @@ impl Default for LocaleSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CameraSettings {
+    pub zoom: i32,
+}
+
+impl CameraSettings {
+    pub fn normalized(self) -> Self {
+        self
+    }
+}
+
+impl Default for CameraSettings {
+    fn default() -> Self {
+        Self {
+            zoom: DEFAULT_CAMERA_ZOOM,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("failed to read config `{path}`: {source}")]
@@ -296,6 +319,7 @@ mod tests {
         config.locale = LocaleSettings {
             language: "Eng".to_string(),
         };
+        config.camera.zoom = 2048;
 
         let path = Config::path_in(&root);
         config.save(&path).unwrap();
@@ -322,6 +346,7 @@ mod tests {
         assert_eq!(loaded.network.last_server, "127.0.0.1:44405");
         assert!(loaded.network.remember_username);
         assert_eq!(loaded.locale.language, "en");
+        assert_eq!(loaded.camera.zoom, 2048);
     }
 
     #[test]

@@ -57,3 +57,6 @@ The migration plan in `.features/20260518-0000-rust-bevy-port/plan.md` is comple
 # [high] Session-state integration
 
 `F5.S2.T2` is now the next pending network slice after the async transport/fake-server work. It needs `port_rust/crates/mu_app/src/session_state.rs` and `port_rust/crates/mu_network/src/session.rs` with fake-server tests and logs.
+# [medium] Camera runtime wiring
+
+`mu_render::camera` and `mu_app::config::CameraSettings` now exist, but no live runtime consumer uses them yet. Next pass should thread the camera config into the active render/camera flow and the options surface.
