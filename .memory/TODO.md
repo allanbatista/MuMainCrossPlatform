@@ -55,6 +55,19 @@ validation are the remaining gates before the Rust client can be treated as
 releasable. Next step is to unblock the Actions artifact for `F1.S2.T2` and
 finish the release workflow.
 
+# [high] Finish Windows release bundle packaging
+
+`F11.S1.T1` is still open. The Linux release smoke is now in place, but the
+Windows release bundle still needs a reusable packager that stages
+`mu_client.exe`, converted assets, and `manifest.muasset.json` into a clean
+distributable layout.
+
+# [high] Final e2e validation
+
+`F11.S3.T1` is the remaining release gate. The packager and Linux smoke are in
+place, but the final e2e validator still needs to exercise login, world,
+GameShop, MU Helper, editor/admin, and log evidence on the packaged flow.
+
 # [high] Start world/render/input parity slice
 
 `F7.S1.T1` through `F7.S2.T2` are still open after the audio runtime pass.

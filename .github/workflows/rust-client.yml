@@ -46,3 +46,11 @@ jobs:
       - name: Build client
         run: |
           cargo build --manifest-path port_rust/Cargo.toml -p mu_client
+
+      - name: Build release client
+        run: |
+          cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
+
+      - name: Smoke release client
+        run: |
+          cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --headless

@@ -70,6 +70,8 @@ rtk cargo fmt --manifest-path port_rust/Cargo.toml --check
 rtk cargo test --manifest-path port_rust/Cargo.toml --workspace
 rtk cargo run --manifest-path port_rust/Cargo.toml -p port_rust -- --status
 rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --control-http 127.0.0.1:0
+rtk cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
+rtk cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --headless
 ```
 
 O comando `--status` deve imprimir uma mensagem contendo `initialized`,
