@@ -18,6 +18,10 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - As configuracoes persistidas ficam em `config/client.toml`; elas cobrem
   video, audio, camera, controles, performance, rede e idioma, e nao gravam
   segredos como senha ou token. O zoom orbital fica salvo em `[Camera] zoom`.
+- O sistema de camera e os presets de zoom estao documentados em
+  `docs/camera-system.md` e `docs/camera-config-zoom.md`.
+- A janela de options compartilhada usa o mesmo `config/client.toml` em login, character
+  select e gameplay; detalhes em `docs/options-window.md`.
 - Quando `--asset-root` e informado, o root precisa conter
   `manifest.muasset.json` e os assets convertidos com hashes coerentes; falhas
   de manifest ou checksum mantem o cliente em `asset-check-failed`.
@@ -95,6 +99,9 @@ Veja tambem:
 - `docs/face_server.md` para o fluxo completo do fake connect-server.
 - `docs/character-progression.md` para a tabela de classes e as curvas de
   experiencia do personagem.
+- `docs/camera-system.md` para o sistema de camera e
+  `docs/options-window.md` para a janela de options compartilhada e a persistencia de
+  configuracao.
 - `docs/combat-buffs-experience.md` para os helpers de combate, buffs e
   experiencia compartilhada.
 - `docs/skills-effects-audio.md` para o catalogo de skills, requisitos, delay e
