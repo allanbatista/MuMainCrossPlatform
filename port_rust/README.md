@@ -44,6 +44,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de friend e guild esta documentada em `docs/friend-guild.md`.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
   snapshots de party info/list e o consumo do `PartyManager`.
+- A camada de siege warfare esta documentada em `docs/siege-warfare.md` e
+  cobre observer, soldier e commander na janela de castle siege.
 - A camada de quests, events, duel e gens esta documentada em
   `docs/quests-events-duel-gens.md`.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
@@ -120,6 +122,8 @@ Veja tambem:
 - `docs/friend-guild.md` para as snapshots de friend, letter e guild.
 - `docs/party-ui.md` para as snapshots de party info/list e o consumo do
   `PartyManager`.
+- `docs/siege-warfare.md` para a snapshot de siege warfare e os modos
+  observer, soldier e commander.
 - `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e
   gens.
 - `docs/game-shop.md` para o runtime, a seguranca transacional e as snapshots

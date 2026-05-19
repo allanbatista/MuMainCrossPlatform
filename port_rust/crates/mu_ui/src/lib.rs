@@ -29,6 +29,7 @@ pub mod quests;
 pub mod routes;
 pub mod server_select;
 pub mod shop;
+pub mod siege;
 pub mod trade;
 pub mod widgets;
 
@@ -98,5 +99,9 @@ pub use server_select::{
     ServerSelectScreenState,
 };
 pub use shop::{shop_screen, ShopAction, ShopScreen, ShopScreenState};
+pub use siege::{
+    siege_screen, SiegeAction, SiegeBattleSkill, SiegeCommand, SiegeCommanderEntry,
+    SiegeMemberLocation, SiegeScreen, SiegeScreenState, SiegeUiPlugin,
+};
 pub use trade::{trade_screen, TradeAction, TradeScreen, TradeScreenState};
 pub use widgets::{UiShellWidgetKind, UiShellWidgetSet};
