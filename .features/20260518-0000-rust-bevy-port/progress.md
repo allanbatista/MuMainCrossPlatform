@@ -1,10 +1,10 @@
 # Port completo Rust + Bevy do cliente MU
 
-Status atual: `F5.S2.T1` concluída; `F1.S2.T2` continua bloqueado até existir artefato/checksum/log de Actions
+Status atual: `F6.S1.T3` concluída; `F1.S2.T2` continua bloqueado até existir artefato/checksum/log de Actions
 
-Próximo passo concreto: iniciar `F5.S2.T2`, a integração de session-state.
+Próximo passo concreto: iniciar `F6.S2.T1`, a UI hud/chat/minimap/hotkeys.
 
-Sincronização com git: `rtk git status --short --untracked-files=all` agora também mostra `.features/20260518-0000-rust-bevy-port/progress.md`, `.memory/TODO.md`, `port_rust/Cargo.lock`, `port_rust/crates/mu_network/{Cargo.toml,src/{client.rs,fake_server.rs,lib.rs,transport.rs}}` e `prompt.txt`; o restante do workspace segue limpo nesta etapa.
+Sincronização com git: `rtk git status --short --untracked-files=all` agora também mostra `.features/20260518-0000-rust-bevy-port/progress.md`, `port_rust/Cargo.lock`, `port_rust/crates/mu_app/src/{lib.rs,session_state.rs}`, `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs,src/session.rs}`, `port_rust/crates/mu_ui/{Cargo.toml,src/{character_select.rs,fixture_routes.rs,layout.rs,lib.rs,login.rs,messages.rs,options.rs,routes.rs,server_select.rs,widgets.rs}}`; o restante do workspace segue limpo nesta etapa.
 
 ## Controle documental
 
@@ -83,7 +83,7 @@ Validation Gate F4: done.
 | F5.S1.T6 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{guild.rs,social.rs,quests.rs,events.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
 | F5.S1.T7 | todo | `feature-network` | `port_rust/crates/mu_protocol/src/{cash_shop.rs,mu_helper.rs,admin.rs}` | nenhum | golden tests | pendente | aguarda autorização de implementação |
 | F5.S2.T1 | done | `feature-network` | `port_rust/crates/mu_network/src/{transport.rs,client.rs,fake_server.rs}` | `port_rust/crates/mu_network/{Cargo.toml,src/{client.rs,fake_server.rs,lib.rs,transport.rs}}`, `port_rust/Cargo.lock` | integration tests | async TCP transport, reconnecting client and scripted fake server with connect-timeout, read-timeout, disconnect and malformed-packet coverage; validation: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
-| F5.S2.T2 | todo | `feature-network` | `port_rust/crates/mu_app/src/session_state.rs`, `port_rust/crates/mu_network/src/session.rs` | nenhum | fake server tests + logs | pendente | aguarda autorização de implementação |
+| F5.S2.T2 | done | `feature-network` | `port_rust/crates/mu_app/src/session_state.rs`, `port_rust/crates/mu_network/src/session.rs` | `port_rust/crates/mu_app/src/{lib.rs,session_state.rs}`, `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs,src/session.rs}`, `port_rust/Cargo.lock` | fake server tests + logs | state tracker em `mu_app` e session wrapper em `mu_network` observam login sucesso/falha, logout e disconnect; validation: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_app --all-targets -- -D warnings`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
 
 Validation Gate F5: todo.
 
@@ -91,9 +91,9 @@ Validation Gate F5: todo.
 
 | ID | Status | Owner/subagent | Planned files | Actual files touched | Required evidence | Produced evidence | Blocker/cause |
 |---|---|---|---|---|---|---|---|
-| F6.S1.T1 | todo | `feature-ui` | `port_rust/crates/mu_ui/src/{lib.rs,routes.rs,widgets.rs,layout.rs}` | nenhum | route tests | pendente | aguarda autorização de implementação |
-| F6.S1.T2 | todo | `feature-ui` | `port_rust/crates/mu_ui/src/{login.rs,server_select.rs,options.rs,messages.rs}` | nenhum | snapshots | pendente | aguarda autorização de implementação |
-| F6.S1.T3 | todo | `feature-ui` | `port_rust/crates/mu_ui/src/character_select.rs` | nenhum | fake server + screenshots | pendente | aguarda autorização de implementação |
+| F6.S1.T1 | done | `feature-ui` | `port_rust/crates/mu_ui/src/{lib.rs,routes.rs,widgets.rs,layout.rs}` | `port_rust/crates/mu_ui/{Cargo.toml,src/{fixture_routes.rs,layout.rs,lib.rs,routes.rs,widgets.rs}}`, `port_rust/Cargo.lock` | route tests | `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_ui`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml -p mu_ui --all-targets -- -D warnings`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
+| F6.S1.T2 | done | `feature-ui` | `port_rust/crates/mu_ui/src/{login.rs,server_select.rs,options.rs,messages.rs}` | `port_rust/crates/mu_ui/src/{lib.rs,login.rs,messages.rs,options.rs,server_select.rs}` | snapshots | login, server-select, options e messages agora têm modelos/estados estáveis e testes de snapshot; validation: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_ui`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
+| F6.S1.T3 | done | `feature-ui` | `port_rust/crates/mu_ui/src/character_select.rs` | `port_rust/crates/mu_ui/src/{character_select.rs,lib.rs}` | fake server + screenshots | character-select agora cobre loading/empty/ready/error/action-denied com botões e cartões de personagem; validation: `rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `rtk cargo test --manifest-path port_rust/Cargo.toml -p mu_ui`, `rtk cargo test --manifest-path port_rust/Cargo.toml --workspace`, `rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings` | nenhum |
 | F6.S2.T1 | todo | `feature-ui` | `port_rust/crates/mu_ui/src/{hud.rs,chat.rs,minimap.rs,hotkeys.rs}` | nenhum | visual snapshots | pendente | aguarda autorização de implementação |
 | F6.S2.T2 | todo | `feature-audio` | `port_rust/crates/mu_audio/src/{lib.rs,diagnostics.rs,events.rs}` | nenhum | audio tests/logs | pendente | aguarda autorização de implementação |
 
@@ -168,14 +168,16 @@ Novos:
 
 - `.features/20260518-0000-rust-bevy-port/spec.md` — representado por `DOC.SPEC`.
 - `.features/20260518-0000-rust-bevy-port/plan.md` — representado por `DOC.PLAN`.
+- `port_rust/crates/mu_app/src/session_state.rs` — representado por `F5.S2.T2`.
+- `port_rust/crates/mu_network/src/session.rs` — representado por `F5.S2.T2`.
 - `port_rust/Cargo.toml` — representado por `F1.S1.T1`, `F1.S1.T2` e `F4.S2.T1`.
-- `port_rust/Cargo.lock` — gerado por `F1.S1.T1`, atualizado por `F1.S1.T3`, `F3.S1.T2`, `F3.S2.T1`, `F4.S2.T1` e `F5.S1.T4`.
+- `port_rust/Cargo.lock` — gerado por `F1.S1.T1`, atualizado por `F1.S1.T3`, `F3.S1.T2`, `F3.S2.T1`, `F4.S2.T1`, `F5.S1.T4` e `F5.S2.T2`.
 - `port_rust/rust-toolchain.toml` — representado por `F1.S1.T1`.
 - `.github/workflows/rust-client.yml` — representado por `F1.S2.T1`.
 - `.github/workflows/rust-client-windows.yml` — representado por `F1.S2.T2` e `F1.S2.T3`.
 - `port_rust/crates/mu_client/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1` e `F1.S1.T2`.
 - `port_rust/crates/mu_client/src/main.rs` — representado por `F1.S1.T3` e `F4.S2.T1`.
-- `port_rust/crates/mu_app/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F4.S2.T1`.
+- `port_rust/crates/mu_app/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2`, `F4.S2.T1` e `F5.S2.T2`.
 - `port_rust/crates/mu_app/src/logging.rs` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_app/src/cli.rs` — representado por `F1.S1.T3`.
 - `port_rust/crates/mu_app/src/state.rs` — representado por `F1.S1.T3`.
@@ -184,7 +186,7 @@ Novos:
 - `port_rust/crates/mu_protocol/src/{items.rs,player_shop.rs,trade.rs,vault.rs}` — representado por `F5.S1.T4`.
 - `port_rust/crates/mu_protocol/src/{codec.rs,error.rs,frame.rs}` — representado por `F5.S1.T1`.
 - `port_rust/crates/mu_network/src/redaction.rs` — representado por `F4.S2.T1`.
-- `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F4.S2.T1`.
+- `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2`, `F4.S2.T1` e `F5.S2.T2`.
 - `port_rust/crates/mu_assets/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F3.S2.T1`.
 - `port_rust/crates/mu_assets/src/translations.rs` — representado por `F3.S2.T1`.
 - `port_rust/crates/mu_assets/src/audio.rs` — representado por `F3.S2.T2`.
@@ -198,6 +200,8 @@ Novos:
 - `tmp/asset-inventory/data-report.txt` — artefato local ignorado, representado por `F2.S1.T1`.
 - `port_rust/crates/mu_render/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1` e `F1.S1.T2`.
 - `port_rust/crates/mu_ui/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1`, `F1.S1.T2` e `F3.S2.T1`.
+- `port_rust/crates/mu_ui/src/{layout.rs,routes.rs,widgets.rs}` — representado por `F6.S1.T1`.
+- `port_rust/crates/mu_ui/src/{character_select.rs,login.rs,messages.rs,options.rs,server_select.rs}` — representado por `F6.S1.T2` e `F6.S1.T3`.
 - `port_rust/crates/mu_ui/src/i18n.rs` — representado por `F3.S2.T1`.
 - `port_rust/crates/mu_audio/{Cargo.toml,src/lib.rs}` — representado por `F1.S1.T1` e `F1.S1.T2`.
 - `port_rust/crates/mu_audio/src/assets.rs` — representado por `F3.S2.T2`.
@@ -216,12 +220,16 @@ Modificados:
 
 - `.features/20260518-0000-rust-bevy-port/progress.md` — representado por `DOC.PROGRESS`, `F1.S1.T1` e atualização de rastreabilidade.
 - `port_rust/Cargo.toml` — representado por `F4.S2.T1`.
-- `port_rust/Cargo.lock` — representado por `F4.S2.T1` e `F5.S1.T4`.
-- `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,runtime.rs}}` — representado por `F4.S2.T1`.
+- `port_rust/Cargo.lock` — representado por `F4.S2.T1`, `F5.S1.T4`, `F5.S2.T2` e `F6.S1.T1`.
+- `port_rust/crates/mu_app/{Cargo.toml,src/{lib.rs,runtime.rs}}` — representado por `F4.S2.T1` e `F5.S2.T2`.
 - `port_rust/crates/mu_app/src/logging.rs` — representado por `F4.S2.T1`.
 - `port_rust/crates/mu_client/src/main.rs` — representado por `F4.S2.T1`.
-- `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F4.S2.T1`.
+- `port_rust/crates/mu_network/{Cargo.toml,src/lib.rs}` — representado por `F4.S2.T1` e `F5.S2.T2`.
 - `port_rust/crates/mu_network/src/redaction.rs` — representado por `F4.S2.T1`.
+- `port_rust/crates/mu_ui/{Cargo.toml,src/{fixture_routes.rs,lib.rs}}` — representado por `F3.S2.T1` e `F6.S1.T1`.
+- `port_rust/crates/mu_ui/src/layout.rs` — representado por `F6.S1.T1`.
+- `port_rust/crates/mu_ui/src/routes.rs` — representado por `F6.S1.T1`.
+- `port_rust/crates/mu_ui/src/widgets.rs` — representado por `F6.S1.T1`.
 - `port_rust/crates/mu_protocol/Cargo.toml` — representado por `F5.S1.T4`.
 - `port_rust/crates/mu_protocol/src/connect_server.rs` — representado por `F5.S1.T1`.
 - `port_rust/crates/mu_protocol/src/lib.rs` — representado por `F5.S1.T1` e `F5.S1.T4`.
@@ -285,11 +293,11 @@ Removidos:
 
 ## Contagem de tarefas
 
-- done: 4 documentais + 24 implementação
- - doing: 0
-- todo: 41 implementação
- - blocked: 1
- - failed: 0
+- done: 4 documentais + 28 implementação
+- doing: 0
+- todo: 37 implementação
+- blocked: 1
+- failed: 0
 
 ## Pendências e evidências ausentes
 
@@ -319,7 +327,7 @@ Removidos:
 - F5.S1.T6 concluída com guild/social/quests/events packet helpers e testes de golden coverage.
 - F5.S1.T7 concluída com cash shop/MU Helper/admin packet helpers e testes de golden coverage.
 - F5.S2.T1 concluída com transport async, cliente reconectável e fake server scriptável; cobri connect-timeout, read-timeout, disconnect e malformed packet.
-- Próxima tarefa executável local é `F5.S2.T2`, a integração de session-state.
+- Próxima tarefa executável local é `F6.S1.T1`, a UI shell/routes.
 - Evidências já disponíveis: `cargo metadata`, `cargo tree --manifest-path port_rust/Cargo.toml --workspace --depth 1`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo build --manifest-path port_rust/Cargo.toml -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_app`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_asset_pipeline`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_asset_pipeline --all-targets -- -D warnings`, `cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__`, `cargo fmt --manifest-path port_rust/Cargo.toml --all --check`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_app -p mu_input -p mu_audio -p mu_network -p mu_core -p mu_client`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_app -p mu_network -p mu_client --all-targets -- -D warnings`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_core -p mu_ui --all-targets -- -D warnings`, `smokes headless`, `rg` da política central, `port_rust/Cargo.lock` e relatório local de inventário.
 - `cargo test --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_audio`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_assets -p mu_audio --all-targets -- -D warnings`
 - `cargo test --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server`, `cargo test --manifest-path port_rust/Cargo.toml -p mu_protocol -p mu_network -p mu_app`, `cargo clippy --manifest-path port_rust/Cargo.toml -p mu_network -p mu_fake_server --all-targets -- -D warnings`, `cargo test --manifest-path port_rust/Cargo.toml --workspace`, `cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings`

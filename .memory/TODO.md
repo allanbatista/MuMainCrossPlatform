@@ -60,3 +60,7 @@ The migration plan in `.features/20260518-0000-rust-bevy-port/plan.md` is comple
 # [medium] Camera runtime wiring
 
 `mu_render::camera` and `mu_app::config::CameraSettings` now exist, but no live runtime consumer uses them yet. Next pass should thread the camera config into the active render/camera flow and the options surface.
+
+# [medium] UI HUD/chat/minimap/hotkeys slice
+
+`F6.S2.T1` remains pending after the auth and character-select snapshot work. Next step is to add `port_rust/crates/mu_ui/src/{hud.rs,chat.rs,minimap.rs,hotkeys.rs}` with snapshot coverage.
