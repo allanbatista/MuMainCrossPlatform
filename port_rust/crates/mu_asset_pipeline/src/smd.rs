@@ -46,6 +46,8 @@ struct ParsedTriangleVertex {
     texcoord: [f32; 2],
 }
 
+type PoseTransform = ([f32; 3], [f32; 3]);
+
 pub fn parse_smd_file(path: &Utf8Path) -> Result<BakedModel, SmdParseError> {
     let content = fs::read_to_string(path).map_err(|source| SmdParseError::Read {
         path: path.to_path_buf(),
@@ -169,10 +171,9 @@ fn parse_skeleton(
     path: &Utf8Path,
     stream: &mut TokenStream<'_>,
     node_count: usize,
-) -> Result<Vec<([f32; 3], [f32; 3])>, SmdParseError> {
+) -> Result<Vec<PoseTransform>, SmdParseError> {
     stream.expect_name(path, "skeleton")?;
     let mut transforms = vec![([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]); node_count];
-    let mut have_time_zero = false;
 
     loop {
         match stream.peek() {
@@ -197,7 +198,6 @@ fn parse_skeleton(
                     ];
                     if time_index == 0 && node_index < node_count {
                         transforms[node_index] = (position, rotation);
-                        have_time_zero = true;
                     }
                 }
             }
@@ -214,10 +214,6 @@ fn parse_skeleton(
                 })
             }
         }
-    }
-
-    if !have_time_zero {
-        return Ok(transforms);
     }
 
     Ok(transforms)
@@ -298,7 +294,7 @@ fn tokenize(path: &Utf8Path, content: &str) -> Result<Vec<Token>, SmdParseError>
 
         if ch == '/' && chars.peek() == Some(&'/') {
             chars.next();
-            while let Some(next) = chars.next() {
+            for next in chars.by_ref() {
                 if next == '\n' {
                     break;
                 }
@@ -308,7 +304,7 @@ fn tokenize(path: &Utf8Path, content: &str) -> Result<Vec<Token>, SmdParseError>
 
         if ch == '"' {
             let mut value = String::new();
-            while let Some(next) = chars.next() {
+            for next in chars.by_ref() {
                 if next == '"' {
                     break;
                 }

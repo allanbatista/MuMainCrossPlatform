@@ -270,7 +270,7 @@ fn choose_layout(
             continue;
         }
         let body = payload.len() - 4;
-        if body % entry_size != 0 {
+        if !body.is_multiple_of(*entry_size) {
             continue;
         }
         let version = payload[0];
@@ -326,7 +326,7 @@ fn scene_object_score(
         {
             continue;
         }
-        if object_type < -1 || object_type > 4096 {
+        if !(-1..=4096).contains(&object_type) {
             continue;
         }
         if px.abs() > 250_000.0 || py.abs() > 250_000.0 || pz.abs() > 250_000.0 {

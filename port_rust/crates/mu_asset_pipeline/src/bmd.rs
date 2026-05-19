@@ -165,8 +165,7 @@ pub(crate) fn parse_bmd_bytes(path: &Utf8Path, bytes: &[u8]) -> Result<BakedMode
         let mut local_translation = [0.0; 3];
         let mut local_rotation = [0.0; 3];
 
-        for action_index in 0..actions.len() {
-            let action = &actions[action_index];
+        for (action_index, action) in actions.iter().enumerate() {
             let mut positions = Vec::with_capacity(action.num_keys);
             for _ in 0..action.num_keys {
                 positions.push(reader.read_vec3(path, "bone action position")?);
@@ -235,21 +234,23 @@ pub(crate) fn parse_bmd_bytes(path: &Utf8Path, bytes: &[u8]) -> Result<BakedMode
                         &source_vertices,
                         &source_normals,
                         &source_texcoords,
-                        &[
-                            triangle.vertex_index[0],
-                            triangle.vertex_index[1],
-                            triangle.vertex_index[2],
-                        ],
-                        &[
-                            triangle.normal_index[0],
-                            triangle.normal_index[1],
-                            triangle.normal_index[2],
-                        ],
-                        &[
-                            triangle.texcoord_index[0],
-                            triangle.texcoord_index[1],
-                            triangle.texcoord_index[2],
-                        ],
+                        &TriangleIndices {
+                            vertex: [
+                                triangle.vertex_index[0],
+                                triangle.vertex_index[1],
+                                triangle.vertex_index[2],
+                            ],
+                            normal: [
+                                triangle.normal_index[0],
+                                triangle.normal_index[1],
+                                triangle.normal_index[2],
+                            ],
+                            texcoord: [
+                                triangle.texcoord_index[0],
+                                triangle.texcoord_index[1],
+                                triangle.texcoord_index[2],
+                            ],
+                        },
                     )?;
                 } else if triangle.polygon == 4 {
                     append_triangle_vertices(
@@ -259,21 +260,23 @@ pub(crate) fn parse_bmd_bytes(path: &Utf8Path, bytes: &[u8]) -> Result<BakedMode
                         &source_vertices,
                         &source_normals,
                         &source_texcoords,
-                        &[
-                            triangle.vertex_index[0],
-                            triangle.vertex_index[1],
-                            triangle.vertex_index[2],
-                        ],
-                        &[
-                            triangle.normal_index[0],
-                            triangle.normal_index[1],
-                            triangle.normal_index[2],
-                        ],
-                        &[
-                            triangle.texcoord_index[0],
-                            triangle.texcoord_index[1],
-                            triangle.texcoord_index[2],
-                        ],
+                        &TriangleIndices {
+                            vertex: [
+                                triangle.vertex_index[0],
+                                triangle.vertex_index[1],
+                                triangle.vertex_index[2],
+                            ],
+                            normal: [
+                                triangle.normal_index[0],
+                                triangle.normal_index[1],
+                                triangle.normal_index[2],
+                            ],
+                            texcoord: [
+                                triangle.texcoord_index[0],
+                                triangle.texcoord_index[1],
+                                triangle.texcoord_index[2],
+                            ],
+                        },
                     )?;
                     append_triangle_vertices(
                         path,
@@ -282,21 +285,23 @@ pub(crate) fn parse_bmd_bytes(path: &Utf8Path, bytes: &[u8]) -> Result<BakedMode
                         &source_vertices,
                         &source_normals,
                         &source_texcoords,
-                        &[
-                            triangle.vertex_index[0],
-                            triangle.vertex_index[2],
-                            triangle.vertex_index[3],
-                        ],
-                        &[
-                            triangle.normal_index[0],
-                            triangle.normal_index[2],
-                            triangle.normal_index[3],
-                        ],
-                        &[
-                            triangle.texcoord_index[0],
-                            triangle.texcoord_index[2],
-                            triangle.texcoord_index[3],
-                        ],
+                        &TriangleIndices {
+                            vertex: [
+                                triangle.vertex_index[0],
+                                triangle.vertex_index[2],
+                                triangle.vertex_index[3],
+                            ],
+                            normal: [
+                                triangle.normal_index[0],
+                                triangle.normal_index[2],
+                                triangle.normal_index[3],
+                            ],
+                            texcoord: [
+                                triangle.texcoord_index[0],
+                                triangle.texcoord_index[2],
+                                triangle.texcoord_index[3],
+                            ],
+                        },
                     )?;
                 }
             }
@@ -332,6 +337,13 @@ struct ParsedTriangle {
     vertex_index: [i16; 4],
     normal_index: [i16; 4],
     texcoord_index: [i16; 4],
+}
+
+#[derive(Debug, Clone)]
+struct TriangleIndices {
+    vertex: [i16; 3],
+    normal: [i16; 3],
+    texcoord: [i16; 3],
 }
 
 fn parse_mesh(
@@ -458,14 +470,12 @@ fn append_triangle_vertices(
     source_vertices: &[(i16, [f32; 3])],
     source_normals: &[(i16, [f32; 3])],
     source_texcoords: &[[f32; 2]],
-    vertex_indices: &[i16; 3],
-    normal_indices: &[i16; 3],
-    texcoord_indices: &[i16; 3],
+    indices: &TriangleIndices,
 ) -> Result<(), BmdParseError> {
     for corner in [0usize, 2, 1] {
-        let vertex_index = clamp_index(vertex_indices[corner], source_vertices.len());
-        let normal_index = clamp_index(normal_indices[corner], source_normals.len());
-        let texcoord_index = clamp_index(texcoord_indices[corner], source_texcoords.len());
+        let vertex_index = clamp_index(indices.vertex[corner], source_vertices.len());
+        let normal_index = clamp_index(indices.normal[corner], source_normals.len());
+        let texcoord_index = clamp_index(indices.texcoord[corner], source_texcoords.len());
 
         let (node, position) =
             source_vertices
