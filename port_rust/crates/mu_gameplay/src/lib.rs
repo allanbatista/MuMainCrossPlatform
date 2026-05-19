@@ -6,6 +6,7 @@ pub mod duel;
 pub mod equipment;
 pub mod events;
 pub mod experience;
+pub mod game_shop;
 pub mod gens;
 pub mod inventory;
 pub mod items;
@@ -13,6 +14,7 @@ pub mod mail;
 pub mod master_level;
 pub mod mounts;
 pub mod mu_helper;
+pub mod mu_helper_runtime;
 pub mod npc;
 pub mod party;
 pub mod pets;
@@ -52,6 +54,10 @@ pub use experience::{
     MASTER_LEVEL_OVERFLOW_SCALE, NORMAL_EXPERIENCE_LEVEL_BONUS, NORMAL_EXPERIENCE_SCALE,
     OVERLEVEL_EXPERIENCE_SCALE, OVERLEVEL_EXPERIENCE_THRESHOLD,
 };
+pub use game_shop::{
+    GameShopCatalogState, GameShopExecutionState, GameShopManager, GameShopMode, GameShopPlugin,
+    GameShopStorageState, GameShopVersion, GameShopWalletSummary,
+};
 pub use gens::{GensManager, GensMode, GensPlugin, GensType};
 pub use inventory::{
     InventoryError, InventoryManager, InventoryPlugin, InventorySlot,
@@ -75,6 +81,7 @@ pub use mu_helper::{
     MU_HELPER_MAX_SECONDS_AWAY, MU_HELPER_MAX_THRESHOLD, MU_HELPER_PACKET_PAYLOAD_SIZE,
     MU_HELPER_THRESHOLD_STEP,
 };
+pub use mu_helper_runtime::{MuHelperExecutionState, MuHelperRuntime, MuHelperRuntimePlugin};
 pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,

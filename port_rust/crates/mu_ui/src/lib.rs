@@ -3,6 +3,7 @@ pub mod chat;
 pub mod duel;
 pub mod error;
 pub mod events;
+pub mod game_shop;
 pub mod gens;
 pub mod hotkeys;
 pub mod hud;
@@ -12,6 +13,7 @@ pub mod layout;
 pub mod login;
 pub mod messages;
 pub mod minimap;
+pub mod mu_helper;
 pub mod npc;
 pub mod options;
 pub mod player_shop;
@@ -35,6 +37,7 @@ pub use duel::{duel_screen, DuelAction, DuelChannelCard, DuelScreen, DuelScreenS
 pub use error::ErrorPresentation;
 pub use events::{events_screen, EventAction, EventScreen, EventScreenState};
 pub use fixture_routes::{fixture_routes, UiFixtureRoute};
+pub use game_shop::{game_shop_screen, GameShopAction, GameShopScreen, GameShopScreenState};
 pub use gens::{gens_ranking_screen, GensAction, GensRankingScreen, GensRankingScreenState};
 pub use hotkeys::{hotkeys_screen, HotkeyBinding, HotkeysScreen, HotkeysScreenState};
 pub use hud::{hud_screen, HudButton, HudButtonKind, HudGauge, HudGaugeKind, HudScreen};
@@ -47,6 +50,9 @@ pub use login::{login_screen, LoginAction, LoginField, LoginScreen, LoginScreenS
 pub use messages::{messages_screen, MessageAction, MessageSeverity, MessagesScreen};
 pub use minimap::{minimap_screen, MiniMapMarker, MiniMapMarkerKind, MiniMapScreen};
 pub use mu_assets::TranslationDomain;
+pub use mu_helper::{
+    mu_helper_screen, MuHelperAction, MuHelperConfigSummary, MuHelperScreen, MuHelperScreenState,
+};
 pub use npc::{npc_screen, NpcAction, NpcScreen, NpcScreenState};
 pub use options::{
     options_screen, OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle,

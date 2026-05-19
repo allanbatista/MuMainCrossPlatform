@@ -1,7 +1,7 @@
 # MU Helper
 
 The Rust port keeps the legacy MU Helper configuration as a local model that
-can be saved to the server payload.
+can be saved to the server payload and mirrored by a runtime state model.
 
 ## What the helper stores
 
@@ -26,3 +26,10 @@ can be saved to the server payload.
 - Empty extra-item entries are ignored.
 - The helper save payload is still the legacy fixed-size packet body; the Rust
   model validates the user-facing limits before serializing it.
+- The runtime helper state now exposes `inactive`, `active`,
+  `invalid-config`, `resource-limited`, and `server-limited` states.
+- `mu_gameplay::mu_helper_runtime` owns the execution state and server pause /
+  resume handling; `mu_ui::mu_helper` renders the snapshot surface for the
+  helper window.
+- A blocked helper keeps the last validation or limit reason visible so QA can
+  distinguish bad rules from missing resources or a server pause.

@@ -21,3 +21,9 @@ reach parity. Next concrete step is `F8.S2.T1`.
 
 `F8.S2.T1` is complete. The next concrete gameplay slice is `F8.S2.T2`, which
 should add `mu_gameplay::npc` and `mu_ui::{npc,shop}`.
+
+# [high] Finish GameShop transaction safety
+
+`F9.S2.T1` is complete. The next pending slice is `F9.S2.T2`, which should add
+transaction/idempotency handling in `mu_gameplay::game_shop_transaction` and
+`mu_network::shop`, with redacted logs and duplicate-purchase coverage.

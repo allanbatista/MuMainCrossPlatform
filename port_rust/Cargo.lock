@@ -1270,6 +1270,7 @@ dependencies = [
  "camino",
  "mu_assets",
  "mu_core",
+ "mu_gameplay",
 ]
 
 [[package]]

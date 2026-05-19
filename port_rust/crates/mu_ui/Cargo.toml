@@ -9,3 +9,4 @@ bevy = { workspace = true }
 camino.workspace = true
 mu_core = { path = "../mu_core" }
 mu_assets = { path = "../mu_assets" }
+mu_gameplay = { path = "../mu_gameplay" }
