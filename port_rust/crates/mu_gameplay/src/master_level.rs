@@ -1,9 +1,5 @@
 use crate::classes::MASTER_EXPERIENCE_UNLOCK_LEVEL;
-
-const MASTER_LEVEL_EXPERIENCE_OFFSET: i64 = 3_892_250_000;
-const MASTER_LEVEL_EXPONENT_BONUS: i64 = 9;
-const MASTER_LEVEL_EXPONENT_SCALE: i64 = 10;
-const MASTER_LEVEL_OVERFLOW_SCALE: i64 = 1000;
+pub use crate::experience::next_master_level_experience;
 const MASTER_LEVEL_UNLOCK_LEVEL: u16 = MASTER_EXPERIENCE_UNLOCK_LEVEL;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,21 +37,6 @@ impl MasterLevelState {
     pub fn is_enabled_for_level(class_level: u16) -> bool {
         class_level >= MASTER_LEVEL_UNLOCK_LEVEL
     }
-}
-
-pub fn next_master_level_experience(character_level: u16, master_level: i16) -> i64 {
-    let total_level = i64::from(character_level) + i64::from(master_level) + 1;
-    let over_level = total_level - 255;
-    let master_experience = ((MASTER_LEVEL_EXPONENT_BONUS + total_level)
-        * total_level
-        * total_level
-        * MASTER_LEVEL_EXPONENT_SCALE)
-        + ((MASTER_LEVEL_EXPONENT_BONUS + over_level)
-            * over_level
-            * over_level
-            * MASTER_LEVEL_OVERFLOW_SCALE);
-
-    (master_experience - MASTER_LEVEL_EXPERIENCE_OFFSET) / 2
 }
 
 #[cfg(test)]

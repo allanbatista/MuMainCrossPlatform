@@ -1,10 +1,6 @@
 use crate::classes::CharacterClass;
+pub use crate::experience::next_experience_for_level;
 use crate::stats::{base_class_attributes, ClassAttributes};
-
-const NORMAL_EXPERIENCE_LEVEL_BONUS: u64 = 9;
-const NORMAL_EXPERIENCE_SCALE: u64 = 10;
-const OVERLEVEL_EXPERIENCE_THRESHOLD: u16 = 255;
-const OVERLEVEL_EXPERIENCE_SCALE: u64 = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CharacterSheet {
@@ -83,22 +79,6 @@ impl CharacterSheet {
     pub fn is_master_experience_active(&self) -> bool {
         self.class_.is_master_experience_active(self.level)
     }
-}
-
-pub fn next_experience_for_level(level: u16) -> u64 {
-    let level = u64::from(level);
-    let mut next_experience =
-        (NORMAL_EXPERIENCE_LEVEL_BONUS + level) * level * level * NORMAL_EXPERIENCE_SCALE;
-
-    if level > u64::from(OVERLEVEL_EXPERIENCE_THRESHOLD) {
-        let over_level = level - u64::from(OVERLEVEL_EXPERIENCE_THRESHOLD);
-        next_experience += (NORMAL_EXPERIENCE_LEVEL_BONUS + over_level)
-            * over_level
-            * over_level
-            * OVERLEVEL_EXPERIENCE_SCALE;
-    }
-
-    next_experience
 }
 
 #[cfg(test)]

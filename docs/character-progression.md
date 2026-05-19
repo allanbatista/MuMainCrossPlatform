@@ -50,9 +50,23 @@ next = ((9 + total_level) * total_level^2 * 10
         - 3_892_250_000) / 2
 ```
 
+## Shared Experience Helpers
+
+The gameplay crate also exposes band helpers for UI and future combat/progression
+consumers:
+
+- `ExperienceBand::for_level(level)` returns the lower/upper thresholds for a
+  normal level gauge.
+- `ExperienceBand::for_master_level(character_level, master_level)` returns the
+  equivalent band for master levels.
+- `previous_experience_for_level(level)` and
+  `previous_master_level_experience(character_level, master_level)` expose the
+  lower bound directly.
+
 ## Rust Code Locations
 
 - `port_rust/crates/mu_gameplay/src/classes.rs`
 - `port_rust/crates/mu_gameplay/src/stats.rs`
 - `port_rust/crates/mu_gameplay/src/characters.rs`
 - `port_rust/crates/mu_gameplay/src/master_level.rs`
+- `port_rust/crates/mu_gameplay/src/experience.rs`
