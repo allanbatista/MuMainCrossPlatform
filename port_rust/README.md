@@ -44,8 +44,9 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   modelo de configuracao, o runtime de execucao e os estados ativo/inativo/
   bloqueado.
 - A camada de editor/admin equivalente esta documentada em
-  `docs/admin-editor-rust.md` e cobre o gate de permissao, o bloqueio em modo
-  release e a entrada visivel quando o acesso e autorizado.
+  `docs/admin-editor-rust.md` e cobre o gate de permissao, a rota `admin-core`,
+  o shell do editor, o console, o dev editor e a entrada visivel quando o
+  acesso e autorizado.
 
 ## Validacao local prevista
 
@@ -108,8 +109,8 @@ Veja tambem:
   de GameShop.
 - `docs/mu-helper.md` para o modelo de configuracao do MU Helper, o runtime de
   execucao e os limites legados de salvamento.
-- `docs/admin-editor-rust.md` para o gate de acesso do editor/admin
-  equivalente.
+- `docs/admin-editor-rust.md` para o gate de acesso e o shell do
+  editor/admin equivalente.
 
 ## Dependencias dos scripts de port
 

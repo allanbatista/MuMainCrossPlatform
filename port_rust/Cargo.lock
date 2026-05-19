@@ -1202,6 +1202,7 @@ name = "mu_editor_admin"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "mu_render",
 ]
 
 [[package]]
