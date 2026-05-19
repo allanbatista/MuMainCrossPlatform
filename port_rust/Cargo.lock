@@ -1220,6 +1220,9 @@ name = "mu_gameplay"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "camino",
+ "mu_assets",
+ "mu_input",
  "mu_network",
  "mu_protocol",
  "proptest",
@@ -1259,7 +1262,11 @@ dependencies = [
 name = "mu_render"
 version = "0.1.0"
 dependencies = [
+ "bevy",
+ "camino",
+ "mu_assets",
  "mu_gameplay",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

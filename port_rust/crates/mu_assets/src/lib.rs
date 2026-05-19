@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod manifest;
+pub mod map;
 pub mod runtime;
 pub mod translations;
 pub mod validation;
@@ -10,6 +11,14 @@ pub use audio::{
 };
 pub use manifest::{
     sha256_hex, AssetManifest, AssetManifestEntry, MANIFEST_FILE_NAME, SUPPORTED_SCHEMA_VERSION,
+};
+pub use map::{
+    load_terrain_world_bundle, terrain_world_directory, terrain_world_relative_directory,
+    TerrainCameraTour, TerrainCameraTourMetadata, TerrainCameraWaypoint, TerrainLayerStats,
+    TerrainLayerStatsSet, TerrainMapHeader, TerrainMapJson, TerrainSceneObject,
+    TerrainSceneObjectCollection, TerrainTextureLayer, TerrainTextureSlotCatalog,
+    TerrainTextureSlotMetadata, TerrainWorldBundle, TerrainWorldConfig, TerrainWorldError,
+    TerrainWorldMetadata, TerrainWorldSize, TerrainWorldSummary,
 };
 pub use runtime::{validate_asset_root, AssetRuntimeError};
 pub use translations::{

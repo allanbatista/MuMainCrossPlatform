@@ -14,6 +14,7 @@ pub mod items;
 pub mod mail;
 pub mod master_level;
 pub mod mounts;
+pub mod movement;
 pub mod mu_helper;
 pub mod mu_helper_runtime;
 pub mod npc;
@@ -26,6 +27,7 @@ pub mod stats;
 pub mod summons;
 pub mod trade;
 pub mod vault;
+pub mod world;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -80,6 +82,7 @@ pub use mail::{
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use mounts::{mount_camera_offset, MountKind, MountManager, MountPlugin};
+pub use movement::{MovementActorState, MovementManager, MovementPlugin, MovementState};
 pub use mu_helper::{
     MuHelperConfig, MuHelperConfigError, MuHelperDarkRavenMode, MuHelperMobCount,
     MuHelperMobPresence, MuHelperSkillCondition, MuHelperSkillSlot, MU_HELPER_MAX_EXTRA_ITEMS,
@@ -88,6 +91,9 @@ pub use mu_helper::{
     MU_HELPER_THRESHOLD_STEP,
 };
 pub use mu_helper_runtime::{MuHelperExecutionState, MuHelperRuntime, MuHelperRuntimePlugin};
+pub use mu_input::{
+    CameraBindings, CameraMode, CameraTourState, MovementBindings, MovementCommand,
+};
 pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
@@ -121,4 +127,9 @@ pub use trade::{TradeManager, TradeMode, TradePartnerInfo, TradePlugin, MAX_TRAD
 pub use vault::{
     VaultError, VaultManager, VaultMoneyDirection, VaultPendingTransfer, VaultPlugin, VaultSlot,
     VaultSyncOutcome, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,
+};
+pub use world::{
+    load_terrain_world_bundle, terrain_world_directory, terrain_world_relative_directory,
+    TerrainWorldBundle, TerrainWorldError, TerrainWorldSummary, WorldManager, WorldPlugin,
+    WorldState,
 };
