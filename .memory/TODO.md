@@ -10,3 +10,9 @@ runtime where it is actually consumed.
 `mu_gameplay::party` is implemented, but the first runtime/UI consumer that
 reads party state is still pending. The next step is to hook the resource into
 the surface that actually uses party membership and helper/HUD logic.
+
+# [high] Continue gameplay systems parity
+
+`F8.S1.T1` through `F8.S1.T3` are done, but the gameplay slice still needs
+items/inventory/equipment/vault, NPC, social, events, and pet/summon coverage to
+reach parity. Next concrete step is `F8.S2.T1`.
