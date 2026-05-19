@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod character_select;
 pub mod chat;
 pub mod duel;
@@ -28,6 +29,7 @@ pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
 mod fixture_routes;
 
+pub use admin::{admin_screen, AdminAction, AdminScreen, AdminScreenState};
 pub use character_select::{
     character_select_screen, CharacterSelectAction, CharacterSelectButton,
     CharacterSelectCharacter, CharacterSelectScreen, CharacterSelectScreenState,

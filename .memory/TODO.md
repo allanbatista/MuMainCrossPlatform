@@ -27,3 +27,14 @@ should add `mu_gameplay::npc` and `mu_ui::{npc,shop}`.
 `F9.S2.T1` is complete. The next pending slice is `F9.S2.T2`, which should add
 transaction/idempotency handling in `mu_gameplay::game_shop_transaction` and
 `mu_network::shop`, with redacted logs and duplicate-purchase coverage.
+
+# [medium] Start editor/admin shell
+
+`F10.S1.T1` is complete. The next pending slice is `F10.S1.T2`, which should
+add the editor core shell, console, and dev editor surfaces on top of the new
+admin auth gate.
+
+# [high] Windows CI artifact pending
+
+`F1.S2.T2` still needs a GitHub Actions run to produce the Windows x64 release
+artifact, checksum, and log evidence for the workflow gate.

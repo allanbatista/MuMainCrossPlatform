@@ -1,5 +1,7 @@
 use bevy::prelude::{App, Plugin, Resource};
 
+use crate::game_shop_transaction::GameShopTransactionManager;
+
 const EMPTY_NOTICE: &str = "No GameShop items are available.";
 const CATALOG_NOTICE: &str = "Browse the cash shop catalog.";
 const DETAILS_NOTICE: &str = "Review the selected package.";
@@ -106,6 +108,7 @@ pub struct GameShopManager {
     wallet: GameShopWalletSummary,
     catalog: GameShopCatalogState,
     storage: GameShopStorageState,
+    transactions: GameShopTransactionManager,
     error: Option<String>,
 }
 
@@ -117,6 +120,7 @@ impl Default for GameShopManager {
             wallet: GameShopWalletSummary::default(),
             catalog: GameShopCatalogState::default(),
             storage: GameShopStorageState::default(),
+            transactions: GameShopTransactionManager::default(),
             error: None,
         }
     }
@@ -162,6 +166,14 @@ impl GameShopManager {
         &self.storage
     }
 
+    pub fn transaction(&self) -> &GameShopTransactionManager {
+        &self.transactions
+    }
+
+    pub fn transaction_mut(&mut self) -> &mut GameShopTransactionManager {
+        &mut self.transactions
+    }
+
     pub fn status_detail(&self) -> Option<&str> {
         self.error.as_deref()
     }
@@ -184,6 +196,7 @@ impl GameShopManager {
         self.execution.request_opening = false;
         self.mode = GameShopMode::Empty;
         self.error = None;
+        self.transactions.cancel_active();
     }
 
     pub fn set_versions(
@@ -365,6 +378,7 @@ mod tests {
         assert_eq!(manager.mode(), GameShopMode::Empty);
         assert_eq!(manager.execution(), GameShopExecutionState::default());
         assert_eq!(manager.wallet(), GameShopWalletSummary::default());
+        assert!(!manager.transaction().is_pending());
     }
 
     #[test]
@@ -520,5 +534,18 @@ mod tests {
         client.write_all(&close_state).await.unwrap();
 
         server.finish().await.unwrap();
+    }
+
+    #[test]
+    fn game_shop_closing_clears_pending_transactions() {
+        let mut manager = GameShopManager::new();
+        manager.transaction_mut().begin_purchase().unwrap();
+        assert!(manager.transaction().is_pending());
+
+        manager.close_shop();
+
+        assert_eq!(manager.mode(), GameShopMode::Empty);
+        assert!(!manager.transaction().is_pending());
+        assert!(manager.transaction().last_completion().is_none());
     }
 }

@@ -38,10 +38,14 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de quests, events, duel e gens esta documentada em
   `docs/quests-events-duel-gens.md`.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
-  runtime de catalog/details/storage/empty/error e a UI snapshot do jogo.
+  runtime de catalog/details/storage/empty/error, a seguranca transacional e a
+  UI snapshot do jogo.
 - A camada de MU Helper esta documentada em `docs/mu-helper.md` e cobre o
   modelo de configuracao, o runtime de execucao e os estados ativo/inativo/
   bloqueado.
+- A camada de editor/admin equivalente esta documentada em
+  `docs/admin-editor-rust.md` e cobre o gate de permissao, o bloqueio em modo
+  release e a entrada visivel quando o acesso e autorizado.
 
 ## Validacao local prevista
 
@@ -100,9 +104,12 @@ Veja tambem:
 - `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
 - `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e
   gens.
-- `docs/game-shop.md` para o runtime e as snapshots de GameShop.
+- `docs/game-shop.md` para o runtime, a seguranca transacional e as snapshots
+  de GameShop.
 - `docs/mu-helper.md` para o modelo de configuracao do MU Helper, o runtime de
   execucao e os limites legados de salvamento.
+- `docs/admin-editor-rust.md` para o gate de acesso do editor/admin
+  equivalente.
 
 ## Dependencias dos scripts de port
 

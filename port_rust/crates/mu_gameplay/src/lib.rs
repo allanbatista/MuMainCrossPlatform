@@ -7,6 +7,7 @@ pub mod equipment;
 pub mod events;
 pub mod experience;
 pub mod game_shop;
+pub mod game_shop_transaction;
 pub mod gens;
 pub mod inventory;
 pub mod items;
@@ -57,6 +58,11 @@ pub use experience::{
 pub use game_shop::{
     GameShopCatalogState, GameShopExecutionState, GameShopManager, GameShopMode, GameShopPlugin,
     GameShopStorageState, GameShopVersion, GameShopWalletSummary,
+};
+pub use game_shop_transaction::{
+    GameShopTransaction, GameShopTransactionCompletion, GameShopTransactionError,
+    GameShopTransactionKind, GameShopTransactionManager, GameShopTransactionOutcome,
+    INITIAL_GAME_SHOP_TRANSACTION_ID,
 };
 pub use gens::{GensManager, GensMode, GensPlugin, GensType};
 pub use inventory::{

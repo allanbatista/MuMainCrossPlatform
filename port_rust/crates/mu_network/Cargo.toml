@@ -9,3 +9,6 @@ mu_protocol = { path = "../mu_protocol" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }

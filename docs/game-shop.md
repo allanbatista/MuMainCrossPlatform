@@ -28,6 +28,17 @@ resource and a UI snapshot layer.
 - The gameplay tests use `mu_network::FakeServer` to verify the expected
   packet sequence without depending on the live server.
 
+## Transaction safety
+
+- `mu_gameplay::GameShopTransactionManager` keeps a single in-flight shop
+  action, records the last completion outcome, and lets `GameShopManager`
+  clear pending work when the shop closes.
+- `mu_network::shop::CashShopClient` wraps the cash-shop request helpers with
+  the same single-active-transaction guard and clears pending work on
+  disconnect or reconnect.
+- Gift submission logs redacted receiver and message fields so the transaction
+  trace stays useful without leaking private content.
+
 ## Example
 
 ```rust
