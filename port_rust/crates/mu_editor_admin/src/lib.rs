@@ -3,6 +3,7 @@ pub mod console;
 pub mod core;
 pub mod dev_editor;
 pub mod item_editor;
+pub mod skill_editor;
 
 pub use auth::{AdminAccessState, AdminAuthState, AdminPlugin};
 pub use console::{EditorConsolePlugin, EditorConsoleState};
@@ -14,6 +15,10 @@ pub use dev_editor::{
 pub use item_editor::{
     ItemEditorAction, ItemEditorColumn, ItemEditorColumnVisibility, ItemEditorError,
     ItemEditorPlugin, ItemEditorRow, ItemEditorState, ItemEditorWorkflowState,
+};
+pub use skill_editor::{
+    SkillEditorAction, SkillEditorColumnVisibility, SkillEditorError, SkillEditorPlugin,
+    SkillEditorRow, SkillEditorState, SkillEditorWorkflowState,
 };
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");

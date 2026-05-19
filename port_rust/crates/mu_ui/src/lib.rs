@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod admin_core;
 pub mod admin_item_editor;
+pub mod admin_skill_editor;
 pub mod character_select;
 pub mod chat;
 pub mod duel;
@@ -35,6 +36,9 @@ pub use admin::{admin_screen, AdminAction, AdminScreen, AdminScreenState};
 pub use admin_core::{admin_core_screen, AdminCoreScreen, AdminCoreScreenState};
 pub use admin_item_editor::{
     admin_item_editor_screen, AdminItemEditorScreen, AdminItemEditorScreenState,
+};
+pub use admin_skill_editor::{
+    admin_skill_editor_screen, AdminSkillEditorScreen, AdminSkillEditorScreenState,
 };
 pub use character_select::{
     character_select_screen, CharacterSelectAction, CharacterSelectButton,

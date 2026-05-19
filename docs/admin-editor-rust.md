@@ -46,6 +46,16 @@ como o shell do editor em si.
 - As snapshots cobrem os estados `empty`, `ready`, `dirty`, `saved`,
   `cancelled` e `failed`, alem dos fluxos de save, exportacao e cancelamento.
 
+## Skill editor
+
+- `mu_editor_admin::SkillEditorState` modela as rows carregadas, a selecao
+  atual, o filtro de busca, o freeze de colunas, a visibilidade das colunas e
+  o historico de auditoria.
+- `mu_ui::admin_skill_editor_screen` renderiza a rota `admin-skill-editor` a
+  partir desse estado.
+- As snapshots cobrem os estados `empty`, `ready`, `dirty`, `saved`,
+  `cancelled` e `failed`, alem dos fluxos de save, exportacao e cancelamento.
+
 ## UI
 
 - `mu_ui::admin_screen` renderiza a rota `editor-admin` a partir do estado de
@@ -57,7 +67,3 @@ como o shell do editor em si.
 - Builds de jogador ficam em modo release e nao mostram a entrada do editor.
 - Builds de dev/admin podem liberar o acesso e abrir o editor quando a
   autorizacao estiver ativa.
-
-## Proxima etapa
-
-- `admin-skill-editor` continua a expansao do editor/admin equivalente.

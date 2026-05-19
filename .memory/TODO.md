@@ -30,14 +30,15 @@ transaction/idempotency handling in `mu_gameplay::game_shop_transaction` and
 
 # [high] Continue editor/admin parity
 
-`F10.S2.T1` is complete. The next pending slice is `F10.S2.T2`, which should
-add the skill editor on top of the new admin auth gate plus the core shell,
-console, dev editor, and item editor surfaces.
+`F10.S2.T1` and `F10.S2.T2` are complete. The next pending slice is
+`F10.S2.T3`, which should add the admin-editor documentation evidence on top
+of the new admin auth gate, core shell, console, dev editor, item editor, and
+skill editor surfaces.
 
-# [high] Finish skill editor parity
+# [medium] Finish admin docs evidence
 
-`F10.S2.T2` still needs the skill editor state and UI projection on top of the
-new admin auth gate, core shell, console, dev editor, and item editor slices.
+`F10.S2.T3` still needs the admin-editor documentation review and screenshot
+evidence after the item and skill editor slices landed.
 
 # [high] Windows CI artifact pending
 

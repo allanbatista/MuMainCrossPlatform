@@ -45,8 +45,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   bloqueado.
 - A camada de editor/admin equivalente esta documentada em
   `docs/admin-editor-rust.md` e cobre o gate de permissao, a rota `admin-core`,
-  o item editor, o shell do editor, o console, o dev editor e a entrada visivel
-  quando o acesso e autorizado.
+  os item/skill editors, o shell do editor, o console, o dev editor e a entrada
+  visivel quando o acesso e autorizado.
 
 ## Validacao local prevista
 
