@@ -4,7 +4,9 @@ pub mod classes;
 pub mod combat;
 pub mod duel;
 pub mod equipment;
+pub mod events;
 pub mod experience;
+pub mod gens;
 pub mod inventory;
 pub mod items;
 pub mod mail;
@@ -12,6 +14,7 @@ pub mod master_level;
 pub mod npc;
 pub mod party;
 pub mod player_shop;
+pub mod quests;
 pub mod skills;
 pub mod stats;
 pub mod trade;
@@ -36,6 +39,7 @@ pub use duel::{
     MAX_DUEL_CHANNELS, MAX_DUEL_PLAYERS, MAX_USERNAME_SIZE,
 };
 pub use equipment::{EquipmentError, EquipmentManager, EquipmentPlugin, MAX_EQUIPMENT_SLOTS};
+pub use events::{EventKind, EventManager, EventMode, EventPlugin};
 pub use experience::{
     next_experience_for_level as experience_next_experience_for_level,
     next_master_level_experience as experience_next_master_level_experience,
@@ -44,6 +48,7 @@ pub use experience::{
     MASTER_LEVEL_OVERFLOW_SCALE, NORMAL_EXPERIENCE_LEVEL_BONUS, NORMAL_EXPERIENCE_SCALE,
     OVERLEVEL_EXPERIENCE_SCALE, OVERLEVEL_EXPERIENCE_THRESHOLD,
 };
+pub use gens::{GensManager, GensMode, GensPlugin, GensType};
 pub use inventory::{
     InventoryError, InventoryManager, InventoryPlugin, InventorySlot,
     INVENTORY_EXTENSION_PAGE_COUNT, INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS,
@@ -66,6 +71,7 @@ pub use party::{
 pub use player_shop::{
     PlayerShopManager, PlayerShopMode, PlayerShopPlugin, MAX_PLAYER_SHOP_TITLE_LENGTH,
 };
+pub use quests::{QuestDialogueState, QuestManager, QuestMode, QuestPlugin, QuestRewardState};
 pub use skills::{
     SkillAudioCue, SkillCatalog, SkillDefinition, SkillDisplayInfo, SkillEffectCue, SkillId,
     SkillManager, SkillPlugin, SkillPresentation, SkillRequirement, SkillRequirementsCache,

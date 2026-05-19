@@ -1,6 +1,9 @@
 pub mod character_select;
 pub mod chat;
+pub mod duel;
 pub mod error;
+pub mod events;
+pub mod gens;
 pub mod hotkeys;
 pub mod hud;
 pub mod i18n;
@@ -12,6 +15,7 @@ pub mod minimap;
 pub mod npc;
 pub mod options;
 pub mod player_shop;
+pub mod quests;
 pub mod routes;
 pub mod server_select;
 pub mod shop;
@@ -27,8 +31,11 @@ pub use character_select::{
     CharacterSelectCharacter, CharacterSelectScreen, CharacterSelectScreenState,
 };
 pub use chat::{chat_screen, ChatMessageCount, ChatMessageType, ChatScreen, ChatScreenState};
+pub use duel::{duel_screen, DuelAction, DuelChannelCard, DuelScreen, DuelScreenState};
 pub use error::ErrorPresentation;
+pub use events::{events_screen, EventAction, EventScreen, EventScreenState};
 pub use fixture_routes::{fixture_routes, UiFixtureRoute};
+pub use gens::{gens_ranking_screen, GensAction, GensRankingScreen, GensRankingScreenState};
 pub use hotkeys::{hotkeys_screen, HotkeyBinding, HotkeysScreen, HotkeysScreenState};
 pub use hud::{hud_screen, HudButton, HudButtonKind, HudGauge, HudGaugeKind, HudScreen};
 pub use i18n::Translator;
@@ -47,6 +54,7 @@ pub use options::{
 pub use player_shop::{
     player_shop_screen, PlayerShopAction, PlayerShopScreen, PlayerShopScreenState,
 };
+pub use quests::{quests_screen, QuestAction, QuestScreen, QuestScreenState};
 pub use routes::{
     UiRoute, UiRouteCatalog, UiRouteDescriptor, UiRouteGroup, UiShellPlugin, UiShellState,
 };

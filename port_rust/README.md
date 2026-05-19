@@ -8,8 +8,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - Inicializado como workspace Cargo isolado.
 - Incremental: o cliente legado continua sendo a referencia funcional.
 - Sem runtime jogavel, UI, assets, audio ou editor completos em Rust nesta fase;
-  o crate `mu_gameplay` ja porta o estado isolado de duelo, mas ainda nao ha
-  loop de jogo jogavel.
+  o crate `mu_gameplay` ja porta estados isolados de duelo, quests, events e
+  gens, mas ainda nao ha loop de jogo jogavel.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; detalhes em `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes
@@ -33,6 +33,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de NPC/dialog/shop esta documentada em `docs/npc-dialog-shop.md`.
 - A camada de trade, player shop e mail esta documentada em
   `docs/trade-player-shop-mail.md`.
+- A camada de quests, events, duel e gens esta documentada em
+  `docs/quests-events-duel-gens.md`.
 
 ## Validacao local prevista
 
@@ -87,6 +89,8 @@ Veja tambem:
 - `docs/npc-dialog-shop.md` para o estado de dialogo NPC, buy/sell e repair de
   shop.
 - `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
+- `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e
+  gens.
 
 ## Dependencias dos scripts de port
 
