@@ -93,12 +93,14 @@ Arquivos planejados para implementação futura:
 | Editor/admin | `src/MuEditor/**`, `docs/dev-editor.md` | `mu_editor_admin`, `mu_ui::admin` |
 | Tests | `tests/**`, `tests/third_party/doctest` | Rust unit/integration/property/visual fixtures |
 
-Source classification rule: before any release gate can pass, every top-level legacy path under `ClientLibrary`, `src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` and `tests` must be classified as `ported`, `replaced`, `fixture-only`, `reference-only`, or `rejected`. Unclassified paths block AC-16 and F11.
+Source classification rule: before any release gate can pass, every top-level legacy path under `ClientLibrary`, `ConstantsReplacer`, `cmake`, `src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` and `tests` must be classified as `ported`, `replaced`, `fixture-only`, `reference-only`, or `rejected`. Unclassified paths block AC-16 and F11.
 
 ## Tooling / Support Inventory
 
 | Area | Legacy sources | Migration target |
 |---|---|---|
+| Legacy constants replacer | `ConstantsReplacer/**` | `reference-only`; decision recorded in `port_rust/docs/inventory.md` | auxiliary SQL constants tool stays outside the Rust runtime unless a future migration proves otherwise |
+| Legacy CMake support | `cmake/**` | `validation support`; decision recorded in `port_rust/docs/inventory.md` | helper scripts stay with the legacy build while Rust CI coexists |
 | Port tooling and packaging scripts | `scripts/**` | `port_rust/docs/script-dependencies.md`, `feature-assets`, `feature-release`; support tooling stays outside runtime but must be planned with the port |
 
 ## Asset Inventory
