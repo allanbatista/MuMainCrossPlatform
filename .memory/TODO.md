@@ -32,3 +32,10 @@ transaction/idempotency handling in `mu_gameplay::game_shop_transaction` and
 
 `F1.S2.T2` still needs a GitHub Actions run to produce the Windows x64 release
 artifact, checksum, and log evidence for the workflow gate.
+
+# [medium] Friend and guild UI routes
+
+`mu_ui` now has a party consumer, but the `friend` and `guild` routes are still
+missing concrete snapshot modules. Next pass should port the legacy friend
+surface and then the guild surface so the route catalog stops advertising
+unimplemented gameplay UI.
