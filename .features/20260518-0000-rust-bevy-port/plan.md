@@ -93,7 +93,7 @@ Arquivos planejados para implementação futura:
 | GameShop | `src/source/GameShop/**`, `src/bin/Data/InGameShop*` | `mu_gameplay::game_shop`, `mu_ui::game_shop` |
 | MU Helper | `src/source/MUHelper/**`, `src/source/UI/NewUI/NewUIMuHelper.*` | `mu_gameplay::mu_helper`, `mu_ui::mu_helper` |
 | Editor/admin | `src/MuEditor/**`, `docs/dev-editor.md` | `mu_editor_admin`, `mu_ui::admin` |
-| Tests | `tests/**`, `tests/third_party/doctest` | Rust unit/integration/property/visual fixtures |
+| Tests | `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/text/**`, `tests/third_party/doctest/**` | legacy doctest harness/support is reference-only; test cases migrate to Rust unit/integration/property/visual fixtures |
 
 Source classification rule: before any release gate can pass, every top-level legacy path under `ClientLibrary`, `ConstantsReplacer`, `cmake`, `src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` and `tests` must be classified as `ported`, `replaced`, `fixture-only`, `reference-only`, or `rejected`. Unclassified paths block AC-16 and F11.
 
