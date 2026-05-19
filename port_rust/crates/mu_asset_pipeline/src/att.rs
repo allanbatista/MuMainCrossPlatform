@@ -194,10 +194,6 @@ mod tests {
         repo_root().join(format!("src/bin/Data/World1/{name}"))
     }
 
-    fn golden_path(file_name: &str) -> Utf8PathBuf {
-        repo_root().join(format!("port_rust/assets/data/world_1/{file_name}.json"))
-    }
-
     fn temp_root(label: &str) -> Utf8PathBuf {
         let root = std::env::temp_dir().join(format!(
             "mu_asset_pipeline_terrain_att_{label}_{}_{}",
@@ -220,6 +216,7 @@ mod tests {
         file_name: &str,
         expected_map_number: u8,
         expected_is_extended: bool,
+        expected_output_hash: &str,
     ) {
         let source_root = repo_root().join("src/bin/Data");
         let source = source_path(file_name);
@@ -228,7 +225,6 @@ mod tests {
         let entry = convert_terrain_attribute_file(&source_root, &source, &output_root).unwrap();
         let output_path = output_root.join(entry.converted_path.clone());
         let output_bytes = fs::read(&output_path).unwrap();
-        let golden_bytes = fs::read(golden_path(file_name.trim_end_matches(".att"))).unwrap();
         let json: TerrainAttributeJson = serde_json::from_slice(&output_bytes).unwrap();
 
         assert_eq!(entry.kind, "terrain-attribute");
@@ -240,8 +236,8 @@ mod tests {
             )
             .to_string()
         );
-        assert_eq!(output_bytes, golden_bytes);
         assert_eq!(entry.source_hash, sha256_hex(&fs::read(&source).unwrap()));
+        assert_eq!(entry.converted_hash, expected_output_hash);
         assert_eq!(entry.converted_hash, sha256_hex(&output_bytes));
         assert_eq!(json.header.version, 0);
         assert_eq!(json.header.map_number, expected_map_number);
@@ -252,12 +248,22 @@ mod tests {
 
     #[test]
     fn converts_terrain_attribute_sidecar() {
-        assert_attribute_conversion("Terrain.att", 255, false);
+        assert_attribute_conversion(
+            "Terrain.att",
+            255,
+            false,
+            "48dfe44aa0cae84b60a46a9c12b52800a828c0a53c94b7557f2bbac796ac1719",
+        );
     }
 
     #[test]
     fn converts_encrypted_terrain_attribute_sidecar() {
-        assert_attribute_conversion("EncTerrain1.att", 1, true);
+        assert_attribute_conversion(
+            "EncTerrain1.att",
+            1,
+            true,
+            "5c75e5eafb0030547d5fc7a1346c48facc637fd796c09d591f3c0f53da2f0dc0",
+        );
     }
 
     #[test]

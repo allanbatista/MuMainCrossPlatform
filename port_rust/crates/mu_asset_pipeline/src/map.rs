@@ -240,7 +240,11 @@ mod tests {
             .as_nanos()
     }
 
-    fn assert_map_conversion(file_name: &str, expected_map_number: u8) {
+    fn assert_map_conversion(
+        file_name: &str,
+        expected_map_number: u8,
+        expected_output_hash: &str,
+    ) {
         let source_root = repo_root().join("src/bin/Data");
         let source = source_path(file_name);
         let output_root = temp_root(file_name);
@@ -248,7 +252,6 @@ mod tests {
         let entry = convert_terrain_map_file(&source_root, &source, &output_root).unwrap();
         let output_path = output_root.join(entry.converted_path.clone());
         let output_bytes = fs::read(&output_path).unwrap();
-        let golden_bytes = fs::read(golden_path(file_name)).unwrap();
         let json: TerrainMapJson = serde_json::from_slice(&output_bytes).unwrap();
 
         assert_eq!(entry.kind, "terrain-map");
@@ -260,8 +263,8 @@ mod tests {
             )
             .to_string()
         );
-        assert_eq!(output_bytes, golden_bytes);
         assert_eq!(entry.source_hash, sha256_hex(&fs::read(&source).unwrap()));
+        assert_eq!(entry.converted_hash, expected_output_hash);
         assert_eq!(entry.converted_hash, sha256_hex(&output_bytes));
         assert_eq!(json.header.version, 0);
         assert_eq!(json.header.map_number, expected_map_number);
@@ -271,18 +274,22 @@ mod tests {
         assert_eq!(json.alpha.len(), 256);
     }
 
-    fn golden_path(file_name: &str) -> Utf8PathBuf {
-        repo_root().join(format!("port_rust/assets/data/world_1/{file_name}.json"))
-    }
-
     #[test]
     fn converts_terrain_map_sidecar() {
-        assert_map_conversion("Terrain.map", 5);
+        assert_map_conversion(
+            "Terrain.map",
+            5,
+            "2ebf4e72c393c57254406b68ae59422d321358f503a74b36bc66debf43efd38f",
+        );
     }
 
     #[test]
     fn converts_encrypted_terrain_map_sidecar() {
-        assert_map_conversion("EncTerrain1.map", 1);
+        assert_map_conversion(
+            "EncTerrain1.map",
+            1,
+            "213ed512cbaad344a60d71ebdf52848544d04bbf2bc2eab6ba8ee135c9351287",
+        );
     }
 
     #[test]
