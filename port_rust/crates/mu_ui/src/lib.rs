@@ -11,9 +11,11 @@ pub mod messages;
 pub mod minimap;
 pub mod npc;
 pub mod options;
+pub mod player_shop;
 pub mod routes;
 pub mod server_select;
 pub mod shop;
+pub mod trade;
 pub mod widgets;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -42,6 +44,9 @@ pub use npc::{npc_screen, NpcAction, NpcScreen, NpcScreenState};
 pub use options::{
     options_screen, OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle,
 };
+pub use player_shop::{
+    player_shop_screen, PlayerShopAction, PlayerShopScreen, PlayerShopScreenState,
+};
 pub use routes::{
     UiRoute, UiRouteCatalog, UiRouteDescriptor, UiRouteGroup, UiShellPlugin, UiShellState,
 };
@@ -50,4 +55,5 @@ pub use server_select::{
     ServerSelectScreenState,
 };
 pub use shop::{shop_screen, ShopAction, ShopScreen, ShopScreenState};
+pub use trade::{trade_screen, TradeAction, TradeScreen, TradeScreenState};
 pub use widgets::{UiShellWidgetKind, UiShellWidgetSet};

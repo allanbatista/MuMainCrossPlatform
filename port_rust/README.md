@@ -31,6 +31,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de items, inventory, equipment e vault esta documentada em
   `docs/inventory.md`.
 - A camada de NPC/dialog/shop esta documentada em `docs/npc-dialog-shop.md`.
+- A camada de trade, player shop e mail esta documentada em
+  `docs/trade-player-shop-mail.md`.
 
 ## Validacao local prevista
 
@@ -84,6 +86,7 @@ Veja tambem:
   o estado de vault.
 - `docs/npc-dialog-shop.md` para o estado de dialogo NPC, buy/sell e repair de
   shop.
+- `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
 
 ## Dependencias dos scripts de port
 

@@ -21,6 +21,7 @@ const EXPECTED_SLUGS: &[&str] = &[
     "hotkeys",
     "inventory",
     "trade",
+    "marketplace",
     "vault",
     "shop",
     "npc",

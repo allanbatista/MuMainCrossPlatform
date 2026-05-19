@@ -7,11 +7,14 @@ pub mod equipment;
 pub mod experience;
 pub mod inventory;
 pub mod items;
+pub mod mail;
 pub mod master_level;
 pub mod npc;
 pub mod party;
+pub mod player_shop;
 pub mod skills;
 pub mod stats;
+pub mod trade;
 pub mod vault;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -50,11 +53,18 @@ pub use items::{
     EquipmentSlot, Item, ItemError, ItemOptionFlags, ItemPacketData, ItemPacketError,
     ItemRequirements, ItemSize, MAX_ITEM_INDEX, MAX_ITEM_SOCKETS, SOCKET_EMPTY,
 };
+pub use mail::{
+    MailManager, MailMode, MailPlugin, MAX_MAIL_BODY_LENGTH, MAX_MAIL_RECIPIENT_LENGTH,
+    MAX_MAIL_SUBJECT_LENGTH,
+};
 pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
     MAX_PARTY_MEMBERS, PARTY_INDEX_HERO, PARTY_INDEX_NOT_FOUND, PARTY_INDEX_UNSEARCHED,
+};
+pub use player_shop::{
+    PlayerShopManager, PlayerShopMode, PlayerShopPlugin, MAX_PLAYER_SHOP_TITLE_LENGTH,
 };
 pub use skills::{
     SkillAudioCue, SkillCatalog, SkillDefinition, SkillDisplayInfo, SkillEffectCue, SkillId,
@@ -67,6 +77,7 @@ pub use skills::{
     AT_SKILL_TRIPLE_SHOT_STR, AT_SKILL_UNDEFINED, MAX_SKILLS,
 };
 pub use stats::{base_class_attributes, ClassAttributes, BASE_CLASS_COUNT, CLASS_ATTRIBUTES};
+pub use trade::{TradeManager, TradeMode, TradePartnerInfo, TradePlugin, MAX_TRADE_WAIT_TICKS};
 pub use vault::{
     VaultError, VaultManager, VaultMoneyDirection, VaultPendingTransfer, VaultPlugin, VaultSlot,
     VaultSyncOutcome, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,

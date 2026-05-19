@@ -14,6 +14,7 @@ minimap|Minimap|ui_fixtures/minimap.snap
 hotkeys|Hotkeys|ui_fixtures/hotkeys.snap
 inventory|Inventory|ui_fixtures/inventory.snap
 trade|Trade|ui_fixtures/trade.snap
+marketplace|Marketplace|ui_fixtures/marketplace.snap
 vault|Vault|ui_fixtures/vault.snap
 shop|Shop|ui_fixtures/shop.snap
 npc|NPC|ui_fixtures/npc.snap

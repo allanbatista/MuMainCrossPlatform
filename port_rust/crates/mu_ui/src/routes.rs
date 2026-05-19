@@ -22,6 +22,7 @@ pub enum UiRoute {
     Hotkeys,
     Inventory,
     Trade,
+    Marketplace,
     Vault,
     Shop,
     Npc,
@@ -190,6 +191,13 @@ pub const ROUTES: &[UiRouteDescriptor] = &[
         "ui_fixtures/inventory.snap"
     ),
     descriptor!(Trade, Gameplay, "trade", "Trade", "ui_fixtures/trade.snap"),
+    descriptor!(
+        Marketplace,
+        Gameplay,
+        "marketplace",
+        "Marketplace",
+        "ui_fixtures/marketplace.snap"
+    ),
     descriptor!(Vault, Gameplay, "vault", "Vault", "ui_fixtures/vault.snap"),
     descriptor!(Shop, Gameplay, "shop", "Shop", "ui_fixtures/shop.snap"),
     descriptor!(Npc, Gameplay, "npc", "NPC", "ui_fixtures/npc.snap"),
