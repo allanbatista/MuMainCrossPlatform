@@ -51,6 +51,8 @@ Arquivos planejados para implementação futura:
 - `docs/build-guide.md`
 - `docs/player-rust-client.md`
 - `docs/admin-editor-rust.md`
+- `port_rust/docs/inventory.md`
+- `port_rust/docs/script-dependencies.md`
 
 ## Interfaces / Contracts
 
@@ -202,7 +204,7 @@ Validation Gate F1: `cargo fmt --manifest-path port_rust/Cargo.toml --all --chec
 | F2.S1.T2 Protocol inventory fixtures | `feature-network` | `port_rust/crates/mu_protocol/tests/fixtures/**`, `port_rust/tests/rust/protocol_inventory.rs` | F1 | all protocol groups have fixture placeholders or captured golden packets | fixture manifest checked into tests |
 | F2.S1.T3 Legacy comparison harness | `feature-test-support` | `port_rust/crates/mu_test_support/src/{legacy.rs,fixtures.rs,evidence.rs}` | F1 | tests can record output paths, screenshots/logs and legacy-vs-Rust diffs | harness unit tests |
 | F2.S1.T4 UI visual fixture list | `feature-ui` | `port_rust/tests/rust/ui_fixtures/**`, `port_rust/crates/mu_ui/src/fixture_routes.rs` | F1 | every UI/editor surface has named offline fixture | snapshot manifest |
-| F2.S1.T5 Source/dependency classification audit | `feature-test-support` | `port_rust/crates/mu_test_support/src/source_inventory.rs`, `port_rust/tests/rust/source_inventory.rs`, `docs/rust-client.md` | F1 | every legacy source/dependency path is classified and mapped to target, replacement, fixture-only use or rejection | source inventory report + test |
+| F2.S1.T5 Source/dependency classification audit | `feature-test-support` | `port_rust/crates/mu_test_support/src/source_inventory.rs`, `port_rust/tests/rust/source_inventory.rs`, `docs/rust-client.md`, `port_rust/docs/inventory.md`, `port_rust/docs/script-dependencies.md` | F1 | every legacy source/dependency path is classified and mapped to target, replacement, fixture-only use or rejection | source inventory report + test |
 | F2.S2.T1 Evidence artifact conventions | `feature-test-support` | `docs/rust-client.md`, `port_rust/crates/mu_test_support/src/evidence.rs` | F2.S1.T3 | logs/screenshots/reports follow stable path naming | sample evidence output |
 
 Validation Gate F2: `cargo test --manifest-path port_rust/Cargo.toml -p mu_test_support -p mu_protocol -p mu_asset_pipeline`; source/dependency classification report has no unclassified paths; generated fixture inventories under test artifact directory; `e2e-validator` not required yet unless UI smoke is enabled.
