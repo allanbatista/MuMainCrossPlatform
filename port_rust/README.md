@@ -37,6 +37,7 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   `docs/trade-player-shop-mail.md`.
 - A camada de quests, events, duel e gens esta documentada em
   `docs/quests-events-duel-gens.md`.
+- A camada de MU Helper esta documentada em `docs/mu-helper.md`.
 
 ## Validacao local prevista
 
@@ -95,6 +96,8 @@ Veja tambem:
 - `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
 - `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e
   gens.
+- `docs/mu-helper.md` para o modelo de configuracao do MU Helper e os limites
+  legados de salvamento.
 
 ## Dependencias dos scripts de port
 

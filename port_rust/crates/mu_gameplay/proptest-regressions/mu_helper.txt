@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d2928eea3b82c36796eea0e43652675e70c7bfc3c7920c25523a19ba2f63560e # shrinks to config = MuHelperConfig { hunting_range: 0, max_seconds_away: 0, long_range_counter_attack: false, return_to_original_position: true, basic_skill_id: 0, activation_skills: [MuHelperSkillSlot { skill_id: 0, interval_seconds: 0, condition: MuHelperSkillCondition { on_timer: false, on_condition: false, mob_presence: Nearby, mob_count: Two } }, MuHelperSkillSlot { skill_id: 0, interval_seconds: 0, condition: MuHelperSkillCondition { on_timer: false, on_condition: false, mob_presence: Nearby, mob_count: Two } }], use_combo: false, buff_skill_ids: [0, 0, 0], buff_duration: true, buff_duration_party: true, buff_cast_interval: 0, auto_heal: false, heal_threshold: 0, support_party: false, auto_heal_party: false, heal_party_threshold: 0, use_heal_potion: false, potion_threshold: 0, use_drain_life: false, use_dark_raven: false, dark_raven_mode: Cease, repair_item: false, obtaining_range: 1, pick_all_items: false, pick_select_items: false, pick_jewel: false, pick_zen: false, pick_ancient: false, pick_excellent: false, pick_extra_items: true, extra_items: {"a"}, use_self_defense: false, auto_accept_friend: false, auto_accept_guild: false }

@@ -12,6 +12,7 @@ pub mod items;
 pub mod mail;
 pub mod master_level;
 pub mod mounts;
+pub mod mu_helper;
 pub mod npc;
 pub mod party;
 pub mod pets;
@@ -67,6 +68,13 @@ pub use mail::{
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use mounts::{mount_camera_offset, MountKind, MountManager, MountPlugin};
+pub use mu_helper::{
+    MuHelperConfig, MuHelperConfigError, MuHelperDarkRavenMode, MuHelperMobCount,
+    MuHelperMobPresence, MuHelperSkillCondition, MuHelperSkillSlot, MU_HELPER_MAX_EXTRA_ITEMS,
+    MU_HELPER_MAX_EXTRA_ITEM_LENGTH, MU_HELPER_MAX_HUNTING_RANGE, MU_HELPER_MAX_OBTAINING_RANGE,
+    MU_HELPER_MAX_SECONDS_AWAY, MU_HELPER_MAX_THRESHOLD, MU_HELPER_PACKET_PAYLOAD_SIZE,
+    MU_HELPER_THRESHOLD_STEP,
+};
 pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
