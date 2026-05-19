@@ -97,6 +97,8 @@ Arquivos planejados para implementação futura:
 
 Source classification rule: before any release gate can pass, every top-level legacy path under `ClientLibrary`, `ConstantsReplacer`, `cmake`, `src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` and `tests` must be classified as `ported`, `replaced`, `fixture-only`, `reference-only`, or `rejected`. Unclassified paths block AC-16 and F11.
 
+Os top-level que nao viram crate/runtime target - `ClientLibrary/.gitignore`, `ClientLibrary/Common.xslt`, `ClientLibrary/Generate*.xslt`, `ClientLibrary/Properties`, `src/source/StdAfx.cpp`, `src/source/stdafx.h`, `src/MuEditor/README.md`, `src/ThirdParty/json.hpp`, `src/dependencies/.gitattributes`, `src/dependencies/include`, `src/dependencies/netcore`, `src/dependencies/lib`, `src/bin/glew32.dll`, `src/bin/ogg.dll`, `src/bin/vorbisfile.dll` e os fixtures de `tests/*` - permanecem como `reference-only`, `fixture-only` ou `rejected` no inventario canonico e entram apenas como comparacao/validacao, nao como runtime do Rust.
+
 ## Tooling / Support Inventory
 
 | Area | Legacy sources | Migration target |
