@@ -12,7 +12,7 @@ and UI snapshots:
 - `mu_ui::player_shop` renders the player-shop marketplace snapshot for edit,
   open, pricing, and error states.
 - `mu_gameplay::mail` tracks mail alerts, compose state, and the selected
-  letter for the friend/mail flow.
+  letter for the friend route.
 
 ## Trade
 
@@ -63,5 +63,5 @@ mail.select_letter(0x0102_0304);
 ```
 
 Recipient, subject, and body fields are clamped to the legacy compose limits.
-The mail state stays in gameplay for now so future friend/mail UI can reuse it
-without duplicating state.
+The mail state stays in gameplay and feeds the friend route without
+duplicating the compose limits.

@@ -35,6 +35,7 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 - A camada de NPC/dialog/shop esta documentada em `docs/npc-dialog-shop.md`.
 - A camada de trade, player shop e mail esta documentada em
   `docs/trade-player-shop-mail.md`.
+- A camada de friend e guild esta documentada em `docs/friend-guild.md`.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
   snapshots de party info/list e o consumo do `PartyManager`.
 - A camada de quests, events, duel e gens esta documentada em
@@ -105,6 +106,7 @@ Veja tambem:
 - `docs/npc-dialog-shop.md` para o estado de dialogo NPC, buy/sell e repair de
   shop.
 - `docs/trade-player-shop-mail.md` para o estado de trade, player shop e mail.
+- `docs/friend-guild.md` para as snapshots de friend, letter e guild.
 - `docs/party-ui.md` para as snapshots de party info/list e o consumo do
   `PartyManager`.
 - `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e

@@ -7,8 +7,10 @@ pub mod chat;
 pub mod duel;
 pub mod error;
 pub mod events;
+pub mod friend;
 pub mod game_shop;
 pub mod gens;
+pub mod guild;
 pub mod hotkeys;
 pub mod hud;
 pub mod i18n;
@@ -50,8 +52,16 @@ pub use duel::{duel_screen, DuelAction, DuelChannelCard, DuelScreen, DuelScreenS
 pub use error::ErrorPresentation;
 pub use events::{events_screen, EventAction, EventScreen, EventScreenState};
 pub use fixture_routes::{fixture_routes, UiFixtureRoute};
+pub use friend::{
+    friend_screen, ChatRoomEntry, FriendAction, FriendEntry, FriendPresence, FriendScreen,
+    FriendScreenState, FriendSort, LetterEntry, LetterSort,
+};
 pub use game_shop::{game_shop_screen, GameShopAction, GameShopScreen, GameShopScreenState};
 pub use gens::{gens_ranking_screen, GensAction, GensRankingScreen, GensRankingScreenState};
+pub use guild::{
+    guild_screen, GuildAction, GuildMemberEntry, GuildMemberRole, GuildScreen, GuildScreenState,
+    GuildSort, GuildUnionEntry,
+};
 pub use hotkeys::{hotkeys_screen, HotkeyBinding, HotkeysScreen, HotkeysScreenState};
 pub use hud::{hud_screen, HudButton, HudButtonKind, HudGauge, HudGaugeKind, HudScreen};
 pub use i18n::Translator;
