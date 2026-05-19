@@ -6,6 +6,7 @@ pub mod duel;
 pub mod experience;
 pub mod master_level;
 pub mod party;
+pub mod skills;
 pub mod stats;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -38,5 +39,15 @@ pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
     MAX_PARTY_MEMBERS, PARTY_INDEX_HERO, PARTY_INDEX_NOT_FOUND, PARTY_INDEX_UNSEARCHED,
+};
+pub use skills::{
+    SkillAudioCue, SkillCatalog, SkillDefinition, SkillDisplayInfo, SkillEffectCue, SkillId,
+    SkillManager, SkillPlugin, SkillPresentation, SkillRequirement, SkillRequirementsCache,
+    SkillSlotState, SkillStatsSnapshot, AT_SKILL_CHAIN_DRIVE, AT_SKILL_CHAIN_DRIVE_STR,
+    AT_SKILL_DRAGON_KICK, AT_SKILL_DRAGON_ROAR, AT_SKILL_DRAGON_ROAR_STR, AT_SKILL_ICE_ARROW,
+    AT_SKILL_ICE_ARROW_STR, AT_SKILL_PENETRATION, AT_SKILL_PENETRATION_STR,
+    AT_SKILL_SUMMON_EXPLOSION, AT_SKILL_SUMMON_POLLUTION, AT_SKILL_SUMMON_REQUIEM,
+    AT_SKILL_TELEPORT, AT_SKILL_TELEPORT_ALLY, AT_SKILL_TRIPLE_SHOT, AT_SKILL_TRIPLE_SHOT_MASTERY,
+    AT_SKILL_TRIPLE_SHOT_STR, AT_SKILL_UNDEFINED, MAX_SKILLS,
 };
 pub use stats::{base_class_attributes, ClassAttributes, BASE_CLASS_COUNT, CLASS_ATTRIBUTES};

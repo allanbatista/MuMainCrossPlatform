@@ -1179,6 +1179,7 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "mu_assets",
+ "mu_gameplay",
  "serde",
  "thiserror 2.0.18",
  "toml",
@@ -1243,6 +1244,9 @@ dependencies = [
 [[package]]
 name = "mu_render"
 version = "0.1.0"
+dependencies = [
+ "mu_gameplay",
+]
 
 [[package]]
 name = "mu_test_support"

@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 camino.workspace = true
+mu_gameplay = { path = "../mu_gameplay" }
 mu_assets = { path = "../mu_assets" }
 serde.workspace = true
 thiserror.workspace = true

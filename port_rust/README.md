@@ -26,6 +26,8 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   documentadas em `docs/character-progression.md`.
 - A camada compartilhada de combate, buffs e experiencia esta documentada em
   `docs/combat-buffs-experience.md`.
+- A camada de skills, efeitos e audio esta documentada em
+  `docs/skills-effects-audio.md`.
 
 ## Validacao local prevista
 
@@ -73,6 +75,8 @@ Veja tambem:
   experiencia do personagem.
 - `docs/combat-buffs-experience.md` para os helpers de combate, buffs e
   experiencia compartilhada.
+- `docs/skills-effects-audio.md` para o catalogo de skills, requisitos, delay e
+  filas puras de efeitos/audio.
 
 ## Dependencias dos scripts de port
 
