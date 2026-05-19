@@ -3,6 +3,7 @@ pub mod characters;
 pub mod classes;
 pub mod combat;
 pub mod duel;
+pub mod entities;
 pub mod equipment;
 pub mod events;
 pub mod experience;
@@ -13,11 +14,13 @@ pub mod inventory;
 pub mod items;
 pub mod mail;
 pub mod master_level;
+pub mod monsters;
 pub mod mounts;
 pub mod movement;
 pub mod mu_helper;
 pub mod mu_helper_runtime;
 pub mod npc;
+pub mod npcs;
 pub mod party;
 pub mod pets;
 pub mod player_shop;
@@ -46,6 +49,10 @@ pub use combat::{
 pub use duel::{
     DuelChannelInfo, DuelCharacterSnapshot, DuelManager, DuelPlayerInfo, DuelPlugin,
     MAX_DUEL_CHANNELS, MAX_DUEL_PLAYERS, MAX_USERNAME_SIZE,
+};
+pub use entities::{
+    WorldEntitiesManager, WorldEntitiesPlugin, WorldEntitiesState, WorldEntityPose,
+    WorldObjectSpawn, WorldPlayerRole, WorldPlayerSpawn,
 };
 pub use equipment::{EquipmentError, EquipmentManager, EquipmentPlugin, MAX_EQUIPMENT_SLOTS};
 pub use events::{EventKind, EventManager, EventMode, EventPlugin};
@@ -81,6 +88,9 @@ pub use mail::{
     MAX_MAIL_SUBJECT_LENGTH,
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
+pub use monsters::{
+    WorldMonsterKind, WorldMonsterManager, WorldMonsterPlugin, WorldMonsterSpawn, WorldMonsterState,
+};
 pub use mounts::{mount_camera_offset, MountKind, MountManager, MountPlugin};
 pub use movement::{MovementActorState, MovementManager, MovementPlugin, MovementState};
 pub use mu_helper::{
@@ -95,6 +105,7 @@ pub use mu_input::{
     CameraBindings, CameraMode, CameraTourState, MovementBindings, MovementCommand,
 };
 pub use npc::{NpcDialogueState, NpcManager, NpcPlugin, NpcShopMode, NpcShopState};
+pub use npcs::{WorldNpcKind, WorldNpcManager, WorldNpcPlugin, WorldNpcSpawn, WorldNpcState};
 pub use party::{
     PartyCharacterSnapshot, PartyManager, PartyMemberInfo, PartyPlugin, MAX_PARTY_ACTIVE_MEMBERS,
     MAX_PARTY_MEMBERS, PARTY_INDEX_HERO, PARTY_INDEX_NOT_FOUND, PARTY_INDEX_UNSEARCHED,

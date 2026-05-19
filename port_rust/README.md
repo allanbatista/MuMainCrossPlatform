@@ -46,6 +46,9 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
   snapshots de party info/list e o consumo do `PartyManager`.
 - A camada de siege warfare esta documentada em `docs/siege-warfare.md` e
   cobre observer, soldier e commander na janela de castle siege.
+- A camada de world entities usa fixtures para local/remote players, objetos
+  estaticos, NPCs e monstros; o runtime de render consome os mesmos managers
+  para manter a superficie de world/screenshot consistente.
 - A camada de quests, events, duel e gens esta documentada em
   `docs/quests-events-duel-gens.md`.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
