@@ -54,6 +54,25 @@ pub fn hello() -> Result<Vec<u8>, EncodeError> {
     encode_short_packet_with_subcode(0xC1, 0x00, 0x01, &[])
 }
 
+pub fn ping(tick_count: u32, attack_speed: u16) -> Result<Vec<u8>, EncodeError> {
+    let mut payload = Vec::with_capacity(8);
+    payload.extend_from_slice(&tick_count.to_le_bytes());
+    payload.extend_from_slice(&attack_speed.to_le_bytes());
+    payload.extend_from_slice(&[0x00, 0x00]);
+    encode_short_packet_with_subcode(0xC3, 0x0E, 0x00, &payload)
+}
+
+pub fn checksum_response(checksum: u32) -> Result<Vec<u8>, EncodeError> {
+    let mut payload = Vec::with_capacity(5);
+    payload.extend_from_slice(&checksum.to_le_bytes());
+    payload.push(0x00);
+    encode_short_packet(0xC3, 0x03, &payload)
+}
+
+pub fn ping_response() -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC1, 0x71, &[])
+}
+
 pub fn server_list_request() -> Result<Vec<u8>, EncodeError> {
     encode_short_packet_with_subcode(0xC1, CONNECT_SERVER_HEADCODE, 0x06, &[])
 }
@@ -170,11 +189,11 @@ fn build_server_list_payload_old(entries: &[LegacyServerEntry]) -> Result<Vec<u8
 #[cfg(test)]
 mod tests {
     use super::{
-        client_needs_patch, connection_info, connection_info_request, connection_info_request_075,
-        encode_server_list_response, encode_server_list_response_old, hello,
-        is_server_list_request, is_server_list_request_old, patch_check_request,
-        patch_version_okay, server_list_request, server_list_request_old, LegacyServerEntry,
-        ServerEntry,
+        checksum_response, client_needs_patch, connection_info, connection_info_request,
+        connection_info_request_075, encode_server_list_response, encode_server_list_response_old,
+        hello, is_server_list_request, is_server_list_request_old, patch_check_request,
+        patch_version_okay, ping, ping_response, server_list_request, server_list_request_old,
+        LegacyServerEntry, ServerEntry,
     };
 
     #[test]
@@ -232,5 +251,18 @@ mod tests {
     fn detects_server_list_requests() {
         assert!(is_server_list_request(&[0xC1, 0x04, 0xF4, 0x06]));
         assert!(is_server_list_request_old(&[0xC1, 0x04, 0xF4, 0x02]));
+    }
+
+    #[test]
+    fn encodes_keepalive_and_checksum_packets() {
+        assert_eq!(
+            ping(0x01020304, 0x0506).unwrap(),
+            vec![0xC3, 0x0C, 0x0E, 0x00, 0x04, 0x03, 0x02, 0x01, 0x06, 0x05, 0x00, 0x00]
+        );
+        assert_eq!(
+            checksum_response(0x01020304).unwrap(),
+            vec![0xC3, 0x08, 0x03, 0x04, 0x03, 0x02, 0x01, 0x00]
+        );
+        assert_eq!(ping_response().unwrap(), vec![0xC1, 0x03, 0x71]);
     }
 }

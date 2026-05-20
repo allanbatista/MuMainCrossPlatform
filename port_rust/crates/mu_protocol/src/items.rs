@@ -99,6 +99,29 @@ pub fn item_repair(inventory_item_slot: u8) -> Result<Vec<u8>, EncodeError> {
     encode_short_packet(0xC3, 0x34, &[inventory_item_slot])
 }
 
+pub fn talk_to_npc_request(npc_id: u16) -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC3, 0x30, &npc_id.to_be_bytes())
+}
+
+pub fn close_npc_request() -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC1, 0x31, &[])
+}
+
+pub fn buy_item_from_npc_request(item_slot: u8) -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC3, 0x32, &[item_slot])
+}
+
+pub fn sell_item_to_npc_request(item_slot: u8) -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC3, 0x33, &[item_slot])
+}
+
+pub fn repair_item_request(
+    inventory_item_slot: u8,
+    is_self_repair: bool,
+) -> Result<Vec<u8>, EncodeError> {
+    encode_short_packet(0xC1, 0x34, &[inventory_item_slot, u8::from(is_self_repair)])
+}
+
 pub fn chaos_machine_mix_request(
     mix_type: ChaosMachineMixType,
     socket_slot: u8,
@@ -113,9 +136,11 @@ pub fn crafting_dialog_close_request() -> Result<Vec<u8>, EncodeError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        chaos_machine_mix_request, consume_item_request, consume_item_request_075,
-        crafting_dialog_close_request, drop_item_request, fixed_bytes, item_move_request,
-        item_move_request_extended, item_repair, pickup_item_request, pickup_item_request_075,
+        buy_item_from_npc_request, chaos_machine_mix_request, close_npc_request,
+        consume_item_request, consume_item_request_075, crafting_dialog_close_request,
+        drop_item_request, fixed_bytes, item_move_request, item_move_request_extended, item_repair,
+        pickup_item_request, pickup_item_request_075, repair_item_request,
+        sell_item_to_npc_request, talk_to_npc_request,
     };
     use proptest::prelude::*;
 
@@ -153,6 +178,23 @@ mod tests {
             vec![0xC1, 0x05, 0x26, 0x01, 0x02]
         );
         assert_eq!(item_repair(0xFF).unwrap(), vec![0xC3, 0x04, 0x34, 0xFF]);
+        assert_eq!(
+            talk_to_npc_request(0x1234).unwrap(),
+            vec![0xC3, 0x05, 0x30, 0x12, 0x34]
+        );
+        assert_eq!(close_npc_request().unwrap(), vec![0xC1, 0x03, 0x31]);
+        assert_eq!(
+            buy_item_from_npc_request(7).unwrap(),
+            vec![0xC3, 0x04, 0x32, 0x07]
+        );
+        assert_eq!(
+            sell_item_to_npc_request(8).unwrap(),
+            vec![0xC3, 0x04, 0x33, 0x08]
+        );
+        assert_eq!(
+            repair_item_request(0xFF, true).unwrap(),
+            vec![0xC1, 0x05, 0x34, 0xFF, 0x01]
+        );
         assert_eq!(
             chaos_machine_mix_request(1, 2).unwrap(),
             vec![0xC1, 0x05, 0x86, 0x01, 0x02]

@@ -37,6 +37,16 @@ pub fn teleport_target(
     encode_short_packet(0xC3, 0xB0, &payload)
 }
 
+pub fn warp_command_request(
+    command_key: u32,
+    warp_info_index: u16,
+) -> Result<Vec<u8>, EncodeError> {
+    let mut payload = Vec::with_capacity(6);
+    payload.extend_from_slice(&command_key.to_le_bytes());
+    payload.extend_from_slice(&warp_info_index.to_le_bytes());
+    encode_short_packet_with_subcode(0xC1, 0x8E, 0x02, &payload)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn server_change_authentication(
     account_xor3: impl AsRef<[u8]>,
@@ -66,6 +76,7 @@ pub fn server_change_authentication(
 mod tests {
     use super::{
         enter_gate_request, enter_gate_request_075, server_change_authentication, teleport_target,
+        warp_command_request,
     };
 
     #[test]
@@ -81,6 +92,10 @@ mod tests {
         assert_eq!(
             teleport_target(0x1234, 5, 6).unwrap(),
             vec![0xC3, 0x07, 0xB0, 0x34, 0x12, 0x05, 0x06]
+        );
+        assert_eq!(
+            warp_command_request(0x01020304, 0x1234).unwrap(),
+            vec![0xC1, 0x0A, 0x8E, 0x02, 0x04, 0x03, 0x02, 0x01, 0x34, 0x12]
         );
 
         let packet =
