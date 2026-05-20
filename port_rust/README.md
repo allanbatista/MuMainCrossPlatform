@@ -39,6 +39,10 @@ sessao de jogo completa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
+- O world shell agora prioriza entidades proximas quando amostra object,
+  npc, monster e remote player visiveis, em vez de pegar as primeiras
+  entradas arbitrarias, para deixar a cena 3D mais parecida com a area do
+  jogador sem perder o limite de performance.
 - Se os slots de textura, o alpha map ou o lightmap do terreno nao estiverem
   disponiveis, o shell volta para o material solido de fallback sem sair do
   world route.

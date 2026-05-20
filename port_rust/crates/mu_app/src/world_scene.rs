@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fs;
 
 use bevy::asset::RenderAssetUsages;
@@ -95,6 +96,10 @@ fn sync_world_scene_system(
     };
 
     let summary = world_bundle.summary();
+    let focus_translation = client_runtime
+        .world_entities()
+        .local_player()
+        .map(|local_player| world_transform(&local_player.pose).translation);
     if state.world_id == Some(summary.world) && !state.entities.is_empty() {
         return;
     }
@@ -108,6 +113,7 @@ fn sync_world_scene_system(
         world_bundle,
         runtime_config.asset_root.as_deref(),
         client_runtime.render_entities().catalog(),
+        focus_translation,
         camera_config.camera.zoom_scale(),
         &mut state,
     );
@@ -223,6 +229,7 @@ fn spawn_world_scene(
     world_bundle: &mu_gameplay::TerrainWorldBundle,
     asset_root: Option<&Utf8Path>,
     catalog: &RenderEntityCatalog,
+    focus_translation: Option<Vec3>,
     camera_zoom_scale: f32,
     state: &mut WorldSceneState,
 ) {
@@ -246,6 +253,7 @@ fn spawn_world_scene(
         materials,
         world_bundle,
         catalog,
+        focus_translation,
         state,
     );
 }
@@ -601,6 +609,7 @@ fn spawn_world_entities(
     materials: &mut Assets<StandardMaterial>,
     world_bundle: &TerrainWorldBundle,
     catalog: &RenderEntityCatalog,
+    focus_translation: Option<Vec3>,
     state: &mut WorldSceneState,
 ) {
     if let Some(entry) = catalog.local_player.as_ref() {
@@ -622,6 +631,7 @@ fn spawn_world_entities(
         world_bundle,
         &catalog.remote_players,
         RenderEntityFamily::RemotePlayer,
+        focus_translation,
         state,
         "remote-player",
     );
@@ -630,6 +640,7 @@ fn spawn_world_entities(
         asset_server,
         &catalog.objects,
         RenderEntityFamily::Object,
+        focus_translation,
         state,
         "object",
     );
@@ -638,6 +649,7 @@ fn spawn_world_entities(
         asset_server,
         &catalog.npcs,
         RenderEntityFamily::Npc,
+        focus_translation,
         state,
         "npc",
     );
@@ -646,6 +658,7 @@ fn spawn_world_entities(
         asset_server,
         &catalog.monsters,
         RenderEntityFamily::Monster,
+        focus_translation,
         state,
         "monster",
     );
@@ -658,10 +671,14 @@ fn spawn_world_marker_family(
     world_bundle: &TerrainWorldBundle,
     entries: &[RenderEntityEntry],
     family: RenderEntityFamily,
+    focus_translation: Option<Vec3>,
     state: &mut WorldSceneState,
     label_prefix: &str,
 ) {
-    for entry in entries.iter().take(WORLD_RENDER_ENTITY_LIMIT) {
+    for entry in prioritized_world_scene_entries(entries, focus_translation)
+        .into_iter()
+        .take(WORLD_RENDER_ENTITY_LIMIT)
+    {
         state.entities.push(spawn_world_marker(
             commands,
             meshes,
@@ -679,10 +696,14 @@ fn spawn_world_scene_family(
     asset_server: &AssetServer,
     entries: &[RenderEntityEntry],
     family: RenderEntityFamily,
+    focus_translation: Option<Vec3>,
     state: &mut WorldSceneState,
     label_prefix: &str,
 ) {
-    for entry in entries.iter().take(WORLD_RENDER_ENTITY_LIMIT) {
+    for entry in prioritized_world_scene_entries(entries, focus_translation)
+        .into_iter()
+        .take(WORLD_RENDER_ENTITY_LIMIT)
+    {
         state.entities.push(spawn_world_scene_entity(
             commands,
             asset_server,
@@ -691,6 +712,39 @@ fn spawn_world_scene_family(
             label_prefix,
         ));
     }
+}
+
+fn prioritized_world_scene_entries<'a>(
+    entries: &'a [RenderEntityEntry],
+    focus_translation: Option<Vec3>,
+) -> Vec<&'a RenderEntityEntry> {
+    let mut prioritized: Vec<&RenderEntityEntry> = entries.iter().collect();
+
+    match focus_translation {
+        Some(focus_translation) => prioritized.sort_by(|left, right| {
+            let left_distance = world_scene_entry_distance_sq(left, focus_translation);
+            let right_distance = world_scene_entry_distance_sq(right, focus_translation);
+
+            left_distance
+                .partial_cmp(&right_distance)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| left.key.cmp(&right.key))
+                .then_with(|| left.label.cmp(&right.label))
+        }),
+        None => prioritized.sort_by(|left, right| {
+            left.key
+                .cmp(&right.key)
+                .then_with(|| left.label.cmp(&right.label))
+        }),
+    }
+
+    prioritized
+}
+
+fn world_scene_entry_distance_sq(entry: &RenderEntityEntry, focus_translation: Vec3) -> f32 {
+    world_transform(&entry.pose)
+        .translation
+        .distance_squared(focus_translation)
 }
 
 fn spawn_world_scene_entity(
@@ -875,9 +929,10 @@ mod tests {
     use super::{
         apply_world_camera_zoom_delta, build_world_terrain_blend_mesh, build_world_terrain_mesh,
         grounded_marker_translation, grounded_world_transform, terrain_surface_height_at_position,
-        world_terrain_lightmap_path, world_terrain_texture_paths, world_transform,
-        WorldSceneCamera, WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
-        WORLD_POSITION_SCALE, WORLD_TERRAIN_AMPLITUDE, WORLD_TERRAIN_TEXTURE_REPEAT,
+        prioritized_world_scene_entries, world_terrain_lightmap_path,
+        world_terrain_texture_paths, world_transform, WorldSceneCamera, WorldSceneMarker,
+        WorldScenePlugin, WorldSceneState, WorldSceneTerrain, WORLD_POSITION_SCALE,
+        WORLD_TERRAIN_AMPLITUDE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
     use crate::GraphicalRuntimeConfig;
     use crate::{ClientRuntime, Config};
@@ -890,7 +945,7 @@ mod tests {
     use mu_gameplay::{
         WorldEntityPose, WorldMonsterKind, WorldMonsterSpawn, WorldNpcKind, WorldNpcSpawn,
     };
-    use mu_render::RenderEntityFamily;
+    use mu_render::{RenderEntityEntry, RenderEntityFamily};
     use mu_ui::{UiRoute, UiShellState};
 
     fn repo_assets_root() -> Utf8PathBuf {
@@ -1113,6 +1168,51 @@ mod tests {
         let last_uv = uvs.last().expect("mesh should include the last uv");
         assert!((last_uv[0] - WORLD_TERRAIN_TEXTURE_REPEAT).abs() < f32::EPSILON);
         assert!((last_uv[1] - WORLD_TERRAIN_TEXTURE_REPEAT).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn world_scene_prioritizes_nearby_entities_before_farther_ones() {
+        let entries = vec![
+            RenderEntityEntry {
+                family: RenderEntityFamily::Object,
+                label: "far".to_string(),
+                key: "2".to_string(),
+                model: "data/object_1/far.glb".to_string(),
+                pose: mu_gameplay::WorldEntityPose::new(
+                    [100.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [1.0, 1.0, 1.0],
+                ),
+            },
+            RenderEntityEntry {
+                family: RenderEntityFamily::Object,
+                label: "near".to_string(),
+                key: "1".to_string(),
+                model: "data/object_1/near.glb".to_string(),
+                pose: mu_gameplay::WorldEntityPose::new(
+                    [10.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [1.0, 1.0, 1.0],
+                ),
+            },
+            RenderEntityEntry {
+                family: RenderEntityFamily::Object,
+                label: "closest".to_string(),
+                key: "0".to_string(),
+                model: "data/object_1/closest.glb".to_string(),
+                pose: mu_gameplay::WorldEntityPose::new(
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [1.0, 1.0, 1.0],
+                ),
+            },
+        ];
+
+        let prioritized = prioritized_world_scene_entries(&entries, Some(Vec3::ZERO));
+
+        assert_eq!(prioritized[0].key, "0");
+        assert_eq!(prioritized[1].key, "1");
+        assert_eq!(prioritized[2].key, "2");
     }
 
     #[test]

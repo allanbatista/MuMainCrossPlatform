@@ -45,7 +45,11 @@ in the local config file instead of being typed every time.
   terrain surface from the bundle's first two converted texture slots plus
   the alpha map, the bundled terrain lightmap, sampled local/remote player
   markers grounded to the visible terrain surface, and real converted models
-  for objects, NPCs, and monsters.
+  for nearby objects, NPCs, and monsters.
+- The world shell now prefers nearby scene entities when sampling the visible
+  object, NPC, monster, and remote-player set instead of taking the first
+  arbitrary entries, so the 3D scene better matches the local play area while
+  still staying sampled for performance.
 - The world camera now follows the local avatar and uses the saved
   `[Camera] zoom` value, so mouse-wheel zoom in the world route stays framed
   while the 3D scene is active and persists through `config/client.toml`.
