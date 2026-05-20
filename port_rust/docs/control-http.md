@@ -42,6 +42,7 @@ e o servidor continua disponivel para inspeção local.
 - `session_phase`
 - `last_command`
 - `selected_character_name`
+- `friend_name`
 - `friend_screen_state`
 - `guild_screen_state`
 - `command_count`
@@ -49,7 +50,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -75,6 +76,8 @@ Exemplo:
 - `party`
 - `gate`
 - `friend`
+- `friend-add`
+- `friend-delete`
 - `friend-roster`
 - `friend-inbox`
 - `friend-compose`
@@ -119,6 +122,9 @@ para enviar mensagem publica quando a sessao esta logada.
 runtime. `duel` abre a shell visivel de duel com o snapshot existente do
 runtime. `friend-roster`, `friend-inbox`, `friend-compose` e
 `friend-chat-rooms` selecionam as subvisoes da janela de friend;
+`friend-add` e `friend-delete` enviam as requisicoes de add/delete do friend
+atraves da sessao viva e aceitam o nome no body ou em `friend=`; se o nome
+vier vazio, a resposta sera `400`.
 `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild` e
 `guild-error` selecionam as subvisoes da janela de guild. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
@@ -140,6 +146,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=create-character&character=Ast
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'

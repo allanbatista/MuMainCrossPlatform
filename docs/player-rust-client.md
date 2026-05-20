@@ -82,6 +82,9 @@ in the local config file instead of being typed every time.
   with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms`; when the live friend list arrives, the shell overlays
   the decoded roster and server-state data from the session.
+- The friend control plane also accepts `friend-add` and `friend-delete`
+  commands with a friend name in the body or `friend=` so QA can drive the
+  existing friend packet helpers through the live session.
 - The guild route now opens a visible Bevy shell that mirrors the guild
   snapshot and can be driven from the local control HTTP smoke path with
   `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
@@ -143,6 +146,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=friend` can step into the visible friend route shell
   for local QA smoke. `friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms` select the matching friend subview.
+- `POST /command?name=friend-add` and `POST /command?name=friend-delete`
+  queue the matching friend packet helpers through the live session. Pass
+  the friend name in the body or as `friend=`.
 - `POST /command?name=guild` can step into the visible guild route shell for
   local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` select the matching guild subview.

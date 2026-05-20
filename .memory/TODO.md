@@ -36,3 +36,9 @@ is still required.
 The friend and guild routes now trigger their live list requests on login,
 but the response decoding and snapshot population for the roster, letters,
 and guild data still remain for a later slice.
+
+# [medium] Guild action follow-up
+
+Friend add/delete control-plane commands are now wired through the live
+session bridge, but the guild-side action commands and any remaining social
+management flows still need their own slice if parity is still required.

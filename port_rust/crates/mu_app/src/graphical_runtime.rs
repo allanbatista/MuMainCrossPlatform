@@ -283,6 +283,16 @@ fn sync_control_http_snapshot_to_runtime(
                 }
             }
         }
+        Some(ControlCommand::FriendAdd) => {
+            if let Some(friend_name) = snapshot.friend_name.as_deref() {
+                let _ = bootstrap.queue_friend_add_request(friend_name);
+            }
+        }
+        Some(ControlCommand::FriendDelete) => {
+            if let Some(friend_name) = snapshot.friend_name.as_deref() {
+                let _ = bootstrap.queue_friend_delete_request(friend_name);
+            }
+        }
         _ => {}
     }
 
@@ -443,6 +453,62 @@ mod tests {
             bootstrap.character_create_state(),
             CharacterCreateScreenState::Submitting
         );
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_friend_actions() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.friend_name = Some("Astra".to_string());
+            snapshot.apply_command(ControlCommand::FriendAdd);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("friend add command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::FriendAdd(friend_name) => {
+                assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.friend_name = Some("Astra".to_string());
+            snapshot.apply_command(ControlCommand::FriendDelete);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("friend delete command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::FriendDelete(friend_name) => {
+                assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
     }
 
     #[test]

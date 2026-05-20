@@ -17,7 +17,7 @@ use mu_protocol::chat::public_chat_message;
 use mu_protocol::guild::guild_list_request;
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
-use mu_protocol::social::friend_list_request;
+use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
     character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
@@ -75,6 +75,8 @@ pub(crate) enum BootstrapCommand {
     SelectCharacter(String),
     CreateCharacter(String),
     FriendListRequest,
+    FriendAdd(String),
+    FriendDelete(String),
     GuildListRequest,
 }
 
@@ -246,6 +248,26 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::FriendListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_friend_add_request(&self, friend_name: impl Into<String>) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::FriendAdd(friend_name.into()))
+            .is_ok()
+    }
+
+    pub(crate) fn queue_friend_delete_request(&self, friend_name: impl Into<String>) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::FriendDelete(friend_name.into()))
             .is_ok()
     }
 
@@ -924,6 +946,22 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::FriendAdd(friend_name) => {
+            let packet = friend_add_request(friend_name).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::FriendDelete(friend_name) => {
+            let packet = friend_delete(friend_name).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::GuildListRequest => {
             let packet = guild_list_request().map_err(|error| error.to_string())?;
 
@@ -1045,7 +1083,7 @@ mod tests {
         character_creation_failed, character_creation_successful, character_list_extended,
         game_server_entered, CharacterListEntry,
     };
-    use mu_protocol::social::friend_list_request;
+    use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
     use mu_ui::{
         CharacterCreateScreenState, FriendPresence, GuildMemberRole, UiRoute, UiShellState,
     };
@@ -1301,6 +1339,36 @@ mod tests {
             .expect("guild list command missing")
         {
             BootstrapCommand::GuildListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn friend_management_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_friend_add_request("Astra"));
+        assert!(bootstrap.queue_friend_delete_request("Astra"));
+
+        match command_receiver
+            .try_recv()
+            .expect("friend add command missing")
+        {
+            BootstrapCommand::FriendAdd(friend_name) => {
+                assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("friend delete command missing")
+        {
+            BootstrapCommand::FriendDelete(friend_name) => {
+                assert_eq!(friend_name, "Astra");
+            }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
     }
@@ -1844,6 +1912,90 @@ mod tests {
         assert!(bootstrap.queue_guild_list_request());
 
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fake_server_packets_drive_the_friend_management_request_worker() {
+        let server_list = mu_protocol::connect::encode_server_list_response(&[
+            mu_protocol::connect::ServerEntry::new(7, 42),
+        ])
+        .unwrap();
+        let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
+        let character_list = character_list_extended(
+            1,
+            2,
+            true,
+            &[CharacterListEntry {
+                slot_index: 0,
+                name: b"Astra",
+                level: 255,
+                status: 32,
+                is_item_block_active: false,
+                appearance: b"appearance-data",
+                guild_position: 0,
+            }],
+        )
+        .unwrap();
+        let join_map = join_map_packet(1);
+        let friend_add_request = friend_add_request(b"Astra").unwrap();
+        let friend_delete_request = friend_delete(b"Astra").unwrap();
+        let server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .send_packet(server_list.clone())
+                    .send_packet(login_success.clone())
+                    .expect_packet(request_character_list(0).unwrap())
+                    .send_packet(character_list.clone())
+                    .expect_packet(select_character(b"Astra").unwrap())
+                    .send_packet(join_map.clone())
+                    .expect_packet(friend_add_request.clone())
+                    .expect_packet(friend_delete_request.clone())
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let mut bootstrap = {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
+            BootstrapRuntime::new(receiver, Some(command_sender))
+        };
+        let config = config(Some(server.address().to_string()));
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        drive_bootstrap_until_world(
+            &mut bootstrap,
+            &config,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            Some("Astra"),
+        )
+        .await;
+
+        assert!(bootstrap.queue_friend_add_request("Astra"));
+        assert!(bootstrap.queue_friend_delete_request("Astra"));
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        server.finish().await.unwrap();
     }
 
     #[tokio::test]

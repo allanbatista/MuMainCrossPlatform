@@ -108,6 +108,9 @@ sessao de jogo completa.
   `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis. Quando
   a sessao envia as respostas de listagem, o runtime decodifica friend/guild
   e sobrepoe o roster/score/roles live no mesmo shell.
+- O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
+  friend no body ou em `friend=` para enviar os pacotes de add/delete pela
+  sessao viva.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
   vez a requisicao de listagem correspondente antes de manter a shell
   visivel, e limpa o snapshot decodificado no logout ou disconnect.
@@ -170,13 +173,15 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|guild|duel|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|duel|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
 `select-character` aceita o nome do personagem no body bruto ou em
 `character=` e avanca o bootstrap para o envio do `select_character` pelo
 session worker.
+`friend-add` e `friend-delete` aceitam o nome do friend no body bruto ou em
+`friend=` e enviam os pacotes de add/delete pela sessao viva.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
 

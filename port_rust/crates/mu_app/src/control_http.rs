@@ -29,6 +29,8 @@ pub enum ControlCommand {
     Gate,
     Friend,
     Guild,
+    FriendAdd,
+    FriendDelete,
     FriendRoster,
     FriendInbox,
     FriendCompose,
@@ -73,6 +75,8 @@ impl ControlCommand {
             Self::Gate => "gate",
             Self::Friend => "friend",
             Self::Guild => "guild",
+            Self::FriendAdd => "friend-add",
+            Self::FriendDelete => "friend-delete",
             Self::FriendRoster => "friend-roster",
             Self::FriendInbox => "friend-inbox",
             Self::FriendCompose => "friend-compose",
@@ -121,6 +125,8 @@ impl ControlCommand {
             "gate" => Some(Self::Gate),
             "friend" => Some(Self::Friend),
             "guild" => Some(Self::Guild),
+            "friend-add" | "friend_add" => Some(Self::FriendAdd),
+            "friend-delete" | "friend_delete" => Some(Self::FriendDelete),
             "friend-roster" | "friend_roster" => Some(Self::FriendRoster),
             "friend-inbox" | "friend_inbox" => Some(Self::FriendInbox),
             "friend-compose" | "friend_compose" => Some(Self::FriendCompose),
@@ -155,6 +161,7 @@ pub struct ControlSnapshot {
     pub session_phase: SessionPhase,
     pub last_command: Option<ControlCommand>,
     pub selected_character_name: Option<String>,
+    pub friend_name: Option<String>,
     pub friend_screen_state: Option<FriendScreenState>,
     pub guild_screen_state: Option<GuildScreenState>,
     pub command_count: u64,
@@ -168,6 +175,7 @@ impl ControlSnapshot {
             session_phase: initial_session_phase(state),
             last_command: None,
             selected_character_name: None,
+            friend_name: None,
             friend_screen_state: None,
             guild_screen_state: None,
             command_count: 0,
@@ -278,6 +286,13 @@ impl ControlSnapshot {
                 false
             }
             ControlCommand::Friend => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = None;
+                false
+            }
+            ControlCommand::FriendAdd | ControlCommand::FriendDelete => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Friend;
                 self.session_phase = SessionPhase::LoggedIn;
@@ -428,6 +443,11 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let friend_name = self
+            .friend_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
         let friend_screen_state = self
             .friend_screen_state
             .map(|state| format!("\"{}\"", state.as_str()))
@@ -438,12 +458,13 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
             selected_character_name,
+            friend_name,
             friend_screen_state,
             guild_screen_state,
             self.command_count
@@ -686,6 +707,26 @@ fn route_request(
                     snapshot.selected_character_name = Some(character_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::FriendAdd | ControlCommand::FriendDelete => {
+                    let Some(friend_name) = friend_name_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing friend name"}"#.to_string(),
+                        );
+                    };
+
+                    if friend_name.trim().is_empty() {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing friend name"}"#.to_string(),
+                        );
+                    }
+
+                    snapshot.friend_name = Some(friend_name);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::CreateCharacter => {
                     let Some(character_name) = character_name_from_request(&request) else {
                         return HttpResponse::json(
@@ -860,6 +901,20 @@ fn character_name_from_request(request: &HttpRequest) -> Option<String> {
         })
 }
 
+fn friend_name_from_request(request: &HttpRequest) -> Option<String> {
+    query_value(&request.query, "friend")
+        .or_else(|| query_value(&request.body, "friend"))
+        .map(str::to_string)
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() {
+                None
+            } else {
+                Some(body.to_string())
+            }
+        })
+}
+
 #[derive(Debug, Clone)]
 struct HttpRequest {
     method: String,
@@ -941,7 +996,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
         );
     }
 
@@ -1004,6 +1059,24 @@ mod tests {
         assert_eq!(ControlCommand::Friend.as_str(), "friend");
         assert_eq!(ControlCommand::parse("guild"), Some(ControlCommand::Guild));
         assert_eq!(ControlCommand::Guild.as_str(), "guild");
+        assert_eq!(
+            ControlCommand::parse("friend-add"),
+            Some(ControlCommand::FriendAdd)
+        );
+        assert_eq!(
+            ControlCommand::parse("friend_add"),
+            Some(ControlCommand::FriendAdd)
+        );
+        assert_eq!(ControlCommand::FriendAdd.as_str(), "friend-add");
+        assert_eq!(
+            ControlCommand::parse("friend-delete"),
+            Some(ControlCommand::FriendDelete)
+        );
+        assert_eq!(
+            ControlCommand::parse("friend_delete"),
+            Some(ControlCommand::FriendDelete)
+        );
+        assert_eq!(ControlCommand::FriendDelete.as_str(), "friend-delete");
         assert_eq!(
             ControlCommand::parse("friend-roster"),
             Some(ControlCommand::FriendRoster)
@@ -1298,6 +1371,14 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=friend-add&friend=Astra HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"friend""#));
+        assert!(body.contains(r#""friend_name":"Astra""#));
+        assert!(body.contains(r#""last_command":"friend-add""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=guild-members HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"guild""#));
@@ -1325,7 +1406,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 19);
+        assert_eq!(final_snapshot.command_count, 20);
     }
 
     #[test]
@@ -1347,6 +1428,50 @@ mod tests {
         );
         assert!(state_body.contains(r#""ui_route":"login""#));
         assert!(state_body.contains(r#""selected_character_name":null"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn friend_actions_require_a_name() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=friend-add HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing friend name""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=friend-delete HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing friend name""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=friend-add&friend= HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing friend name""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=friend-delete HTTP/1.1\r\nHost: localhost\r\nContent-Length: 3\r\nConnection: close\r\n\r\n   ",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing friend name""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""friend_name":null"#));
+        assert!(state_body.contains(r#""command_count":0"#));
 
         handle.request_shutdown();
         let _ = handle.join();
