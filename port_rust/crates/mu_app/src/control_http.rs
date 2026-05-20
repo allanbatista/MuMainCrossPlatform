@@ -20,6 +20,7 @@ pub enum ControlCommand {
     Npc,
     Shop,
     Party,
+    Gate,
     Quests,
     LoginSuccess,
     LoginFailure,
@@ -43,6 +44,7 @@ impl ControlCommand {
             Self::Npc => "npc",
             Self::Shop => "shop",
             Self::Party => "party",
+            Self::Gate => "gate",
             Self::Quests => "quests",
             Self::LoginSuccess => "login-success",
             Self::LoginFailure => "login-failure",
@@ -70,6 +72,7 @@ impl ControlCommand {
             "npc" => Some(Self::Npc),
             "shop" => Some(Self::Shop),
             "party" => Some(Self::Party),
+            "gate" => Some(Self::Gate),
             "quests" => Some(Self::Quests),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
             "login-failure" | "login_failure" => Some(Self::LoginFailure),
@@ -161,6 +164,12 @@ impl ControlSnapshot {
             ControlCommand::Party => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Party;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Gate => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Gate;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -699,6 +708,11 @@ mod tests {
         assert_eq!(snapshot.ui_route, UiRoute::Party);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
+        snapshot.apply_command(ControlCommand::Gate);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Gate);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
         snapshot.apply_command(ControlCommand::Quests);
 
         assert_eq!(snapshot.ui_route, UiRoute::Quests);
@@ -764,13 +778,20 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=gate HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"gate""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=exit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""state":"exit""#));
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 7);
+        assert_eq!(final_snapshot.command_count, 8);
     }
 
     #[test]

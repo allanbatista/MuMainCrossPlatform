@@ -20,6 +20,7 @@ use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
 use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::gate_shell::GateShellPlugin;
 use crate::inventory_route::InventoryRoutePlugin;
 use crate::inventory_shell::InventoryShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
@@ -132,6 +133,7 @@ fn configure_project_plugins(
             NpcShopShellPlugin,
             QuestsShellPlugin,
             PartyShellPlugin,
+            GateShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
             InventoryShellPlugin,

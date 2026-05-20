@@ -4,6 +4,7 @@ pub mod cli;
 pub mod client_runtime;
 pub mod config;
 pub mod control_http;
+pub(crate) mod gate_shell;
 pub mod graphical_runtime;
 pub(crate) mod inventory_route;
 pub(crate) mod inventory_shell;

@@ -28,6 +28,8 @@ sessao de jogo completa.
   abertas pelo `--control-http` para smoke local.
 - A rota `Party` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local.
+- A rota `Gate` agora mostra uma shell visual propria e pode ser aberta pelo
+  `--control-http` para smoke local.
 - A rota `Quests` agora mostra uma shell visual propria e pode ser aberta
   pelo `--control-http` para smoke local.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
@@ -118,8 +120,8 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|loading|world|npc|shop|login-success|login-failure|
-  party|quests|logout-login|logout-character|disconnect|exit|ping` para mudar
-  o estado ou encerrar o processo/runtime grafico.
+  party|gate|quests|logout-login|logout-character|disconnect|exit|ping` para
+  mudar o estado ou encerrar o processo/runtime grafico.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
 
