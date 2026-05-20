@@ -30,7 +30,7 @@ impl VaultSlot {
     }
 
     pub fn linear_index(self) -> Option<usize> {
-        if self.page < VAULT_PAGE_COUNT {
+        if self.page < VAULT_PAGE_COUNT && self.slot < VAULT_PAGE_SLOTS {
             Some(self.page * VAULT_PAGE_SLOTS + self.slot)
         } else {
             None
@@ -448,5 +448,15 @@ mod tests {
             .unwrap();
         vault.apply_status(12).unwrap();
         assert_eq!(vault.money(), 250);
+    }
+
+    #[test]
+    fn vault_slot_linear_index_rejects_out_of_bounds_slots() {
+        assert_eq!(VaultSlot::new(0, VAULT_PAGE_SLOTS).linear_index(), None);
+        assert_eq!(VaultSlot::new(VAULT_PAGE_COUNT, 0).linear_index(), None);
+        assert_eq!(
+            VaultSlot::from_linear(VAULT_PAGE_SLOTS + 4),
+            Some(VaultSlot::new(1, 4))
+        );
     }
 }

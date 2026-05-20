@@ -54,11 +54,15 @@ impl InventorySlot {
         let extension_slots = INVENTORY_EXTENSION_PAGE_COLUMNS * INVENTORY_EXTENSION_PAGE_ROWS;
 
         if self.page == 0 {
-            return Some(self.slot);
+            return (self.slot < main_slots).then_some(self.slot);
         }
 
         if self.page <= INVENTORY_EXTENSION_PAGE_COUNT {
-            Some(main_slots + (self.page - 1) * extension_slots + self.slot)
+            if self.slot < extension_slots {
+                Some(main_slots + (self.page - 1) * extension_slots + self.slot)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -280,6 +284,7 @@ fn map_grid_error(error: crate::items::GridError) -> InventoryError {
 mod tests {
     use super::{
         InventoryManager, InventoryPlugin, InventorySlot, INVENTORY_EXTENSION_PAGE_COUNT,
+        INVENTORY_EXTENSION_PAGE_COLUMNS,
         INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS, INVENTORY_MAIN_PAGE_ROWS,
         INVENTORY_TOTAL_PAGE_COUNT,
     };
@@ -339,5 +344,19 @@ mod tests {
         let item = inventory.use_item(slot, 2).unwrap();
         assert_eq!(item.stack_count, 3);
         assert_eq!(inventory.item_at(slot).unwrap().stack_count, 3);
+    }
+
+    #[test]
+    fn inventory_slot_linear_index_rejects_out_of_bounds_slots() {
+        let main_slots = INVENTORY_MAIN_PAGE_COLUMNS * INVENTORY_MAIN_PAGE_ROWS;
+        let extension_slots = INVENTORY_EXTENSION_PAGE_COLUMNS * INVENTORY_EXTENSION_PAGE_ROWS;
+
+        assert_eq!(InventorySlot::main(main_slots).linear_index(), None);
+        assert_eq!(
+            InventorySlot::extension(0, extension_slots).linear_index(),
+            None
+        );
+        assert_eq!(InventorySlot::new(5, 0).linear_index(), None);
+        assert_eq!(InventorySlot::from_linear(main_slots + 3), Some(InventorySlot::extension(0, 3)));
     }
 }
