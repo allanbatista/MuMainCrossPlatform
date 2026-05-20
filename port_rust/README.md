@@ -17,6 +17,8 @@ sessao de jogo completa.
   visivel com terreno e marcadores amostrados do bundle carregado.
 - O world route tambem mostra uma HUD visivel com as gauges e botoes do frame
   principal legado enquanto a cena 3D esta ativa.
+- O world route tambem mostra o stack visual de HUD com chat, minimap e
+  hotkeys legados enquanto a cena 3D esta ativa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.

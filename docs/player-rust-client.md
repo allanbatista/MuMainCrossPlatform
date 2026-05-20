@@ -33,6 +33,8 @@ in the local config file instead of being typed every time.
   terrain, and sampled scene markers from the loaded world bundle.
 - The world now also shows a visible HUD overlay with the legacy main-frame
   gauges and buttons while the 3D scene is active.
+- The world HUD stack now also shows the visible chat log, minimap, and
+  hotkey surfaces while the 3D scene is active.
 - The world shell now seeds a local avatar marker and keeps it synchronized
   with authoritative movement replies when the live session is active.
 - Press Tab while the world route is active to open or close the visible
