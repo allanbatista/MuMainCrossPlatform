@@ -7,8 +7,14 @@ publish.workspace = true
 [dependencies]
 camino.workspace = true
 clap.workspace = true
+cast5 = "0.12"
+cipher = "0.5"
+gost-crypto = "0.3"
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "tga"] }
+idea = "0.6"
 mu_assets = { path = "../mu_assets" }
+rc6_rs = "0.1"
+tea-soft = "0.3"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

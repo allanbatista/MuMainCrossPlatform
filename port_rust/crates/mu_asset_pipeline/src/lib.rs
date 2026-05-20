@@ -3,6 +3,7 @@ pub mod bmd;
 pub mod game_data;
 pub mod inventory;
 pub mod manifest_writer;
+pub mod modulus;
 pub mod map;
 pub mod models;
 pub mod obj;

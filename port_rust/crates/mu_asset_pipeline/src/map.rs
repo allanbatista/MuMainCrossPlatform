@@ -11,6 +11,7 @@ use crate::terrain::{
     has_modulus_magic, is_encrypted_terrain_stem, map_file_decrypt, normalized_extension,
     normalized_stem, rows_from_u8, terrain_output_relative_path, terrain_size, write_json_file,
 };
+use crate::modulus::decrypt_modulus_payload;
 
 const TERRAIN_MAP_KIND: &str = "terrain-map";
 const TERRAIN_TILE_COUNT: usize = 256 * 256;
@@ -121,15 +122,12 @@ pub(crate) fn decode_terrain_map_bytes(
     path: &Utf8Path,
     raw: &[u8],
 ) -> Result<TerrainMapJson, TerrainMapError> {
-    if has_modulus_magic(raw) {
-        return Err(TerrainMapError::ParseSource {
+    let mut decoded = if has_modulus_magic(raw) {
+        decrypt_modulus_payload(raw).map_err(|message| TerrainMapError::ParseSource {
             path: path.to_path_buf(),
-            message: "Season16+ terrain map decryption is not implemented in the Rust port yet"
-                .to_string(),
-        });
-    }
-
-    let mut decoded = if is_encrypted_terrain_stem(&normalized_stem(path)) {
+            message,
+        })?
+    } else if is_encrypted_terrain_stem(&normalized_stem(path)) {
         map_file_decrypt(raw)
     } else {
         raw.to_vec()
