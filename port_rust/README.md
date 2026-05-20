@@ -158,5 +158,5 @@ area ser considerada equivalente, descartada ou fora do runtime Rust.
 O inventario granular dos caminhos legados vive em
 `port_rust/crates/mu_test_support/src/source_inventory.rs` e e validado por
 `port_rust/tests/rust/source_inventory.rs`. Ele cobre `ClientLibrary/`,
-`src/source/`, `src/MuEditor/`, `src/bin/`, `src/ThirdParty/`,
+`src/`, `src/source/`, `src/MuEditor/`, `src/bin/`, `src/ThirdParty/`,
 `src/dependencies/` e `tests/`.

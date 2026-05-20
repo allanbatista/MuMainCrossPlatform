@@ -6,6 +6,7 @@ use mu_test_support::source_inventory::{source_inventory_report, source_inventor
 
 const LEGACY_ROOTS: &[&str] = &[
     "ClientLibrary",
+    "src",
     "src/source",
     "src/MuEditor",
     "src/bin",
@@ -59,7 +60,7 @@ fn source_inventory_matches_the_current_top_level_legacy_paths() {
 
     let report = source_inventory_report();
     assert!(report.contains("source inventory"));
-    assert!(report.contains("fixture-only=2"));
-    assert!(report.contains("reference-only=52"));
-    assert!(report.contains("rejected=4"));
+    assert!(report.contains("fixture-only=3"));
+    assert!(report.contains("reference-only=59"));
+    assert!(report.contains("rejected=5"));
 }

@@ -84,6 +84,17 @@ pub const SOURCE_ROOTS: &[SourceRoot] = &[
         "MUnique.Client.Library.csproj" => ReferenceOnly, "source comparison inputs", "project metadata for the legacy comparison build",
         "Properties" => ReferenceOnly, "source comparison inputs", "assembly metadata reference",
     ]),
+    source_root!("src", [
+        ".gitignore" => ReferenceOnly, "legacy source comparison inputs", "keeps generated source and build noise out of diffs",
+        "CMakeLists.txt" => ReferenceOnly, "legacy build reference", "legacy source build graph reference",
+        "Main.sln.DotSettings.user" => Rejected, "none", "legacy IDE metadata is not shipped by the Rust client",
+        "MuEditor" => ReferenceOnly, "src/MuEditor", "fan-out root for legacy editor and admin reference",
+        "ThirdParty" => ReferenceOnly, "src/ThirdParty", "fan-out root for native third-party reference",
+        "afxres.h" => ReferenceOnly, "legacy build reference", "Windows resource compatibility header for the legacy build",
+        "bin" => FixtureOnly, "src/bin", "fan-out root for asset and config fixtures",
+        "dependencies" => ReferenceOnly, "src/dependencies", "fan-out root for native dependency reference",
+        "source" => ReferenceOnly, "src/source", "fan-out root for legacy client source reference",
+    ]),
     source_root!("src/source", [
         "Audio" => ReferenceOnly, "mu_audio", "legacy audio runtime reference",
         "Camera" => ReferenceOnly, "mu_input / mu_render", "camera control reference",
@@ -200,6 +211,7 @@ mod tests {
             .collect::<BTreeSet<_>>();
         let expected = [
             "ClientLibrary",
+            "src",
             "src/source",
             "src/MuEditor",
             "src/bin",
@@ -218,10 +230,10 @@ mod tests {
         let report = source_inventory_report();
 
         assert!(report.contains("source inventory"));
-        assert!(report.contains("roots=7"));
-        assert!(report.contains("entries=58"));
-        assert!(report.contains("fixture-only=2"));
-        assert!(report.contains("reference-only=52"));
-        assert!(report.contains("rejected=4"));
+        assert!(report.contains("roots=8"));
+        assert!(report.contains("entries=67"));
+        assert!(report.contains("fixture-only=3"));
+        assert!(report.contains("reference-only=59"));
+        assert!(report.contains("rejected=5"));
     }
 }

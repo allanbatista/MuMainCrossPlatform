@@ -78,6 +78,6 @@ and is exercised by `port_rust/tests/rust/source_inventory.rs`.
 - `ported`: the legacy path is fully mirrored by Rust code.
 - `rejected`: keep the path out of the Rust client and packaging flow.
 
-When a new top-level legacy path appears under `ClientLibrary`, `src/source`,
-`src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies` or `tests`,
-update the inventory helper and its test in the same change.
+When a new top-level legacy path appears under `ClientLibrary`, `src`,
+`src/source`, `src/MuEditor`, `src/bin`, `src/ThirdParty`, `src/dependencies`
+or `tests`, update the inventory helper and its test in the same change.
