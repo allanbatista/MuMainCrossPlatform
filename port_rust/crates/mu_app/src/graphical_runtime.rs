@@ -18,6 +18,7 @@ use mu_gameplay::{
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
+use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
@@ -111,6 +112,7 @@ fn configure_project_plugins(
             WorldNpcPlugin,
             WorldMonsterPlugin,
             WorldMotionPlugin,
+            AuthShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
         ))

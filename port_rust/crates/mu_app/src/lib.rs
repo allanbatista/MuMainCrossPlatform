@@ -1,3 +1,4 @@
+pub(crate) mod auth_shell;
 pub mod bootstrap_runtime;
 pub mod cli;
 pub mod client_runtime;

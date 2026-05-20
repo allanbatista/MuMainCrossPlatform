@@ -24,7 +24,8 @@ in the local config file instead of being typed every time.
 
 ## What Players See
 
-- Login and server selection screens.
+- A visible Bevy auth shell for login, server selection, and character
+  selection while the client boots.
 - Character selection and character creation.
 - The Bevy bootstrap now carries the client from login to character select and
   into the loaded world once the map handoff packet arrives.

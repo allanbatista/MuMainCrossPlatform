@@ -10,10 +10,11 @@ sessao de jogo completa.
 - Incremental: o cliente legado continua sendo a referencia funcional.
 - O runtime grafico inicial abre via Bevy no modo sem `--headless`; as camadas
   de UI, assets, audio, gameplay, editor/admin e rede ainda seguem em paridade
-  incremental antes de uma sessao jogavel completa. Esse boot ja faz a
-  transicao login -> server select -> character select -> world quando o
-  fluxo de rede entrega o handoff do mapa e, no world route, mostra uma world
-  shell 3D visivel com terreno e marcadores amostrados do bundle carregado.
+  incremental antes de uma sessao jogavel completa. Esse boot ja mostra a
+  shell visual de login/server select/character select, faz a transicao
+  login -> server select -> character select -> world quando o fluxo de rede
+  entrega o handoff do mapa e, no world route, mostra uma world shell 3D
+  visivel com terreno e marcadores amostrados do bundle carregado.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.

@@ -5,8 +5,8 @@
 
 Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
 jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
-character select/world da Bevy runtime; no modo `--headless`, continua sendo
-um smoke server deterministico.
+character select/world da Bevy runtime e a shell visual correspondente; no
+modo `--headless`, continua sendo um smoke server deterministico.
 
 ## Como iniciar
 
