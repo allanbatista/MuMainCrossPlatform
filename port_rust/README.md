@@ -14,8 +14,10 @@ sessao de jogo completa.
   shell visual de login/server select/character select, faz a transicao
   login -> server select -> character select -> world quando o fluxo de rede
   entrega o handoff do mapa e, no world route, mostra uma world shell 3D
-  visivel com terreno heightfield derivado dos dados do bundle, marcadores de
-  player amostrados e modelos convertidos reais para objects, NPCs e monstros.
+  visivel com terreno heightfield derivado dos dados do bundle, uma superficie
+  em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
+  map, marcadores de player amostrados e modelos convertidos reais para
+  objects, NPCs e monstros.
 - O world route tambem mostra uma HUD visivel com as gauges e botoes do frame
   principal legado enquanto a cena 3D esta ativa.
 - O world route tambem mostra o stack visual de HUD com chat, minimap e
@@ -23,6 +25,8 @@ sessao de jogo completa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
+- Se os slots de textura ou o alpha map do terreno nao estiverem disponiveis,
+  o shell volta para o material solido de fallback sem sair do world route.
 - A tecla `Tab` alterna entre o world route e a shell visual de inventory
   enquanto a sessao de mundo estiver ativa.
 - As rotas `Npc` e `Shop` agora mostram shells visuais proprias e podem ser

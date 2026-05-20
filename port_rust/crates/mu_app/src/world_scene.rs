@@ -3,9 +3,9 @@ use bevy::gltf::GltfAssetLabel;
 use bevy::math::primitives::Cuboid;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::{
-    App, AssetServer, Assets, Camera3d, Color, Commands, Component, DirectionalLight, Entity,
-    EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res, ResMut,
-    Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
+    AlphaMode, App, AssetServer, Assets, Camera3d, Color, Commands, Component, DirectionalLight,
+    Entity, EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res,
+    ResMut, Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
 };
 use mu_assets::TerrainWorldSummary;
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
@@ -16,6 +16,8 @@ use crate::ClientRuntime;
 const WORLD_POSITION_SCALE: f32 = 0.05;
 const WORLD_TERRAIN_AMPLITUDE: f32 = 1.0;
 const WORLD_TERRAIN_FALLBACK_THICKNESS: f32 = 0.2;
+const WORLD_TERRAIN_TEXTURE_REPEAT: f32 = 8.0;
+const WORLD_TERRAIN_BLEND_OFFSET: f32 = 0.01;
 const WORLD_CAMERA_HEIGHT_FACTOR: f32 = 1.8;
 const WORLD_CAMERA_DISTANCE_FACTOR: f32 = 2.2;
 const WORLD_RENDER_ENTITY_LIMIT: usize = 8;
@@ -135,8 +137,9 @@ fn spawn_world_scene(
     let summary = world_bundle.summary();
     state.entities.push(spawn_world_camera(commands, &summary));
     state.entities.push(spawn_world_light(commands));
-    state.entities.push(spawn_world_terrain(
+    state.entities.extend(spawn_world_terrain(
         commands,
+        asset_server,
         meshes,
         materials,
         world_bundle,
@@ -182,41 +185,65 @@ fn spawn_world_light(commands: &mut Commands) -> Entity {
 
 fn spawn_world_terrain(
     commands: &mut Commands,
+    asset_server: &AssetServer,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     world_bundle: &mu_gameplay::TerrainWorldBundle,
-) -> Entity {
+) -> Vec<Entity> {
     let summary = world_bundle.summary();
     let extent = summary.terrain_size as f32 * WORLD_POSITION_SCALE;
-    let mesh = meshes.add(
-        build_world_terrain_mesh(&summary, &world_bundle.map).unwrap_or_else(|| {
+    let Some(base_mesh) = build_world_terrain_mesh(&summary, &world_bundle.map) else {
+        return vec![spawn_world_terrain_surface(
+            commands,
+            meshes,
+            materials,
             Mesh::from(Cuboid::new(
                 extent,
                 WORLD_TERRAIN_FALLBACK_THICKNESS,
                 extent,
-            ))
-        }),
-    );
-    let material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.12, 0.28, 0.12),
-        perceptual_roughness: 1.0,
-        cull_mode: None,
-        ..Default::default()
-    });
-
-    commands
-        .spawn((
-            Mesh3d(mesh),
-            MeshMaterial3d(material),
-            Transform::from_translation(Vec3::new(
-                0.0,
-                -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5,
-                0.0,
             )),
-            WorldSceneTerrain,
-            Name::new(format!("world-terrain-{}", summary.world)),
-        ))
-        .id()
+            solid_world_terrain_material(),
+            Vec3::new(0.0, -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5, 0.0),
+            format!("world-terrain-{}", summary.world),
+        )];
+    };
+
+    let (base_texture_path, blend_texture_path) = world_terrain_texture_paths(world_bundle);
+    let mut entities = Vec::new();
+    let base_material =
+        build_world_terrain_material(asset_server, base_texture_path, AlphaMode::Opaque);
+    entities.push(spawn_world_terrain_surface(
+        commands,
+        meshes,
+        materials,
+        base_mesh,
+        base_material,
+        Vec3::new(0.0, -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5, 0.0),
+        format!("world-terrain-base-{}", summary.world),
+    ));
+
+    if let (Some(blend_texture_path), Some(blend_mesh)) = (
+        blend_texture_path,
+        build_world_terrain_blend_mesh(&summary, &world_bundle.map),
+    ) {
+        let blend_material =
+            build_world_terrain_material(asset_server, Some(blend_texture_path), AlphaMode::Blend);
+        entities.push(spawn_world_terrain_surface(
+            commands,
+            meshes,
+            materials,
+            blend_mesh,
+            blend_material,
+            Vec3::new(
+                0.0,
+                -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5 + WORLD_TERRAIN_BLEND_OFFSET,
+                0.0,
+            ),
+            format!("world-terrain-blend-{}", summary.world),
+        ));
+    }
+
+    entities
 }
 
 fn build_world_terrain_mesh(
@@ -247,6 +274,7 @@ fn build_world_terrain_mesh(
             ]);
         }
     }
+    let uvs = build_world_terrain_uvs(terrain_size);
 
     let mut indices = Vec::with_capacity((terrain_size - 1) * (terrain_size - 1) * 6);
     for z in 0..(terrain_size - 1) {
@@ -271,9 +299,116 @@ fn build_world_terrain_mesh(
         RenderAssetUsages::default(),
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(Indices::U32(indices));
     mesh.compute_smooth_normals();
     Some(mesh)
+}
+
+fn build_world_terrain_uvs(terrain_size: usize) -> Vec<[f32; 2]> {
+    let tile_step = WORLD_TERRAIN_TEXTURE_REPEAT / (terrain_size as f32 - 1.0);
+    let mut uvs = Vec::with_capacity(terrain_size * terrain_size);
+
+    for z in 0..terrain_size {
+        for x in 0..terrain_size {
+            uvs.push([x as f32 * tile_step, z as f32 * tile_step]);
+        }
+    }
+
+    uvs
+}
+
+fn build_world_terrain_material(
+    asset_server: &AssetServer,
+    texture_path: Option<&str>,
+    alpha_mode: AlphaMode,
+) -> StandardMaterial {
+    let Some(texture_path) = texture_path else {
+        return solid_world_terrain_material();
+    };
+
+    StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(asset_server.load(texture_path.to_owned())),
+        perceptual_roughness: 1.0,
+        cull_mode: None,
+        alpha_mode,
+        ..Default::default()
+    }
+}
+
+fn solid_world_terrain_material() -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::srgb(0.12, 0.28, 0.12),
+        perceptual_roughness: 1.0,
+        cull_mode: None,
+        ..Default::default()
+    }
+}
+
+fn world_terrain_texture_paths(
+    world_bundle: &mu_gameplay::TerrainWorldBundle,
+) -> (Option<&str>, Option<&str>) {
+    let mut texture_paths = world_bundle.texture_slots.slots.values();
+    let base = texture_paths.next().map(String::as_str);
+    let blend = texture_paths.next().map(String::as_str);
+    (base, blend)
+}
+
+fn build_world_terrain_blend_mesh(
+    summary: &TerrainWorldSummary,
+    map: &mu_assets::TerrainMapJson,
+) -> Option<Mesh> {
+    let terrain_size = summary.terrain_size as usize;
+    let alpha_rows = map.alpha.as_slice();
+    if alpha_rows.len() != terrain_size || alpha_rows.iter().any(|row| row.len() != terrain_size) {
+        return None;
+    }
+
+    let mut mesh = build_world_terrain_mesh(summary, map)?;
+    let colors = build_world_terrain_blend_colors(alpha_rows)?;
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+    Some(mesh)
+}
+
+fn build_world_terrain_blend_colors(alpha_rows: &[Vec<u8>]) -> Option<Vec<[f32; 4]>> {
+    let Some(terrain_size) = alpha_rows.first().map(Vec::len) else {
+        return None;
+    };
+
+    if alpha_rows.len() != terrain_size || alpha_rows.iter().any(|row| row.len() != terrain_size) {
+        return None;
+    }
+
+    let mut colors = Vec::with_capacity(terrain_size * terrain_size);
+    for row in alpha_rows {
+        for sample in row {
+            let alpha = f32::from(*sample) / 255.0;
+            colors.push([1.0, 1.0, 1.0, alpha]);
+        }
+    }
+
+    Some(colors)
+}
+
+fn spawn_world_terrain_surface(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    mesh: Mesh,
+    material: StandardMaterial,
+    translation: Vec3,
+    name: String,
+) -> Entity {
+    commands
+        .spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(materials.add(material)),
+            Transform::from_translation(translation),
+            WorldSceneTerrain,
+            Name::new(name),
+        ))
+        .id()
 }
 
 fn spawn_world_entities(
@@ -485,13 +620,14 @@ fn render_entity_for_marker<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_world_terrain_mesh, WorldSceneMarker, WorldScenePlugin, WorldSceneState,
-        WorldSceneTerrain, WORLD_POSITION_SCALE,
+        build_world_terrain_blend_mesh, build_world_terrain_mesh, world_terrain_texture_paths,
+        WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
+        WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
     use crate::ClientRuntime;
     use bevy::asset::AssetPlugin;
     use bevy::mesh::VertexAttributeValues;
-    use bevy::prelude::{App, Camera3d, Mesh3d, SceneRoot};
+    use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, SceneRoot};
     use bevy::{gltf::GltfPlugin, scene::ScenePlugin};
     use camino::Utf8PathBuf;
     use mu_assets::load_terrain_world_bundle;
@@ -526,6 +662,7 @@ mod tests {
             ScenePlugin::default(),
             WorldScenePlugin,
         ));
+        app.init_asset::<bevy::prelude::Image>();
         app.insert_resource(ClientRuntime::new());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::Mesh>::default());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::StandardMaterial>::default());
@@ -610,6 +747,14 @@ mod tests {
             .entities
             .iter()
             .any(|entity| world.entity(*entity).contains::<WorldSceneTerrain>()));
+        assert_eq!(
+            state
+                .entities
+                .iter()
+                .filter(|entity| world.entity(**entity).contains::<WorldSceneTerrain>())
+                .count(),
+            2
+        );
         assert!(state
             .entities
             .iter()
@@ -652,9 +797,17 @@ mod tests {
             VertexAttributeValues::Float32x3(values) => values,
             other => panic!("unexpected position attribute: {other:?}"),
         };
+        let uvs = match mesh
+            .attribute(bevy::prelude::Mesh::ATTRIBUTE_UV_0)
+            .expect("mesh should have uvs")
+        {
+            VertexAttributeValues::Float32x2(values) => values,
+            other => panic!("unexpected uv attribute: {other:?}"),
+        };
 
         let terrain_size = summary.terrain_size as usize;
         assert_eq!(positions.len(), terrain_size * terrain_size);
+        assert_eq!(uvs.len(), terrain_size * terrain_size);
 
         let max_height = f32::from(summary.layer_stats.layer1.max.max(1));
         let expected_first = f32::from(bundle.map.layer1[0][0]) / max_height;
@@ -671,6 +824,8 @@ mod tests {
         assert!((positions[0][0] + half_extent).abs() < f32::EPSILON);
         assert!((positions[0][1] - expected_first).abs() < f32::EPSILON);
         assert!((positions[0][2] + half_extent).abs() < f32::EPSILON);
+        assert!((uvs[0][0]).abs() < f32::EPSILON);
+        assert!((uvs[0][1]).abs() < f32::EPSILON);
 
         let last = positions
             .last()
@@ -678,6 +833,62 @@ mod tests {
         assert!((last[0] - half_extent).abs() < f32::EPSILON);
         assert!((last[1] - expected_last).abs() < f32::EPSILON);
         assert!((last[2] - half_extent).abs() < f32::EPSILON);
+
+        let last_uv = uvs.last().expect("mesh should include the last uv");
+        assert!((last_uv[0] - WORLD_TERRAIN_TEXTURE_REPEAT).abs() < f32::EPSILON);
+        assert!((last_uv[1] - WORLD_TERRAIN_TEXTURE_REPEAT).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn world_terrain_layer_paths_use_the_first_two_available_slots() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+
+        assert_eq!(
+            world_terrain_texture_paths(&bundle),
+            (
+                Some("data/world_1/TileGrass01.png"),
+                Some("data/world_1/TileGrass02.png"),
+            )
+        );
+
+        let mut no_texture_bundle = bundle.clone();
+        no_texture_bundle.texture_slots.slots.clear();
+        assert_eq!(
+            world_terrain_texture_paths(&no_texture_bundle),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn world_terrain_blend_mesh_uses_alpha_colors() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let summary = bundle.summary();
+        let mesh = build_world_terrain_blend_mesh(&summary, &bundle.map).unwrap();
+
+        let colors = match mesh
+            .attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR)
+            .expect("mesh should have colors")
+        {
+            VertexAttributeValues::Float32x4(values) => values,
+            other => panic!("unexpected color attribute: {other:?}"),
+        };
+
+        let terrain_size = summary.terrain_size as usize;
+        assert_eq!(colors.len(), terrain_size * terrain_size);
+        assert!((colors[0][3] - (f32::from(bundle.map.alpha[0][0]) / 255.0)).abs() < f32::EPSILON);
+
+        let last_color = colors.last().expect("mesh should include the last color");
+        let last_alpha = f32::from(
+            *bundle
+                .map
+                .alpha
+                .last()
+                .and_then(|row| row.last())
+                .expect("bundle should include the last alpha sample"),
+        ) / 255.0;
+        assert!((last_color[3] - last_alpha).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -6,6 +6,7 @@ phases before implementing the next surface.
 
 # [medium] Terrain mesh follow-up
 
-The world route now renders a bundle-driven heightfield terrain and converted
-object/NPC/monster models, but the terrain materials are still a simplified
-shell. The next slice should decide which visible surface to upgrade next.
+The world route now renders a bundle-driven heightfield terrain, layered
+terrain surface, and converted object/NPC/monster models, but broader legacy
+terrain/material parity still remains. The next slice should decide which
+remaining visible surface or interaction is highest priority.
