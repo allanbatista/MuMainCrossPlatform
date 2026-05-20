@@ -215,6 +215,10 @@ impl WorldEntitiesManager {
         self.local_player.as_ref()
     }
 
+    pub fn local_player_mut(&mut self) -> Option<&mut WorldPlayerSpawn> {
+        self.local_player.as_mut()
+    }
+
     pub fn remote_players(&self) -> &[WorldPlayerSpawn] {
         &self.remote_players
     }
@@ -252,6 +256,16 @@ impl WorldEntitiesManager {
 
     pub fn clear_local_player(&mut self) {
         self.local_player = None;
+    }
+
+    pub fn translate_local_player(&mut self, delta: [f64; 3]) {
+        let Some(local_player) = self.local_player.as_mut() else {
+            return;
+        };
+
+        for (index, offset) in delta.into_iter().enumerate() {
+            local_player.pose.position[index] += offset;
+        }
     }
 
     pub fn set_remote_players<I>(&mut self, remote_players: I)
@@ -441,5 +455,22 @@ mod tests {
             manager.snapshot(),
             "state=ready|world_summary=none|local=role=local|label=Hero|key=17|model=data/character/dark_knight.glb|pose=position=1,2,3|rotation=0,90,0|scale=1,1,1|remote_count=1|remote=[role=remote|label=Ally|key=23|model=data/character/wizard.glb|pose=position=4,5,6|rotation=0,180,0|scale=1,1,1]|object_count=3|objects=[id=obj_00000|label=stone_01|type=30|model=data/object_1/stone_01.glb|pose=position=1397.105,44.23,682.558|rotation=0,0,-60|scale=0.94,0.94,0.94;id=obj_00001|label=stone_01|type=30|model=data/object_1/stone_01.glb|pose=position=784.989,-20.855,643.003|rotation=0,0,150|scale=1,1,1;...]"
         );
+    }
+
+    #[test]
+    fn world_entities_manager_translates_local_player_pose() {
+        let mut manager = WorldEntitiesManager::new();
+        manager.set_local_player(WorldPlayerSpawn::new(
+            WorldPlayerRole::Local,
+            "Hero",
+            17,
+            "data/character/dark_knight.glb",
+            WorldEntityPose::new([1.0, 2.0, 3.0], [0.0, 90.0, 0.0], [1.0, 1.0, 1.0]),
+        ));
+
+        manager.translate_local_player([4.0, 0.0, -1.5]);
+
+        let local_player = manager.local_player().unwrap();
+        assert_eq!(local_player.pose.position, [5.0, 2.0, 1.5]);
     }
 }

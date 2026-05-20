@@ -1,8 +1,8 @@
 use bevy::math::primitives::Cuboid;
 use bevy::prelude::{
-    App, Assets, Camera3d, Color, Commands, Component, DirectionalLight, Entity, EulerRot, Mesh,
-    Mesh3d, MeshMaterial3d, Name, Plugin, Res, ResMut, Resource, StandardMaterial, Transform,
-    Update, Vec3,
+    App, Assets, Camera3d, Color, Commands, Component, DirectionalLight, Entity, EulerRot,
+    IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res, ResMut, Resource,
+    StandardMaterial, Transform, Update, Vec3,
 };
 use mu_assets::TerrainWorldSummary;
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
@@ -23,9 +23,10 @@ struct WorldSceneState {
     entities: Vec<Entity>,
 }
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
 struct WorldSceneMarker {
     family: RenderEntityFamily,
+    key: String,
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,8 +37,15 @@ pub struct WorldScenePlugin;
 
 impl Plugin for WorldScenePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<WorldSceneState>()
-            .add_systems(Update, sync_world_scene_system);
+        app.init_resource::<WorldSceneState>().add_systems(
+            Update,
+            (
+                sync_world_scene_system,
+                sync_world_scene_transforms_system
+                    .after(crate::world_motion::apply_world_motion_system),
+            )
+                .chain(),
+        );
     }
 }
 
@@ -76,6 +84,29 @@ fn sync_world_scene_system(
         &mut state,
     );
     state.world_id = Some(summary.world);
+}
+
+fn sync_world_scene_transforms_system(
+    ui_shell: Res<UiShellState>,
+    client_runtime: Res<ClientRuntime>,
+    state: Res<WorldSceneState>,
+    mut markers: Query<(&WorldSceneMarker, &mut Transform)>,
+) {
+    if ui_shell.current() != UiRoute::World
+        || !client_runtime.world_ready()
+        || !client_runtime.render_entities_ready()
+        || state.entities.is_empty()
+    {
+        return;
+    }
+
+    let catalog = client_runtime.render_entities().catalog();
+
+    for (marker, mut transform) in markers.iter_mut() {
+        if let Some(entry) = render_entity_for_marker(catalog, marker) {
+            *transform = world_transform(&entry.pose);
+        }
+    }
 }
 
 fn clear_world_scene(commands: &mut Commands, state: &mut WorldSceneState) {
@@ -269,6 +300,7 @@ fn spawn_world_marker(
             world_transform(&entry.pose),
             WorldSceneMarker {
                 family: entry.family,
+                key: entry.key.clone(),
             },
             Name::new(format!("{label_prefix}-{}-{}", entry.key, entry.label)),
         ))
@@ -308,6 +340,29 @@ fn marker_style(family: RenderEntityFamily) -> (Color, f32) {
         RenderEntityFamily::Npc => (Color::srgb(0.65, 0.40, 0.85), 1.1),
         RenderEntityFamily::Monster => (Color::srgb(0.95, 0.25, 0.25), 1.4),
         RenderEntityFamily::Other => (Color::srgb(0.80, 0.80, 0.80), 1.0),
+    }
+}
+
+fn render_entity_for_marker<'a>(
+    catalog: &'a RenderEntityCatalog,
+    marker: &WorldSceneMarker,
+) -> Option<&'a RenderEntityEntry> {
+    match marker.family {
+        RenderEntityFamily::LocalPlayer => catalog
+            .local_player
+            .as_ref()
+            .filter(|entry| entry.key == marker.key),
+        RenderEntityFamily::RemotePlayer => catalog
+            .remote_players
+            .iter()
+            .find(|entry| entry.key == marker.key),
+        RenderEntityFamily::Object => catalog.objects.iter().find(|entry| entry.key == marker.key),
+        RenderEntityFamily::Npc => catalog.npcs.iter().find(|entry| entry.key == marker.key),
+        RenderEntityFamily::Monster => catalog
+            .monsters
+            .iter()
+            .find(|entry| entry.key == marker.key),
+        RenderEntityFamily::Other => None,
     }
 }
 
@@ -391,6 +446,53 @@ mod tests {
                 .map(|marker| marker.family == RenderEntityFamily::Object)
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn world_scene_reconciles_the_local_player_marker_after_runtime_motion() {
+        let mut app = spawn_ready_app();
+        load_world(&mut app);
+
+        let (local_marker, initial_x) = {
+            let state = app.world().resource::<WorldSceneState>();
+            let world = app.world();
+            let local_marker = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| {
+                    world
+                        .entity(*entity)
+                        .get::<WorldSceneMarker>()
+                        .map(|marker| {
+                            marker.family == RenderEntityFamily::LocalPlayer && marker.key == "0"
+                        })
+                        .unwrap_or(false)
+                })
+                .expect("local player marker should exist");
+            let initial_x = world
+                .entity(local_marker)
+                .get::<bevy::prelude::Transform>()
+                .unwrap()
+                .translation
+                .x;
+            (local_marker, initial_x)
+        };
+
+        app.world_mut()
+            .resource_mut::<ClientRuntime>()
+            .translate_local_player([20.0, 0.0, 0.0]);
+        app.update();
+
+        let updated_x = app
+            .world()
+            .entity(local_marker)
+            .get::<bevy::prelude::Transform>()
+            .unwrap()
+            .translation
+            .x;
+
+        assert!(updated_x > initial_x);
     }
 
     #[test]

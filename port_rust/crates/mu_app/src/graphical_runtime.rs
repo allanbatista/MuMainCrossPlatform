@@ -16,6 +16,7 @@ use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
 use crate::{Cli, ClientRuntime};
 
@@ -84,6 +85,7 @@ fn configure_project_plugins(
             WorldEntitiesPlugin,
             WorldNpcPlugin,
             WorldMonsterPlugin,
+            WorldMotionPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
         ))

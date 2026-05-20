@@ -12,3 +12,10 @@ The current Rust client only implements the first graphical boot slice. Remainin
 The world scene shell is shipped. Next work should make the player avatar
 interactive: movement input, server-authoritative position sync, and the first
 HUD/chat/inventory hooks that turn the visible world into a playable loop.
+
+# [medium]Server-authoritative movement follow-up
+
+The local avatar is now seeded and moves in the world shell, but the motion is
+still client-side. Next work is to replace the placeholder spawn with real
+game-server authority, keep remote/local pose sync consistent, and begin the
+HUD/chat/inventory hooks that build the playable loop.

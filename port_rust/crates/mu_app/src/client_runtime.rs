@@ -2,13 +2,20 @@ use bevy::prelude::Resource;
 use camino::Utf8Path;
 use mu_assets::{load_terrain_world_bundle, TerrainWorldBundle, TerrainWorldError};
 use mu_gameplay::{
-    MovementManager, PartyManager, WorldEntitiesManager, WorldManager, WorldMonsterManager,
-    WorldNpcManager,
+    MovementManager, PartyManager, WorldEntitiesManager, WorldEntityPose, WorldManager,
+    WorldMonsterManager, WorldNpcManager, WorldPlayerRole, WorldPlayerSpawn,
 };
 use mu_render::{
     RenderAssets, RenderAssetsError, RenderEntities, RenderEntitiesState, TerrainRenderer,
 };
 use thiserror::Error;
+
+const DEFAULT_LOCAL_PLAYER_KEY: u32 = 0;
+const DEFAULT_LOCAL_PLAYER_LABEL: &str = "Player";
+const DEFAULT_LOCAL_PLAYER_MODEL: &str = "local-player";
+const DEFAULT_LOCAL_PLAYER_POSITION: [f64; 3] = [0.0, 1.0, 0.0];
+const DEFAULT_LOCAL_PLAYER_ROTATION: [f64; 3] = [0.0, 0.0, 0.0];
+const DEFAULT_LOCAL_PLAYER_SCALE: [f64; 3] = [1.0, 1.0, 1.0];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ClientRuntimeState {
@@ -153,8 +160,14 @@ impl ClientRuntime {
     pub fn load_world_bundle(&mut self, bundle: TerrainWorldBundle) {
         self.clear_world_projection();
         self.world.set_bundle(bundle);
+        self.seed_local_player();
         self.sync_world_projection();
         self.world_error = None;
+    }
+
+    pub fn translate_local_player(&mut self, delta: [f64; 3]) {
+        self.world_entities.translate_local_player(delta);
+        self.sync_world_projection();
     }
 
     pub fn sync_world_projection(&mut self) {
@@ -193,6 +206,15 @@ impl ClientRuntime {
             self.world_error,
         )
     }
+
+    fn seed_local_player(&mut self) {
+        if self.world_entities.local_player().is_some() {
+            return;
+        }
+
+        self.world_entities
+            .set_local_player(default_local_player_spawn());
+    }
 }
 
 impl ClientRuntime {
@@ -220,9 +242,26 @@ impl ClientRuntime {
     }
 }
 
+fn default_local_player_spawn() -> WorldPlayerSpawn {
+    WorldPlayerSpawn::new(
+        WorldPlayerRole::Local,
+        DEFAULT_LOCAL_PLAYER_LABEL,
+        DEFAULT_LOCAL_PLAYER_KEY,
+        DEFAULT_LOCAL_PLAYER_MODEL,
+        WorldEntityPose::new(
+            DEFAULT_LOCAL_PLAYER_POSITION,
+            DEFAULT_LOCAL_PLAYER_ROTATION,
+            DEFAULT_LOCAL_PLAYER_SCALE,
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ClientRuntime, ClientRuntimeState};
+    use super::{
+        ClientRuntime, ClientRuntimeState, DEFAULT_LOCAL_PLAYER_LABEL,
+        DEFAULT_LOCAL_PLAYER_POSITION,
+    };
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -355,10 +394,46 @@ mod tests {
         assert!(runtime.terrain_ready());
         assert!(runtime.movement_ready());
         assert!(runtime.render_entities_ready());
+        assert_eq!(
+            runtime.world_entities().local_player().unwrap().label,
+            DEFAULT_LOCAL_PLAYER_LABEL
+        );
+        assert_eq!(
+            runtime
+                .world_entities()
+                .local_player()
+                .unwrap()
+                .pose
+                .position,
+            DEFAULT_LOCAL_PLAYER_POSITION
+        );
         assert_eq!(runtime.party().party_number(), 0);
         assert!(runtime.snapshot().contains("render_assets=inactive"));
         assert!(runtime.snapshot().contains("world=ready"));
         assert!(runtime.snapshot().contains("party_number=0"));
+
+        runtime.translate_local_player([4.0, 0.0, -2.0]);
+
+        assert_eq!(
+            runtime
+                .world_entities()
+                .local_player()
+                .unwrap()
+                .pose
+                .position,
+            [4.0, 1.0, -2.0]
+        );
+        assert_eq!(
+            runtime
+                .render_entities()
+                .catalog()
+                .local_player
+                .as_ref()
+                .unwrap()
+                .pose
+                .position,
+            [4.0, 1.0, -2.0]
+        );
 
         runtime.load_render_assets(&render_root).unwrap();
 

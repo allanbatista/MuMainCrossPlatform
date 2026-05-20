@@ -8,6 +8,7 @@ pub mod logging;
 mod runtime;
 pub mod session_state;
 pub mod state;
+pub mod world_motion;
 pub mod world_scene;
 
 pub use cli::Cli;
@@ -17,4 +18,5 @@ pub use graphical_runtime::{build_graphical_app, run_graphical, GraphicalRuntime
 pub use runtime::run;
 pub use session_state::{SessionEvent, SessionPhase, SessionState};
 pub use state::{boot_state, AppState};
+pub use world_motion::WorldMotionPlugin;
 pub use world_scene::WorldScenePlugin;

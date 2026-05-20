@@ -30,10 +30,18 @@ in the local config file instead of being typed every time.
   into the loaded world once the map handoff packet arrives.
 - The world now opens a visible Bevy world shell with a camera, lighting,
   terrain, and sampled scene markers from the loaded world bundle.
+- The world shell now seeds a local avatar marker and lets you move it with
+  WASD while the server-authoritative movement slice is still staged.
 - The world, HUD, inventory, NPC/shop, trade, quests, MU Helper, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
+
+## World Controls
+
+- `WASD` moves the local avatar in the world shell.
+- Motion is currently local-only; the networked movement slice still comes
+  later.
 
 ## If Something Fails
 

@@ -14,6 +14,9 @@ sessao de jogo completa.
   transicao login -> server select -> character select -> world quando o
   fluxo de rede entrega o handoff do mapa e, no world route, mostra uma world
   shell 3D visivel com terreno e marcadores amostrados do bundle carregado.
+- O world route agora tambem cria um avatar local e o move com `WASD`; isso
+  ainda e motion local-only enquanto a sincronizacao autoritativa de movimento
+  com o servidor nao chega.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; detalhes em `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes
