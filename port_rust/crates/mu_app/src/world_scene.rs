@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::gltf::GltfAssetLabel;
@@ -34,6 +36,7 @@ const WORLD_LIGHT_LEVEL: f32 = 30_000.0;
 #[derive(Debug, Default, Resource)]
 struct WorldSceneState {
     world_id: Option<u32>,
+    spawn_signature: Option<u64>,
     entities: Vec<Entity>,
 }
 
@@ -100,7 +103,16 @@ fn sync_world_scene_system(
         .world_entities()
         .local_player()
         .map(|local_player| world_transform(&local_player.pose).translation);
-    if state.world_id == Some(summary.world) && !state.entities.is_empty() {
+    let spawn_signature = world_scene_spawn_signature(
+        &summary,
+        client_runtime.render_entities().catalog(),
+        focus_translation,
+    );
+
+    if state.world_id == Some(summary.world)
+        && state.spawn_signature == Some(spawn_signature)
+        && !state.entities.is_empty()
+    {
         return;
     }
 
@@ -118,6 +130,7 @@ fn sync_world_scene_system(
         &mut state,
     );
     state.world_id = Some(summary.world);
+    state.spawn_signature = Some(spawn_signature);
 }
 
 fn sync_world_scene_transforms_system(
@@ -219,6 +232,7 @@ fn clear_world_scene(commands: &mut Commands, state: &mut WorldSceneState) {
         commands.entity(entity).despawn();
     }
     state.world_id = None;
+    state.spawn_signature = None;
 }
 
 fn spawn_world_scene(
@@ -924,12 +938,102 @@ fn render_entity_for_marker<'a>(
     }
 }
 
+fn world_scene_spawn_signature(
+    summary: &mu_assets::TerrainWorldSummary,
+    catalog: &RenderEntityCatalog,
+    focus_translation: Option<Vec3>,
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    world_scene_summary_signature(summary).hash(&mut hasher);
+    world_scene_entry_signature_option(catalog.local_player.as_ref()).hash(&mut hasher);
+    world_scene_entries_signature(&catalog.remote_players, focus_translation).hash(&mut hasher);
+    world_scene_entries_signature(&catalog.objects, focus_translation).hash(&mut hasher);
+    world_scene_entries_signature(&catalog.npcs, focus_translation).hash(&mut hasher);
+    world_scene_entries_signature(&catalog.monsters, focus_translation).hash(&mut hasher);
+    hasher.finish()
+}
+
+fn world_scene_summary_signature(summary: &mu_assets::TerrainWorldSummary) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    summary.world.hash(&mut hasher);
+    summary.world_directory.hash(&mut hasher);
+    summary.map_number.hash(&mut hasher);
+    summary.terrain_size.hash(&mut hasher);
+    summary.texture_layers.len().hash(&mut hasher);
+    for layer in &summary.texture_layers {
+        layer.hash(&mut hasher);
+    }
+    summary.texture_slots.hash(&mut hasher);
+    summary.scene_objects.hash(&mut hasher);
+    summary.camera_waypoints.hash(&mut hasher);
+    summary.layer_stats.layer1.min.hash(&mut hasher);
+    summary.layer_stats.layer1.max.hash(&mut hasher);
+    summary.layer_stats.layer1.mean.to_bits().hash(&mut hasher);
+    summary.layer_stats.layer1.unique_values.hash(&mut hasher);
+    summary.layer_stats.layer2.min.hash(&mut hasher);
+    summary.layer_stats.layer2.max.hash(&mut hasher);
+    summary.layer_stats.layer2.mean.to_bits().hash(&mut hasher);
+    summary.layer_stats.layer2.unique_values.hash(&mut hasher);
+    summary.layer_stats.alpha.min.hash(&mut hasher);
+    summary.layer_stats.alpha.max.hash(&mut hasher);
+    summary.layer_stats.alpha.mean.to_bits().hash(&mut hasher);
+    summary.layer_stats.alpha.unique_values.hash(&mut hasher);
+    summary.height_map_path.hash(&mut hasher);
+    summary.alpha_map_path.hash(&mut hasher);
+    summary.lightmap_path.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn world_scene_entries_signature(
+    entries: &[RenderEntityEntry],
+    focus_translation: Option<Vec3>,
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let mut sum = 0u64;
+    let mut xor = 0u64;
+    let mut count = 0u64;
+
+    for entry in prioritized_world_scene_entries(entries, focus_translation)
+        .into_iter()
+        .take(WORLD_RENDER_ENTITY_LIMIT)
+    {
+        let entry_signature = world_scene_entry_signature(entry);
+        sum = sum.wrapping_add(entry_signature);
+        xor ^= entry_signature;
+        count += 1;
+    }
+
+    count.hash(&mut hasher);
+    sum.hash(&mut hasher);
+    xor.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn world_scene_entry_signature_option(entry: Option<&RenderEntityEntry>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    if let Some(entry) = entry {
+        world_scene_entry_signature(entry).hash(&mut hasher);
+    } else {
+        0u8.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+fn world_scene_entry_signature(entry: &RenderEntityEntry) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    entry.family.as_str().hash(&mut hasher);
+    entry.label.hash(&mut hasher);
+    entry.key.hash(&mut hasher);
+    entry.model.hash(&mut hasher);
+    hasher.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         apply_world_camera_zoom_delta, build_world_terrain_blend_mesh, build_world_terrain_mesh,
-        grounded_marker_translation, grounded_world_transform, terrain_surface_height_at_position,
-        prioritized_world_scene_entries, world_terrain_lightmap_path,
+        grounded_marker_translation, grounded_world_transform, prioritized_world_scene_entries,
+        terrain_surface_height_at_position, world_terrain_lightmap_path,
         world_terrain_texture_paths, world_transform, WorldSceneCamera, WorldSceneMarker,
         WorldScenePlugin, WorldSceneState, WorldSceneTerrain, WORLD_POSITION_SCALE,
         WORLD_TERRAIN_AMPLITUDE, WORLD_TERRAIN_TEXTURE_REPEAT,
@@ -1594,5 +1698,72 @@ mod tests {
         let state = app.world().resource::<WorldSceneState>();
         assert!(state.entities.is_empty());
         assert!(state.world_id.is_none());
+    }
+
+    #[test]
+    fn world_scene_refreshes_when_npc_catalog_changes() {
+        let mut app = spawn_ready_app();
+        load_world(&mut app);
+
+        let initial_npc_count = {
+            let state = app.world().resource::<WorldSceneState>();
+            let world = app.world();
+            state
+                .entities
+                .iter()
+                .filter(|entity| {
+                    world
+                        .entity(**entity)
+                        .get::<WorldSceneMarker>()
+                        .map(|marker| marker.family == RenderEntityFamily::Npc)
+                        .unwrap_or(false)
+                })
+                .count()
+        };
+        assert_eq!(initial_npc_count, 2);
+
+        {
+            let mut runtime = app.world_mut().resource_mut::<ClientRuntime>();
+            runtime.world_npcs_mut().push_spawn(WorldNpcSpawn::new(
+                WorldNpcKind::Other,
+                "New Guide",
+                999,
+                0,
+                "data/object_1/npc_quest.glb",
+                WorldEntityPose::new([30.0, 0.0, 18.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]),
+            ));
+            runtime.sync_world_projection();
+        }
+
+        app.update();
+
+        let world = app.world();
+        let updated_npc_count = app
+            .world()
+            .resource::<WorldSceneState>()
+            .entities
+            .iter()
+            .filter(|entity| {
+                world
+                    .entity(**entity)
+                    .get::<WorldSceneMarker>()
+                    .map(|marker| marker.family == RenderEntityFamily::Npc)
+                    .unwrap_or(false)
+            })
+            .count();
+
+        assert_eq!(updated_npc_count, 3);
+        assert!(app
+            .world()
+            .resource::<WorldSceneState>()
+            .entities
+            .iter()
+            .any(|entity| {
+                app.world()
+                    .entity(*entity)
+                    .get::<WorldSceneMarker>()
+                    .map(|marker| marker.family == RenderEntityFamily::Npc && marker.key == "999")
+                    .unwrap_or(false)
+            }));
     }
 }
