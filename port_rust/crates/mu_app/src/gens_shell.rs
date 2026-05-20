@@ -180,6 +180,7 @@ fn apply_gens_ranking_snapshot(snapshot: GensRankingInfo, gens_manager: &mut Gen
     gens_manager.set_ranking(positive_i32_to_option_u16(snapshot.ranking));
     gens_manager.set_contribution(positive_i32_to_u32(snapshot.contribution_point));
     gens_manager.set_next_contribution(positive_i32_to_u32(snapshot.next_contribution_point));
+    gens_manager.set_title_name_from_gens_class(snapshot.gens_class);
     gens_manager.mark_ranking();
 }
 
@@ -462,10 +463,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{gens_shell_state_for_mode, gens_shell_view, GensShellPlugin, GensShellRoot};
+    use super::{
+        apply_gens_ranking_snapshot, gens_shell_state_for_mode, gens_shell_view, GensShellPlugin,
+        GensShellRoot,
+    };
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_gameplay::{GensManager, GensMode, GensPlugin, GensType};
+    use mu_protocol::events::GensRankingInfo;
     use mu_ui::{GensRankingScreenState, UiRoute, UiShellState};
 
     fn gens_shell_root_count(world: &mut bevy::prelude::World) -> usize {
@@ -500,7 +505,7 @@ mod tests {
         let mut manager = GensManager::new();
         manager.set_gens_type(GensType::Duprian);
         manager.set_team_name("NightWatch");
-        manager.set_title_name("Sentinel");
+        manager.set_title_name_from_gens_class(12);
         manager.set_contribution(4_300);
         manager.set_next_contribution(5_000);
         manager.set_ranking(Some(12));
@@ -520,7 +525,7 @@ mod tests {
         assert!(view.body.contains("ranking=Some(12)"));
         assert!(view.body.contains("contribution=4300"));
         assert!(view.body.contains("next_contribution=5000"));
-        assert!(view.body.contains("title_name=Some(\"Sentinel\")"));
+        assert!(view.body.contains("title_name=Some(\"Lieutenant\")"));
         assert!(view.body.contains("reward_available=true"));
         assert!(view.body.contains("Review Gens ranking and contribution."));
 
@@ -534,6 +539,7 @@ mod tests {
         assert!(view.body.contains("mode=joining | screen_state=join"));
         assert!(view.body.contains("Choose a Gens faction."));
 
+        manager.set_title_name_from_gens_class(5);
         manager.mark_rewarding();
         assert_eq!(
             gens_shell_state_for_mode(manager.mode()),
@@ -542,6 +548,7 @@ mod tests {
         let view = gens_shell_view(UiRoute::Hud, SessionPhase::LoggedIn, &manager)
             .expect("gens shell view");
         assert!(view.body.contains("mode=rewarding | screen_state=reward"));
+        assert!(view.body.contains("title_name=Some(\"Viscount\")"));
         assert!(view.body.contains("Claim the Gens reward."));
 
         manager.mark_error();
@@ -572,7 +579,7 @@ mod tests {
             let mut manager = app.world_mut().resource_mut::<GensManager>();
             manager.set_gens_type(GensType::Vanert);
             manager.set_team_name("Vanert Vanguard");
-            manager.set_title_name("Guardian");
+            manager.set_title_name_from_gens_class(10);
             manager.set_contribution(9_500);
             manager.set_next_contribution(10_000);
             manager.set_ranking(Some(5));
@@ -591,5 +598,21 @@ mod tests {
         app.update();
         assert_eq!(gens_shell_root_count(app.world_mut()), 0);
         assert!(gens_shell_root_entity(app.world_mut()).is_none());
+    }
+
+    #[test]
+    fn gens_ranking_snapshot_hydrates_legacy_title_name() {
+        let snapshot = GensRankingInfo {
+            influence: 1,
+            ranking: 9,
+            gens_class: 12,
+            contribution_point: 100,
+            next_contribution_point: 200,
+        };
+
+        let mut manager = GensManager::new();
+        apply_gens_ranking_snapshot(snapshot, &mut manager);
+
+        assert_eq!(manager.title_name(), "Lieutenant");
     }
 }

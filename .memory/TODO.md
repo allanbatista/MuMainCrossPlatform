@@ -53,9 +53,3 @@ remain for later if full guild parity is still required.
 `guild-join` is now done. The next guild parity slice can wire
 `guild_create_request` or the remaining guild union management flows if full
 guild parity is still required.
-
-# [medium] Gens title text parity
-
-The live Gens ranking packet does not carry the title text that the legacy
-HUD renders locally. If visible parity still matters, the next slice should
-add the local title mapping and hydrate `GensManager::title_name` from it.

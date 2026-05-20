@@ -2,6 +2,22 @@ use bevy::prelude::{App, Plugin, Resource};
 
 pub const MAX_GENS_TEAM_NAME_LENGTH: usize = 10;
 pub const MAX_GENS_TITLE_LENGTH: usize = 32;
+const GENS_TITLE_NAMES: [&str; 14] = [
+    "Grand Duke",
+    "Duke",
+    "Marquis",
+    "Count",
+    "Viscount",
+    "Baron",
+    "Knight Commander",
+    "Superior Knight",
+    "Knight",
+    "Guard Perfect",
+    "Officer",
+    "Lieutenant",
+    "Sergeant",
+    "Private",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GensMode {
@@ -125,6 +141,10 @@ impl GensManager {
         self.title_name = truncate_text(title_name.into(), MAX_GENS_TITLE_LENGTH);
     }
 
+    pub fn set_title_name_from_gens_class(&mut self, gens_class: i32) {
+        self.title_name = title_name_for_gens_class(gens_class).to_owned();
+    }
+
     pub fn set_reward_available(&mut self, reward_available: bool) {
         self.reward_available = reward_available;
     }
@@ -156,6 +176,16 @@ impl GensManager {
 
 fn truncate_text(value: String, max_len: usize) -> String {
     value.chars().take(max_len).collect()
+}
+
+fn title_name_for_gens_class(gens_class: i32) -> &'static str {
+    let index = if gens_class >= 1 && gens_class <= GENS_TITLE_NAMES.len() as i32 {
+        (gens_class - 1) as usize
+    } else {
+        GENS_TITLE_NAMES.len() - 1
+    };
+
+    GENS_TITLE_NAMES[index]
 }
 
 #[cfg(test)]
@@ -192,9 +222,33 @@ mod tests {
             MAX_GENS_TEAM_NAME_LENGTH
         );
         assert_eq!(manager.title_name().chars().count(), 32);
+        manager.set_title_name_from_gens_class(12);
+        assert_eq!(manager.title_name(), "Lieutenant");
         assert_eq!(manager.contribution(), 4_300);
         assert_eq!(manager.next_contribution(), 5_000);
         assert_eq!(manager.ranking(), Some(12));
         assert!(manager.reward_available());
+    }
+
+    #[test]
+    fn gens_title_name_from_class_matches_legacy_table() {
+        let mut manager = GensManager::new();
+
+        manager.set_title_name_from_gens_class(1);
+        assert_eq!(manager.title_name(), "Grand Duke");
+
+        manager.set_title_name_from_gens_class(7);
+        assert_eq!(manager.title_name(), "Knight Commander");
+
+        manager.set_title_name_from_gens_class(10);
+        assert_eq!(manager.title_name(), "Guard Perfect");
+
+        manager.set_title_name_from_gens_class(14);
+        assert_eq!(manager.title_name(), "Private");
+
+        manager.set_title_name_from_gens_class(0);
+        assert_eq!(manager.title_name(), "Private");
+        manager.set_title_name_from_gens_class(99);
+        assert_eq!(manager.title_name(), "Private");
     }
 }

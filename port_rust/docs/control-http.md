@@ -132,8 +132,9 @@ para enviar mensagem publica quando a sessao esta logada.
 runtime. `duel` abre a shell visivel de duel com o snapshot existente do
 runtime. `events` abre a shell visivel de events com o snapshot existente do
 EventManager. `gens` abre a shell visivel de Gens com o snapshot existente do
-GensManager e, quando a sessao esta logada, pede uma vez o ranking live antes
-de reaplicar o snapshot decodificado quando a resposta chega.
+GensManager e, quando a sessao esta logada, pede uma vez o ranking live,
+hidrata o titulo local da classe Gens pela tabela legacy de 14 ranks e
+reaplica o snapshot decodificado quando a resposta chega.
 `friend-roster`, `friend-inbox`, `friend-compose` e
 `friend-chat-rooms` selecionam as subvisoes da janela de friend;
 `friend-add` e `friend-delete` enviam as requisicoes de add/delete do friend

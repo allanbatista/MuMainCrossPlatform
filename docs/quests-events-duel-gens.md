@@ -36,8 +36,9 @@ separate gameplay resources plus UI snapshot modules.
   ranking and join/reward states.
 - The Rust client also exposes the Gens HUD route as a visible Bevy shell and
   the local control HTTP smoke path can open it with `gens`; when logged in,
-  that shell sends one live ranking request per activation and keeps the
-  decoded ranking snapshot in sync until logout or disconnect clears it.
+  that shell sends one live ranking request per activation, resolves the
+  legacy rank title from the decoded Gens class, and keeps the decoded
+  ranking snapshot in sync until logout or disconnect clears it.
 
 The packet helpers for these flows live in `mu_protocol::quests`,
 `mu_protocol::events`, and `mu_protocol::social`.
