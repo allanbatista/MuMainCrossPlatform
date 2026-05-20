@@ -56,6 +56,11 @@ guild parity is still required.
 
 # [medium] Inventory item control-plane parity
 
-Vault money transfer commands are wired, but item move/use/equip control-plane
+Vault money transfer commands are wired, but item-use/equip control-plane
 commands are still snapshot-only. The next inventory slice should decide which
 legacy item interaction to bridge through the live session next.
+
+# [medium] Inventory use/equip follow-up
+
+`inventory-move` is wired; the remaining item-use and item-equip control-plane
+commands still need their own slice if full inventory parity is required.
