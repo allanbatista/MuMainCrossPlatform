@@ -69,8 +69,9 @@ in the local config file instead of being typed every time.
 - Press Tab while the world route is active to open or close the visible
   inventory shell.
 - The inventory shell also accepts `vault-deposit` and `vault-withdraw`
-  control HTTP commands with an amount in the body or `amount=` so QA can
-  drive the live vault transfer packet helpers.
+  control HTTP commands with an amount in the body or `amount=` and
+  `inventory-move` with `from_slot=`/`to_slot=` so QA can drive the live
+  vault transfer and item move packet helpers.
 - The NPC and shop routes now open visible Bevy shells that can be driven
   from the runtime or the local control HTTP smoke path.
 - The GameShop route now opens a visible Bevy shell that can be driven from
@@ -97,8 +98,9 @@ in the local config file instead of being typed every time.
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
 - The inventory control plane also accepts `vault-deposit` and
-  `vault-withdraw` commands with an amount in the body or `amount=` so QA
-  can drive the existing vault money transfer packet helper through the live
+  `vault-withdraw` commands with an amount in the body or `amount=` and
+  `inventory-move` commands with `from_slot=`/`to_slot=` so QA can drive the
+  existing vault money transfer and item move packet helpers through the live
   session.
 - Opening `guild-union` in a logged-in session also sends the alliance list
   request once per activation before keeping the shell visible.
@@ -180,6 +182,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=vault-deposit` and `POST /command?name=vault-withdraw`
   queue the matching vault money transfer packet through the live session.
   Pass the amount in the body or as `amount=`.
+- `POST /command?name=inventory-move` queues the inventory move packet
+  through the live session. Pass the source and destination linear slots in
+  `from_slot=` and `to_slot=`.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=events` can step into the visible events route shell for

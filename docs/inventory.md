@@ -32,6 +32,10 @@ O port Rust separa a camada de items em quatro blocos:
   - snapshot da storage dialog com estado de lock/pin, zen, toggle da view
     expandida e geometria das 2 paginas de vault.
 
+O control plane local de `mu_app` tambem oferece `inventory-move` para mover
+itens entre slots lineares do inventory e reenviar o movimento pelo helper
+`item_move_request_extended`.
+
 Uso esperado:
 
 ```rust

@@ -44,6 +44,7 @@ pub enum ControlCommand {
     GuildNoGuild,
     GuildError,
     GuildRoleAssign,
+    InventoryMove,
     VaultDeposit,
     VaultWithdraw,
     Duel,
@@ -96,6 +97,7 @@ impl ControlCommand {
             Self::GuildNoGuild => "guild-no-guild",
             Self::GuildError => "guild-error",
             Self::GuildRoleAssign => "guild-role-assign",
+            Self::InventoryMove => "inventory-move",
             Self::VaultDeposit => "vault-deposit",
             Self::VaultWithdraw => "vault-withdraw",
             Self::Duel => "duel",
@@ -154,6 +156,9 @@ impl ControlCommand {
             "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
             "guild-error" | "guild_error" => Some(Self::GuildError),
             "guild-role-assign" | "guild_role_assign" => Some(Self::GuildRoleAssign),
+            "inventory-move" | "inventory_move" | "item-move" | "item_move" => {
+                Some(Self::InventoryMove)
+            }
             "vault-deposit" | "vault_deposit" => Some(Self::VaultDeposit),
             "vault-withdraw" | "vault_withdraw" => Some(Self::VaultWithdraw),
             "duel" => Some(Self::Duel),
@@ -184,6 +189,8 @@ pub struct ControlSnapshot {
     pub guild_player_name: Option<String>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
+    pub inventory_move_from_slot: Option<u8>,
+    pub inventory_move_to_slot: Option<u8>,
     pub friend_screen_state: Option<FriendScreenState>,
     pub guild_screen_state: Option<GuildScreenState>,
     pub vault_money_amount: Option<u32>,
@@ -203,6 +210,8 @@ impl ControlSnapshot {
             guild_player_name: None,
             guild_role: None,
             guild_assignment_type: None,
+            inventory_move_from_slot: None,
+            inventory_move_to_slot: None,
             friend_screen_state: None,
             guild_screen_state: None,
             vault_money_amount: None,
@@ -423,6 +432,12 @@ impl ControlSnapshot {
                 self.guild_screen_state = Some(GuildScreenState::Members);
                 false
             }
+            ControlCommand::InventoryMove => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Inventory;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
             ControlCommand::VaultDeposit | ControlCommand::VaultWithdraw => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Inventory;
@@ -537,9 +552,17 @@ impl ControlSnapshot {
             .vault_money_amount
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let inventory_move_from_slot = self
+            .inventory_move_from_slot
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let inventory_move_to_slot = self
+            .inventory_move_to_slot
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -553,6 +576,8 @@ impl ControlSnapshot {
             friend_screen_state,
             guild_screen_state,
             vault_money_amount,
+            inventory_move_from_slot,
+            inventory_move_to_slot,
             self.command_count
         )
     }
@@ -841,6 +866,19 @@ fn route_request(
                     snapshot.guild_assignment_type = Some(assignment_type);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::InventoryMove => {
+                    let Some((from_slot, to_slot)) = inventory_move_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing inventory move payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.inventory_move_from_slot = Some(from_slot);
+                    snapshot.inventory_move_to_slot = Some(to_slot);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::VaultDeposit | ControlCommand::VaultWithdraw => {
                     let Some(amount) = vault_money_amount_from_request(&request) else {
                         return HttpResponse::json(
@@ -1093,6 +1131,22 @@ fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, 
     Some((player_name, role, assignment_type))
 }
 
+fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
+    let from_slot = query_value(&request.query, "from_slot")
+        .or_else(|| query_value(&request.body, "from_slot"))?
+        .trim()
+        .parse::<u8>()
+        .ok()?;
+
+    let to_slot = query_value(&request.query, "to_slot")
+        .or_else(|| query_value(&request.body, "to_slot"))?
+        .trim()
+        .parse::<u8>()
+        .ok()?;
+
+    Some((from_slot, to_slot))
+}
+
 fn vault_money_amount_from_request(request: &HttpRequest) -> Option<u32> {
     query_value(&request.query, "amount")
         .or_else(|| query_value(&request.body, "amount"))
@@ -1191,12 +1245,13 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_mu_helper_events_gens_social_and_vault_aliases() {
+    fn command_parser_recognizes_game_shop_mu_helper_events_gens_social_vault_and_inventory_aliases(
+    ) {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -1263,6 +1318,23 @@ mod tests {
             ControlCommand::GuildRoleAssign.as_str(),
             "guild-role-assign"
         );
+        assert_eq!(
+            ControlCommand::parse("inventory-move"),
+            Some(ControlCommand::InventoryMove)
+        );
+        assert_eq!(
+            ControlCommand::parse("inventory_move"),
+            Some(ControlCommand::InventoryMove)
+        );
+        assert_eq!(
+            ControlCommand::parse("item-move"),
+            Some(ControlCommand::InventoryMove)
+        );
+        assert_eq!(
+            ControlCommand::parse("item_move"),
+            Some(ControlCommand::InventoryMove)
+        );
+        assert_eq!(ControlCommand::InventoryMove.as_str(), "inventory-move");
         assert_eq!(
             ControlCommand::parse("options"),
             Some(ControlCommand::Options)
@@ -1392,6 +1464,20 @@ mod tests {
 
         assert_eq!(snapshot.ui_route, UiRoute::Guild);
         assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_inventory_move_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.inventory_move_from_slot = Some(0x12);
+        snapshot.inventory_move_to_slot = Some(0x34);
+        snapshot.apply_command(ControlCommand::InventoryMove);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Inventory);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.inventory_move_from_slot, Some(0x12));
+        assert_eq!(snapshot.inventory_move_to_slot, Some(0x34));
     }
 
     #[test]
@@ -1613,6 +1699,14 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=inventory-move&from_slot=0&to_slot=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"inventory""#));
+        assert!(body.contains(r#""inventory_move_from_slot":0"#));
+        assert!(body.contains(r#""inventory_move_to_slot":1"#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=quests HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"quests""#));
@@ -1690,7 +1784,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 24);
+        assert_eq!(final_snapshot.command_count, 25);
     }
 
     #[test]
@@ -1792,6 +1886,30 @@ mod tests {
             "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         );
         assert!(state_body.contains(r#""vault_money_amount":null"#));
+        assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn inventory_move_actions_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-move HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing inventory move payload""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""inventory_move_from_slot":null"#));
+        assert!(state_body.contains(r#""inventory_move_to_slot":null"#));
         assert!(state_body.contains(r#""command_count":0"#));
 
         handle.request_shutdown();

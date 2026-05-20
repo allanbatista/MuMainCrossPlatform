@@ -19,6 +19,7 @@ use mu_protocol::events::{decode_gens_ranking_info, GensRankingInfo};
 use mu_protocol::guild::{
     guild_join_request, guild_list_request, guild_role_assign_request, request_alliance_list,
 };
+use mu_protocol::items::{item_move_request_extended, ItemStorageKind};
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
@@ -37,6 +38,7 @@ const SESSION_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 const SESSION_READ_TIMEOUT: Duration = Duration::from_millis(250);
 const DEFAULT_CHARACTER_CREATE_CLASS: u8 = CharacterClass::Knight as u8;
 const CHARACTER_CREATE_FAILURE_MESSAGE: &str = "character creation failed";
+const INVENTORY_STORAGE_KIND: ItemStorageKind = 0;
 const FRIEND_LIST_ENTRY_LEN: usize = 11;
 const GUILD_LIST_ENTRY_LEN: usize = 13;
 
@@ -94,6 +96,10 @@ pub(crate) enum BootstrapCommand {
         player_name: String,
         role: u8,
         assignment_type: u8,
+    },
+    InventoryMove {
+        from_slot: u8,
+        to_slot: u8,
     },
     VaultMoneyTransfer {
         direction: VaultMoneyMoveDirection,
@@ -390,6 +396,16 @@ impl BootstrapRuntime {
                 role,
                 assignment_type,
             })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_inventory_move_request(&self, from_slot: u8, to_slot: u8) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::InventoryMove { from_slot, to_slot })
             .is_ok()
     }
 
@@ -1153,6 +1169,20 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::InventoryMove { from_slot, to_slot } => {
+            let packet = item_move_request_extended(
+                INVENTORY_STORAGE_KIND,
+                from_slot,
+                INVENTORY_STORAGE_KIND,
+                to_slot,
+            )
+            .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::VaultMoneyTransfer { direction, amount } => {
             let packet =
                 vault_move_money_request(direction, amount).map_err(|error| error.to_string())?;
@@ -1677,6 +1707,26 @@ mod tests {
         }
     }
 
+    #[test]
+    fn inventory_move_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_inventory_move_request(0x12, 0x34));
+
+        match command_receiver
+            .try_recv()
+            .expect("inventory move command missing")
+        {
+            BootstrapCommand::InventoryMove { from_slot, to_slot } => {
+                assert_eq!(from_slot, 0x12);
+                assert_eq!(to_slot, 0x34);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
     #[tokio::test]
     async fn guild_alliance_list_packets_send_the_expected_bytes() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1708,6 +1758,54 @@ mod tests {
             .unwrap();
 
         assert_eq!(received, request_alliance_list().unwrap());
+    }
+
+    #[tokio::test]
+    async fn inventory_move_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::InventoryMove {
+                from_slot: 0x12,
+                to_slot: 0x34,
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            received,
+            super::item_move_request_extended(
+                super::INVENTORY_STORAGE_KIND,
+                0x12,
+                super::INVENTORY_STORAGE_KIND,
+                0x34,
+            )
+            .unwrap()
+        );
     }
 
     #[tokio::test]
