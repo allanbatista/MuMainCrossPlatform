@@ -55,7 +55,10 @@ in the local config file instead of being typed every time.
   runtime or the local control HTTP smoke path.
 - The quests route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
-- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, quests, MU Helper, and GameShop
+- The MU Helper route now opens a visible Bevy shell that mirrors the helper
+  runtime snapshot and can be driven from the local control HTTP smoke path
+  with `mu-helper`.
+- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, quests, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
@@ -73,7 +76,7 @@ in the local config file instead of being typed every time.
   local HTTP automation surface while the Bevy window is running.
 - `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
   and `command_count`.
-- `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|exit|ping`
+- `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
 - `POST /command?name=chat` can step into the visible chat route shell for
   local QA smoke; once open, the shell accepts typed chat and Enter sends the
@@ -90,6 +93,8 @@ in the local config file instead of being typed every time.
   local QA smoke.
 - `POST /command?name=quests` can step into the visible quests route shell
   for local QA smoke.
+- `POST /command?name=mu-helper` can step into the visible MU Helper route
+  shell for local QA smoke.
 - `exit` also shuts down the graphical Bevy process, which is handy for smoke
   automation.
 

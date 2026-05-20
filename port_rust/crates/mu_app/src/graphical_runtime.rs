@@ -13,9 +13,9 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    EquipmentPlugin, GameShopPlugin, InventoryPlugin, MovementPlugin, NpcPlugin, PartyPlugin,
-    QuestPlugin, TradePlugin, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin,
-    WorldPlugin,
+    EquipmentPlugin, GameShopPlugin, InventoryPlugin, MovementPlugin, MuHelperRuntimePlugin,
+    NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultPlugin, WorldEntitiesPlugin,
+    WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
@@ -28,6 +28,7 @@ use crate::game_shop_shell::GameShopShellPlugin;
 use crate::gate_shell::GateShellPlugin;
 use crate::inventory_route::InventoryRoutePlugin;
 use crate::inventory_shell::InventoryShellPlugin;
+use crate::mu_helper_shell::MuHelperShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
 use crate::party_shell::PartyShellPlugin;
 use crate::quests_shell::QuestsShellPlugin;
@@ -130,6 +131,7 @@ fn configure_project_plugins(
             VaultPlugin,
             GameShopPlugin,
             TradePlugin,
+            MuHelperRuntimePlugin,
         ))
         .add_plugins((
             InventoryRoutePlugin,
@@ -143,6 +145,7 @@ fn configure_project_plugins(
             GateShellPlugin,
             GameShopShellPlugin,
             TradeShellPlugin,
+            MuHelperShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
             InventoryShellPlugin,

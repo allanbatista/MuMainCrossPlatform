@@ -12,6 +12,7 @@ pub mod graphical_runtime;
 pub(crate) mod inventory_route;
 pub(crate) mod inventory_shell;
 pub mod logging;
+pub(crate) mod mu_helper_shell;
 pub(crate) mod npc_shop_shell;
 pub(crate) mod party_shell;
 pub(crate) mod quests_shell;

@@ -88,8 +88,8 @@ sessao de jogo completa.
   runtime de catalog/details/storage/empty/error, a seguranca transacional, a
   UI snapshot do jogo e o shell visivel controlado por `game-shop`.
 - A camada de MU Helper esta documentada em `docs/mu-helper.md` e cobre o
-  modelo de configuracao, o runtime de execucao e os estados ativo/inativo/
-  bloqueado.
+  modelo de configuracao, o runtime de execucao, os estados ativo/inativo/
+  bloqueado e a shell visivel controlada por `mu-helper`.
 - A camada de editor/admin equivalente esta documentada em
   `docs/admin-editor-rust.md` e cobre o gate de permissao, a rota `admin-core`,
   os item/skill editors, o shell do editor, o console, o dev editor e a entrada
@@ -128,9 +128,9 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|loading|world|chat|npc|shop|game-shop|trade|login-success|
-  login-failure|party|gate|quests|logout-login|logout-character|disconnect|
-  exit|ping` para
+  character-select|loading|world|chat|npc|shop|game-shop|trade|mu-helper|
+  login-success|login-failure|party|gate|quests|logout-login|
+  logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.

@@ -62,6 +62,7 @@ Exemplo:
 - `party`
 - `gate`
 - `quests`
+- `mu-helper`
 - `login-success`
 - `login-failure`
 - `logout-login`
@@ -71,10 +72,12 @@ Exemplo:
 - `ping`
 
 `server-select`, `character-select`, `loading`, `world`, `chat`, `npc`,
-`shop`, `game-shop`, `trade`, `party`, `gate`, `quests`, `login-success` e
-`login-failure` alteram a rota/session state do runtime grafico. `chat` abre
-a shell visivel de chat, que agora aceita texto digitado e Enter para enviar
-mensagem publica quando a sessao esta logada. `exit`
+`shop`, `game-shop`, `trade`, `party`, `gate`, `quests`, `mu-helper`,
+`login-success` e `login-failure` alteram a rota/session state do runtime
+grafico. `chat` abre a shell visivel de chat, que agora aceita texto digitado
+e Enter para enviar mensagem publica quando a sessao esta logada.
+`mu-helper` abre a shell visivel do MU Helper com o snapshot existente do
+runtime. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
 grafico. Os demais apenas atualizam o snapshot.
 
@@ -96,6 +99,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=trade'
 curl -X POST 'http://127.0.0.1:12345/command?name=party'
 curl -X POST 'http://127.0.0.1:12345/command?name=gate'
 curl -X POST 'http://127.0.0.1:12345/command?name=quests'
+curl -X POST 'http://127.0.0.1:12345/command?name=mu-helper'
 curl -X POST 'http://127.0.0.1:12345/command' -d 'name=ping'
 curl -X POST 'http://127.0.0.1:12345/command' -d 'exit'
 ```

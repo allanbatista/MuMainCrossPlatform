@@ -25,6 +25,7 @@ pub enum ControlCommand {
     Party,
     Gate,
     Quests,
+    MuHelper,
     LoginSuccess,
     LoginFailure,
     LogoutLogin,
@@ -52,6 +53,7 @@ impl ControlCommand {
             Self::Party => "party",
             Self::Gate => "gate",
             Self::Quests => "quests",
+            Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
             Self::LoginFailure => "login-failure",
             Self::LogoutLogin => "logout-login",
@@ -83,6 +85,7 @@ impl ControlCommand {
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
             "quests" => Some(Self::Quests),
+            "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
             "login-failure" | "login_failure" => Some(Self::LoginFailure),
             "logout-login" | "logout_login" => Some(Self::LogoutLogin),
@@ -203,6 +206,12 @@ impl ControlSnapshot {
             ControlCommand::Quests => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Quests;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::MuHelper => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::MuHelper;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -709,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_aliases() {
+    fn command_parser_recognizes_game_shop_and_mu_helper_aliases() {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -719,6 +728,15 @@ mod tests {
             Some(ControlCommand::GameShop)
         );
         assert_eq!(ControlCommand::GameShop.as_str(), "game-shop");
+        assert_eq!(
+            ControlCommand::parse("mu-helper"),
+            Some(ControlCommand::MuHelper)
+        );
+        assert_eq!(
+            ControlCommand::parse("mu_helper"),
+            Some(ControlCommand::MuHelper)
+        );
+        assert_eq!(ControlCommand::MuHelper.as_str(), "mu-helper");
     }
 
     #[test]
@@ -771,6 +789,11 @@ mod tests {
         snapshot.apply_command(ControlCommand::Quests);
 
         assert_eq!(snapshot.ui_route, UiRoute::Quests);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::MuHelper);
+
+        assert_eq!(snapshot.ui_route, UiRoute::MuHelper);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
     }
 
@@ -861,13 +884,20 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=mu-helper HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"mu-helper""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=exit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""state":"exit""#));
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 11);
+        assert_eq!(final_snapshot.command_count, 12);
     }
 
     #[test]
