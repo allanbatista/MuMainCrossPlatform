@@ -12,8 +12,8 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    EquipmentPlugin, InventoryPlugin, MovementPlugin, NpcPlugin, PartyPlugin, VaultPlugin,
-    WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    EquipmentPlugin, InventoryPlugin, MovementPlugin, NpcPlugin, PartyPlugin, QuestPlugin,
+    VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
@@ -23,6 +23,8 @@ use crate::bootstrap_runtime::BootstrapRuntimePlugin;
 use crate::inventory_route::InventoryRoutePlugin;
 use crate::inventory_shell::InventoryShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
+use crate::party_shell::PartyShellPlugin;
+use crate::quests_shell::QuestsShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
@@ -118,13 +120,18 @@ fn configure_project_plugins(
             WorldNpcPlugin,
             WorldMonsterPlugin,
             NpcPlugin,
+            QuestPlugin,
             InventoryPlugin,
             EquipmentPlugin,
             VaultPlugin,
+        ))
+        .add_plugins((
             InventoryRoutePlugin,
             WorldMotionPlugin,
             AuthShellPlugin,
             NpcShopShellPlugin,
+            QuestsShellPlugin,
+            PartyShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
             InventoryShellPlugin,
