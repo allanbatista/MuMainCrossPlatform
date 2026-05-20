@@ -28,6 +28,9 @@ O port Rust separa a camada de items em quatro blocos:
 - `mu_ui::inventory`
   - snapshot da surface gameplay usada para inventory, equip, store e vault
     access.
+- `mu_ui::vault`
+  - snapshot da storage dialog com estado de lock/pin, zen, toggle da view
+    expandida e geometria das 2 paginas de vault.
 
 Uso esperado:
 

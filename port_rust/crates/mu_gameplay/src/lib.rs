@@ -143,7 +143,7 @@ pub use summons::{
 pub use trade::{TradeManager, TradeMode, TradePartnerInfo, TradePlugin, MAX_TRADE_WAIT_TICKS};
 pub use vault::{
     VaultError, VaultManager, VaultMoneyDirection, VaultPendingTransfer, VaultPlugin, VaultSlot,
-    VaultSyncOutcome, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,
+    VaultSyncOutcome, VAULT_PAGE_COLUMNS, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,
 };
 pub use world::{
     load_terrain_world_bundle, terrain_world_directory, terrain_world_relative_directory,

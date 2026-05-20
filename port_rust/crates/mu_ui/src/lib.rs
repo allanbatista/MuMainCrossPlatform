@@ -31,6 +31,7 @@ pub mod server_select;
 pub mod shop;
 pub mod siege;
 pub mod trade;
+pub mod vault;
 pub mod widgets;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -104,4 +105,5 @@ pub use siege::{
     SiegeMemberLocation, SiegeScreen, SiegeScreenState, SiegeUiPlugin,
 };
 pub use trade::{trade_screen, TradeAction, TradeScreen, TradeScreenState};
+pub use vault::{vault_screen, VaultAction, VaultScreen, VaultScreenState, VaultUiPlugin};
 pub use widgets::{UiShellWidgetKind, UiShellWidgetSet};
