@@ -20,6 +20,7 @@ use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
 use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
 use crate::{AppState, Cli, ClientRuntime};
@@ -116,6 +117,7 @@ fn configure_project_plugins(
             BootstrapRuntimePlugin,
             WorldScenePlugin,
         ))
+        .add_plugins(WorldHudPlugin)
         .add_systems(PreUpdate, sync_control_http_snapshot_to_runtime)
         .add_systems(
             PostUpdate,

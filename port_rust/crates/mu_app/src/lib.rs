@@ -9,6 +9,7 @@ pub mod logging;
 mod runtime;
 pub mod session_state;
 pub mod state;
+pub(crate) mod world_hud;
 pub mod world_motion;
 pub mod world_scene;
 

@@ -15,6 +15,8 @@ sessao de jogo completa.
   login -> server select -> character select -> world quando o fluxo de rede
   entrega o handoff do mapa e, no world route, mostra uma world shell 3D
   visivel com terreno e marcadores amostrados do bundle carregado.
+- O world route tambem mostra uma HUD visivel com as gauges e botoes do frame
+  principal legado enquanto a cena 3D esta ativa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
