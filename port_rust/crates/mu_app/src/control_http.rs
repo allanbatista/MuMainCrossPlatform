@@ -44,6 +44,8 @@ pub enum ControlCommand {
     GuildNoGuild,
     GuildError,
     GuildRoleAssign,
+    VaultDeposit,
+    VaultWithdraw,
     Duel,
     Quests,
     MuHelper,
@@ -94,6 +96,8 @@ impl ControlCommand {
             Self::GuildNoGuild => "guild-no-guild",
             Self::GuildError => "guild-error",
             Self::GuildRoleAssign => "guild-role-assign",
+            Self::VaultDeposit => "vault-deposit",
+            Self::VaultWithdraw => "vault-withdraw",
             Self::Duel => "duel",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
@@ -150,6 +154,8 @@ impl ControlCommand {
             "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
             "guild-error" | "guild_error" => Some(Self::GuildError),
             "guild-role-assign" | "guild_role_assign" => Some(Self::GuildRoleAssign),
+            "vault-deposit" | "vault_deposit" => Some(Self::VaultDeposit),
+            "vault-withdraw" | "vault_withdraw" => Some(Self::VaultWithdraw),
             "duel" => Some(Self::Duel),
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
@@ -180,6 +186,7 @@ pub struct ControlSnapshot {
     pub guild_assignment_type: Option<u8>,
     pub friend_screen_state: Option<FriendScreenState>,
     pub guild_screen_state: Option<GuildScreenState>,
+    pub vault_money_amount: Option<u32>,
     pub command_count: u64,
 }
 
@@ -198,6 +205,7 @@ impl ControlSnapshot {
             guild_assignment_type: None,
             friend_screen_state: None,
             guild_screen_state: None,
+            vault_money_amount: None,
             command_count: 0,
         }
     }
@@ -415,6 +423,12 @@ impl ControlSnapshot {
                 self.guild_screen_state = Some(GuildScreenState::Members);
                 false
             }
+            ControlCommand::VaultDeposit | ControlCommand::VaultWithdraw => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Inventory;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
             ControlCommand::Duel => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Duel;
@@ -519,9 +533,13 @@ impl ControlSnapshot {
             .guild_screen_state
             .map(|state| format!("\"{}\"", state.as_str()))
             .unwrap_or_else(|| "null".to_string());
+        let vault_money_amount = self
+            .vault_money_amount
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -534,6 +552,7 @@ impl ControlSnapshot {
             guild_assignment_type,
             friend_screen_state,
             guild_screen_state,
+            vault_money_amount,
             self.command_count
         )
     }
@@ -822,6 +841,26 @@ fn route_request(
                     snapshot.guild_assignment_type = Some(assignment_type);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::VaultDeposit | ControlCommand::VaultWithdraw => {
+                    let Some(amount) = vault_money_amount_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing vault amount"}"#.to_string(),
+                        );
+                    };
+
+                    if amount == 0 {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"vault amount must be positive"}"#.to_string(),
+                        );
+                    }
+
+                    snapshot.vault_money_amount = Some(amount);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::CreateCharacter => {
                     let Some(character_name) = character_name_from_request(&request) else {
                         return HttpResponse::json(
@@ -1054,6 +1093,23 @@ fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, 
     Some((player_name, role, assignment_type))
 }
 
+fn vault_money_amount_from_request(request: &HttpRequest) -> Option<u32> {
+    query_value(&request.query, "amount")
+        .or_else(|| query_value(&request.body, "amount"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() {
+                None
+            } else {
+                Some(body)
+            }
+        })?
+        .parse::<u32>()
+        .ok()
+}
+
 #[derive(Debug, Clone)]
 struct HttpRequest {
     method: String,
@@ -1135,12 +1191,12 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"command_count":1}"#
         );
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_mu_helper_events_gens_and_social_aliases() {
+    fn command_parser_recognizes_game_shop_mu_helper_events_gens_social_and_vault_aliases() {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -1282,6 +1338,24 @@ mod tests {
         );
         assert_eq!(ControlCommand::parse("duel"), Some(ControlCommand::Duel));
         assert_eq!(ControlCommand::Duel.as_str(), "duel");
+        assert_eq!(
+            ControlCommand::parse("vault-deposit"),
+            Some(ControlCommand::VaultDeposit)
+        );
+        assert_eq!(
+            ControlCommand::parse("vault_deposit"),
+            Some(ControlCommand::VaultDeposit)
+        );
+        assert_eq!(
+            ControlCommand::parse("vault-withdraw"),
+            Some(ControlCommand::VaultWithdraw)
+        );
+        assert_eq!(
+            ControlCommand::parse("vault_withdraw"),
+            Some(ControlCommand::VaultWithdraw)
+        );
+        assert_eq!(ControlCommand::VaultDeposit.as_str(), "vault-deposit");
+        assert_eq!(ControlCommand::VaultWithdraw.as_str(), "vault-withdraw");
     }
 
     #[test]
@@ -1523,6 +1597,22 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=vault-deposit&amount=250 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"inventory""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""vault_money_amount":250"#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=vault-withdraw&amount=125 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"inventory""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""vault_money_amount":125"#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=quests HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"quests""#));
@@ -1600,7 +1690,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 22);
+        assert_eq!(final_snapshot.command_count, 24);
     }
 
     #[test]
@@ -1665,6 +1755,43 @@ mod tests {
             "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         );
         assert!(state_body.contains(r#""friend_name":null"#));
+        assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn vault_money_actions_require_an_amount() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=vault-deposit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing vault amount""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=vault-withdraw&amount=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing vault amount""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=vault-deposit&amount=0 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"vault amount must be positive""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""vault_money_amount":null"#));
         assert!(state_body.contains(r#""command_count":0"#));
 
         handle.request_shutdown();

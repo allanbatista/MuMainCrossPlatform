@@ -115,6 +115,8 @@ sessao de jogo completa.
   pacote de join da guild pela sessao viva.
 - O control-http tambem aceita `guild-role-assign` com `player=`, `role=` e
   `type=` para enviar o pacote de role assignment da guild pela sessao viva.
+- O control-http tambem aceita `vault-deposit` e `vault-withdraw` com
+  `amount=` para enviar o pacote de transferencia de vault pela sessao viva.
 - Abrir `guild-union` com a sessao logada tambem envia uma vez a requisicao
   de alliance list antes de manter a shell visivel.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
@@ -188,7 +190,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|vault-deposit|vault-withdraw|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -201,6 +203,8 @@ session worker.
 `master_id=` e envia o pacote de join da guild pela sessao viva.
 `guild-role-assign` aceita o player no body bruto ou em `player=`, o role em
 `role=` e o type em `type=` para enviar o pacote de role assignment da guild.
+`vault-deposit` e `vault-withdraw` aceitam o amount no body bruto ou em
+`amount=` para enviar o pacote de transferencia de vault pela sessao viva.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
 

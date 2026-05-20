@@ -16,7 +16,8 @@ use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
     DuelPlugin, EquipmentPlugin, EventPlugin, GameShopPlugin, GensPlugin, InventoryPlugin,
     MailPlugin, MovementPlugin, MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin,
-    TradePlugin, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    TradePlugin, VaultManager, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin,
+    WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
@@ -247,6 +248,7 @@ fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMu
 fn sync_control_http_snapshot_to_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
     bootstrap: Option<ResMut<BootstrapRuntime>>,
+    mut vault: ResMut<VaultManager>,
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
 ) {
@@ -314,10 +316,43 @@ fn sync_control_http_snapshot_to_runtime(
                     bootstrap.queue_guild_role_assign_request(player_name, role, assignment_type);
             }
         }
+        Some(ControlCommand::VaultDeposit) | Some(ControlCommand::VaultWithdraw) => {
+            apply_vault_money_transfer_command(
+                &mut bootstrap,
+                &mut vault,
+                snapshot.last_command,
+                snapshot.vault_money_amount,
+            );
+        }
         _ => {}
     }
 
     control_http.mark_applied(snapshot.command_count);
+}
+
+fn apply_vault_money_transfer_command(
+    bootstrap: &mut BootstrapRuntime,
+    vault: &mut VaultManager,
+    command: Option<ControlCommand>,
+    amount: Option<u32>,
+) {
+    let Some(amount) = amount else {
+        return;
+    };
+
+    match command {
+        Some(ControlCommand::VaultDeposit) => {
+            if vault.deposit_money(amount).is_ok() {
+                let _ = bootstrap.queue_vault_money_transfer_request(0, amount);
+            }
+        }
+        Some(ControlCommand::VaultWithdraw) => {
+            if vault.withdraw_money(amount).is_ok() {
+                let _ = bootstrap.queue_vault_money_transfer_request(1, amount);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn sync_control_http_snapshot_from_runtime(
@@ -361,6 +396,7 @@ mod tests {
     use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
     use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
+    use mu_gameplay::VaultManager;
     use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc as tokio_mpsc;
@@ -419,6 +455,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
         app.insert_resource(ControlHttpState::new(snapshot));
         app.add_systems(
             bevy::prelude::PreUpdate,
@@ -450,6 +487,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot));
         app.add_systems(
@@ -487,6 +525,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -533,6 +572,88 @@ mod tests {
     }
 
     #[test]
+    fn control_http_snapshot_queues_vault_money_transfers() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut vault = app.world_mut().resource_mut::<VaultManager>();
+            vault.deposit_money(500).expect("seed vault money");
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.vault_money_amount = Some(250);
+            snapshot.apply_command(ControlCommand::VaultDeposit);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("vault deposit command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::VaultMoneyTransfer {
+                direction,
+                amount,
+            } => {
+                assert_eq!(direction, 0);
+                assert_eq!(amount, 250);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        assert_eq!(app.world().resource::<VaultManager>().money(), 750);
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Inventory
+        );
+        assert_eq!(
+            app.world().resource::<SessionState>().phase(),
+            SessionPhase::LoggedIn
+        );
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.vault_money_amount = Some(125);
+            snapshot.apply_command(ControlCommand::VaultWithdraw);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("vault withdraw command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::VaultMoneyTransfer {
+                direction,
+                amount,
+            } => {
+                assert_eq!(direction, 1);
+                assert_eq!(amount, 125);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        assert_eq!(app.world().resource::<VaultManager>().money(), 625);
+    }
+
+    #[test]
     fn control_http_snapshot_queues_guild_join() {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
 
@@ -543,6 +664,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -581,6 +703,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
+        app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(

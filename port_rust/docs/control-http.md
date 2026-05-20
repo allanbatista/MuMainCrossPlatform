@@ -50,12 +50,13 @@ e o servidor continua disponivel para inspeção local.
 - `guild_assignment_type`
 - `friend_screen_state`
 - `guild_screen_state`
+- `vault_money_amount`
 - `command_count`
 
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -97,6 +98,8 @@ Exemplo:
 - `guild-error`
 - `guild-join`
 - `guild-role-assign`
+- `vault-deposit`
+- `vault-withdraw`
 - `duel`
 - `quests`
 - `mu-helper`
@@ -147,10 +150,13 @@ ID no body ou em `master_id=`; se o payload vier incompleto, a resposta sera
 `400`. `guild-role-assign` envia o pacote de role assignment da guild
 atraves da sessao viva e aceita o player no body ou em `player=`, o role em
 `role=` e o tipo em `type=`; se o payload vier incompleto, a resposta sera
-`400`. Ao abrir `guild-union` com a sessao logada, o runtime tambem envia
-uma vez a requisicao de alliance list antes de manter a shell visivel. `exit`
-atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
-grafico. Os demais apenas atualizam o snapshot.
+`400`. `vault-deposit` e `vault-withdraw` atualizam a rota visivel para
+inventory, aceitam o valor no body ou em `amount=` e enviam o pacote de
+transferencia de vault pela sessao viva; se o valor vier ausente ou zero, a
+resposta sera `400`. Ao abrir `guild-union` com a sessao logada, o runtime
+tambem envia uma vez a requisicao de alliance list antes de manter a shell
+visivel. `exit` atualiza o estado para `exit`, encerra o servidor e solicita
+saida do runtime grafico. Os demais apenas atualizam o snapshot.
 
 O comando tambem pode vir no corpo da requisicao como `name=...` ou como texto
 puro.
@@ -172,6 +178,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
+curl -X POST 'http://127.0.0.1:12345/command?name=vault-deposit&amount=250'
+curl -X POST 'http://127.0.0.1:12345/command?name=vault-withdraw&amount=125'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'

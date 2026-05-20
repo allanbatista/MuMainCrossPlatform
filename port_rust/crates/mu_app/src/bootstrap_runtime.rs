@@ -22,6 +22,7 @@ use mu_protocol::guild::{
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
+use mu_protocol::vault::{vault_move_money_request, VaultMoneyMoveDirection};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
     character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
@@ -93,6 +94,10 @@ pub(crate) enum BootstrapCommand {
         player_name: String,
         role: u8,
         assignment_type: u8,
+    },
+    VaultMoneyTransfer {
+        direction: VaultMoneyMoveDirection,
+        amount: u32,
     },
 }
 
@@ -385,6 +390,20 @@ impl BootstrapRuntime {
                 role,
                 assignment_type,
             })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_vault_money_transfer_request(
+        &self,
+        direction: VaultMoneyMoveDirection,
+        amount: u32,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::VaultMoneyTransfer { direction, amount })
             .is_ok()
     }
 
@@ -1134,6 +1153,15 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::VaultMoneyTransfer { direction, amount } => {
+            let packet =
+                vault_move_money_request(direction, amount).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -1253,6 +1281,7 @@ mod tests {
         game_server_entered, CharacterListEntry,
     };
     use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
+    use mu_protocol::vault::vault_move_money_request;
     use mu_ui::{
         CharacterCreateScreenState, FriendPresence, GuildMemberRole, UiRoute, UiShellState,
     };
@@ -1543,6 +1572,26 @@ mod tests {
     }
 
     #[test]
+    fn vault_money_transfer_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_vault_money_transfer_request(0, 125_000));
+
+        match command_receiver
+            .try_recv()
+            .expect("vault money transfer command missing")
+        {
+            BootstrapCommand::VaultMoneyTransfer { direction, amount } => {
+                assert_eq!(direction, 0);
+                assert_eq!(amount, 125_000);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn gens_ranking_requests_are_counted_in_test_mode() {
         let bootstrap = BootstrapRuntime::test_stub();
 
@@ -1659,6 +1708,45 @@ mod tests {
             .unwrap();
 
         assert_eq!(received, request_alliance_list().unwrap());
+    }
+
+    #[tokio::test]
+    async fn vault_money_transfer_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::VaultMoneyTransfer {
+                direction: 1,
+                amount: 0x0102_0304,
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, vault_move_money_request(1, 0x0102_0304).unwrap());
     }
 
     #[tokio::test]

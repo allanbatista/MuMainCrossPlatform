@@ -53,3 +53,9 @@ remain for later if full guild parity is still required.
 `guild-join` is now done. The next guild parity slice can wire
 `guild_create_request` or the remaining guild union management flows if full
 guild parity is still required.
+
+# [medium] Inventory item control-plane parity
+
+Vault money transfer commands are wired, but item move/use/equip control-plane
+commands are still snapshot-only. The next inventory slice should decide which
+legacy item interaction to bridge through the live session next.
