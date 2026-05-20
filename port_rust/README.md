@@ -20,6 +20,8 @@ sessao de jogo completa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
+- A tecla `Tab` alterna entre o world route e a shell visual de inventory
+  enquanto a sessao de mundo estiver ativa.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; no runtime grafico, ele tambem espelha o fluxo de
   login/server select/character select/world. Detalhes em

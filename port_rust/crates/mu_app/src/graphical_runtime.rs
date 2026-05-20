@@ -12,14 +12,16 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    MovementPlugin, PartyPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin,
-    WorldPlugin,
+    EquipmentPlugin, InventoryPlugin, MovementPlugin, PartyPlugin, VaultPlugin,
+    WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
 use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::inventory_route::InventoryRoutePlugin;
+use crate::inventory_shell::InventoryShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
@@ -109,13 +111,20 @@ fn configure_project_plugins(
             WorldPlugin,
             MovementPlugin,
             PartyPlugin,
+        ))
+        .add_plugins((
             WorldEntitiesPlugin,
             WorldNpcPlugin,
             WorldMonsterPlugin,
+            InventoryPlugin,
+            EquipmentPlugin,
+            VaultPlugin,
+            InventoryRoutePlugin,
             WorldMotionPlugin,
             AuthShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
+            InventoryShellPlugin,
         ))
         .add_plugins(WorldHudPlugin)
         .add_systems(PreUpdate, sync_control_http_snapshot_to_runtime)

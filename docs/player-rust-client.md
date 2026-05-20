@@ -35,6 +35,8 @@ in the local config file instead of being typed every time.
   gauges and buttons while the 3D scene is active.
 - The world shell now seeds a local avatar marker and keeps it synchronized
   with authoritative movement replies when the live session is active.
+- Press Tab while the world route is active to open or close the visible
+  inventory shell.
 - The world, HUD, inventory, NPC/shop, trade, quests, MU Helper, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
@@ -43,6 +45,7 @@ in the local config file instead of being typed every time.
 ## World Controls
 
 - `WASD` moves the local avatar in the world shell.
+- `Tab` opens and closes the inventory shell while the world route is active.
 - When connected, movement requests are sent through the live session and the
   returned position updates reconcile the runtime pose.
 
