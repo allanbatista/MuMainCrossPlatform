@@ -47,3 +47,9 @@ management flows still need their own slice if parity is still required.
 
 `guild-role-assign` is done; guild join/create/union packet commands still
 remain for later if full guild parity is still required.
+
+# [medium] Remaining guild create/union follow-up
+
+`guild-join` is now done. The next guild parity slice can wire
+`guild_create_request` or the remaining guild union management flows if full
+guild parity is still required.

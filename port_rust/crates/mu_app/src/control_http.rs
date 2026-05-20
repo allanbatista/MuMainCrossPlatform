@@ -31,6 +31,7 @@ pub enum ControlCommand {
     Guild,
     FriendAdd,
     FriendDelete,
+    GuildJoin,
     FriendRoster,
     FriendInbox,
     FriendCompose,
@@ -78,6 +79,7 @@ impl ControlCommand {
             Self::Guild => "guild",
             Self::FriendAdd => "friend-add",
             Self::FriendDelete => "friend-delete",
+            Self::GuildJoin => "guild-join",
             Self::FriendRoster => "friend-roster",
             Self::FriendInbox => "friend-inbox",
             Self::FriendCompose => "friend-compose",
@@ -129,6 +131,7 @@ impl ControlCommand {
             "guild" => Some(Self::Guild),
             "friend-add" | "friend_add" => Some(Self::FriendAdd),
             "friend-delete" | "friend_delete" => Some(Self::FriendDelete),
+            "guild-join" | "guild_join" => Some(Self::GuildJoin),
             "friend-roster" | "friend_roster" => Some(Self::FriendRoster),
             "friend-inbox" | "friend_inbox" => Some(Self::FriendInbox),
             "friend-compose" | "friend_compose" => Some(Self::FriendCompose),
@@ -165,6 +168,7 @@ pub struct ControlSnapshot {
     pub last_command: Option<ControlCommand>,
     pub selected_character_name: Option<String>,
     pub friend_name: Option<String>,
+    pub guild_master_player_id: Option<u16>,
     pub guild_player_name: Option<String>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
@@ -182,6 +186,7 @@ impl ControlSnapshot {
             last_command: None,
             selected_character_name: None,
             friend_name: None,
+            guild_master_player_id: None,
             guild_player_name: None,
             guild_role: None,
             guild_assignment_type: None,
@@ -306,6 +311,13 @@ impl ControlSnapshot {
                 self.ui_route = UiRoute::Friend;
                 self.session_phase = SessionPhase::LoggedIn;
                 self.friend_screen_state = None;
+                false
+            }
+            ControlCommand::GuildJoin => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = None;
                 false
             }
             ControlCommand::Guild => {
@@ -464,6 +476,10 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let guild_master_player_id = self
+            .guild_master_player_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let guild_player_name = self
             .guild_player_name
             .as_ref()
@@ -487,13 +503,14 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
             selected_character_name,
             friend_name,
+            guild_master_player_id,
             guild_player_name,
             guild_role,
             guild_assignment_type,
@@ -759,6 +776,18 @@ fn route_request(
                     snapshot.friend_name = Some(friend_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::GuildJoin => {
+                    let Some(guild_master_player_id) = guild_join_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing guild join payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.guild_master_player_id = Some(guild_master_player_id);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::GuildRoleAssign => {
                     let Some((player_name, role, assignment_type)) =
                         guild_role_assign_from_request(&request)
@@ -963,6 +992,25 @@ fn friend_name_from_request(request: &HttpRequest) -> Option<String> {
         })
 }
 
+fn guild_join_from_request(request: &HttpRequest) -> Option<u16> {
+    query_value(&request.query, "master_id")
+        .or_else(|| query_value(&request.query, "master-id"))
+        .or_else(|| query_value(&request.body, "master_id"))
+        .or_else(|| query_value(&request.body, "master-id"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() {
+                None
+            } else {
+                Some(body)
+            }
+        })?
+        .parse::<u16>()
+        .ok()
+}
+
 fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, u8)> {
     let player_name = query_value(&request.query, "player")
         .or_else(|| query_value(&request.body, "player"))?
@@ -1069,12 +1117,12 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
         );
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_mu_helper_and_social_view_aliases() {
+    fn command_parser_recognizes_game_shop_mu_helper_and_social_aliases() {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -1120,6 +1168,15 @@ mod tests {
             Some(ControlCommand::CreateCharacter)
         );
         assert_eq!(ControlCommand::CreateCharacter.as_str(), "create-character");
+        assert_eq!(
+            ControlCommand::parse("guild-join"),
+            Some(ControlCommand::GuildJoin)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_join"),
+            Some(ControlCommand::GuildJoin)
+        );
+        assert_eq!(ControlCommand::GuildJoin.as_str(), "guild-join");
         assert_eq!(
             ControlCommand::parse("guild-role-assign"),
             Some(ControlCommand::GuildRoleAssign)
@@ -1235,6 +1292,19 @@ mod tests {
         snapshot.apply_command(ControlCommand::Guild);
 
         assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_guild_join_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.guild_master_player_id = Some(0x1234);
+        snapshot.apply_command(ControlCommand::GuildJoin);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.guild_master_player_id, Some(0x1234));
         assert_eq!(snapshot.guild_screen_state, None);
     }
 
@@ -1557,6 +1627,44 @@ mod tests {
         );
         assert!(state_body.contains(r#""friend_name":null"#));
         assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn guild_join_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-join HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild join payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-join&master_id=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild join payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-join&master_id=4660 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""guild_master_player_id":4660"#));
+        assert!(body.contains(r#""guild_screen_state":null"#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""guild_master_player_id":4660"#));
+        assert!(state_body.contains(r#""command_count":1"#));
 
         handle.request_shutdown();
         let _ = handle.join();

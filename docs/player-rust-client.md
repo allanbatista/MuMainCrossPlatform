@@ -90,6 +90,9 @@ in the local config file instead of being typed every time.
   `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
   and `guild-error`; when the live guild list arrives, the shell overlays the
   decoded score, rival name, and member roles from the session.
+- The guild control plane also accepts `guild-join` commands with a guild
+  master player ID in the body or `master_id=` so QA can drive the existing
+  guild join packet helper through the live session.
 - When the friend or guild route opens while logged in, the client now sends
   the matching live list request once per activation before keeping the shell
   on screen, and the decoded roster state stays visible until logout or
@@ -152,6 +155,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=guild` can step into the visible guild route shell for
   local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` select the matching guild subview.
+- `POST /command?name=guild-join` queues the guild join packet through the
+  live session. Pass the guild master player ID in the body or as
+  `master_id=`.
 - `POST /command?name=guild-role-assign` queues the guild role-assignment
   packet through the live session. Pass the target player in `player=`, the
   role in `role=`, and the assignment type in `type=`.

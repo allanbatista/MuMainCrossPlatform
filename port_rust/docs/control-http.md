@@ -43,6 +43,7 @@ e o servidor continua disponivel para inspeção local.
 - `last_command`
 - `selected_character_name`
 - `friend_name`
+- `guild_master_player_id`
 - `guild_player_name`
 - `guild_role`
 - `guild_assignment_type`
@@ -53,7 +54,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -91,6 +92,7 @@ Exemplo:
 - `guild-union`
 - `guild-no-guild`
 - `guild-error`
+- `guild-join`
 - `guild-role-assign`
 - `duel`
 - `quests`
@@ -131,10 +133,13 @@ runtime. `friend-roster`, `friend-inbox`, `friend-compose` e
 atraves da sessao viva e aceitam o nome no body ou em `friend=`; se o nome
 vier vazio, a resposta sera `400`.
 `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild` e
-`guild-error` selecionam as subvisoes da janela de guild. `guild-role-assign`
-envia o pacote de role assignment da guild atraves da sessao viva e aceita o
-player no body ou em `player=`, o role em `role=` e o tipo em `type=`; se o
-payload vier incompleto, a resposta sera `400`. `exit`
+`guild-error` selecionam as subvisoes da janela de guild. `guild-join` envia o
+pacote de join da guild atraves da sessao viva e aceita o guild master player
+ID no body ou em `master_id=`; se o payload vier incompleto, a resposta sera
+`400`. `guild-role-assign` envia o pacote de role assignment da guild
+atraves da sessao viva e aceita o player no body ou em `player=`, o role em
+`role=` e o tipo em `type=`; se o payload vier incompleto, a resposta sera
+`400`. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
 grafico. Os demais apenas atualizam o snapshot.
 
@@ -156,6 +161,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
