@@ -8,6 +8,7 @@ pub mod graphical_runtime;
 pub(crate) mod inventory_route;
 pub(crate) mod inventory_shell;
 pub mod logging;
+pub(crate) mod npc_shop_shell;
 mod runtime;
 pub mod session_state;
 pub mod state;

@@ -12,7 +12,7 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    EquipmentPlugin, InventoryPlugin, MovementPlugin, PartyPlugin, VaultPlugin,
+    EquipmentPlugin, InventoryPlugin, MovementPlugin, NpcPlugin, PartyPlugin, VaultPlugin,
     WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
@@ -22,6 +22,7 @@ use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
 use crate::inventory_route::InventoryRoutePlugin;
 use crate::inventory_shell::InventoryShellPlugin;
+use crate::npc_shop_shell::NpcShopShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
@@ -116,12 +117,14 @@ fn configure_project_plugins(
             WorldEntitiesPlugin,
             WorldNpcPlugin,
             WorldMonsterPlugin,
+            NpcPlugin,
             InventoryPlugin,
             EquipmentPlugin,
             VaultPlugin,
             InventoryRoutePlugin,
             WorldMotionPlugin,
             AuthShellPlugin,
+            NpcShopShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
             InventoryShellPlugin,

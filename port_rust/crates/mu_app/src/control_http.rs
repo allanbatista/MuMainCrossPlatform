@@ -17,6 +17,8 @@ pub enum ControlCommand {
     CharacterSelect,
     Loading,
     World,
+    Npc,
+    Shop,
     LoginSuccess,
     LoginFailure,
     LogoutLogin,
@@ -36,6 +38,8 @@ impl ControlCommand {
             Self::CharacterSelect => "character-select",
             Self::Loading => "loading",
             Self::World => "world",
+            Self::Npc => "npc",
+            Self::Shop => "shop",
             Self::LoginSuccess => "login-success",
             Self::LoginFailure => "login-failure",
             Self::LogoutLogin => "logout-login",
@@ -59,6 +63,8 @@ impl ControlCommand {
             }
             "loading" => Some(Self::Loading),
             "world" => Some(Self::World),
+            "npc" => Some(Self::Npc),
+            "shop" => Some(Self::Shop),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
             "login-failure" | "login_failure" => Some(Self::LoginFailure),
             "logout-login" | "logout_login" => Some(Self::LogoutLogin),
@@ -132,6 +138,18 @@ impl ControlSnapshot {
             ControlCommand::World => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::World;
+                false
+            }
+            ControlCommand::Npc => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Npc;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Shop => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Shop;
+                self.session_phase = SessionPhase::LoggedIn;
                 false
             }
             ControlCommand::LoginSuccess => {
@@ -647,6 +665,16 @@ mod tests {
 
         assert_eq!(snapshot.ui_route, UiRoute::CharacterSelect);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Npc);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Npc);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Shop);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Shop);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
     }
 
     #[test]
@@ -680,13 +708,27 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=npc HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"npc""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=shop HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"shop""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=exit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""state":"exit""#));
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 3);
+        assert_eq!(final_snapshot.command_count, 5);
     }
 
     #[test]

@@ -39,6 +39,8 @@ in the local config file instead of being typed every time.
   with authoritative movement replies when the live session is active.
 - Press Tab while the world route is active to open or close the visible
   inventory shell.
+- The NPC and shop routes now open visible Bevy shells that can be driven
+  from the runtime or the local control HTTP smoke path.
 - The world, HUD, inventory, NPC/shop, trade, quests, MU Helper, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
@@ -59,6 +61,8 @@ in the local config file instead of being typed every time.
   and `command_count`.
 - `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
+- `POST /command?name=npc|shop` can step into the visible NPC and shop route
+  shells for local QA smoke.
 - `exit` also shuts down the graphical Bevy process, which is handy for smoke
   automation.
 
