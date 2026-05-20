@@ -49,6 +49,7 @@ build-mingw/
 
 # Local-only files
 docs/reviews/
+config/client.toml
 
 port_rust/assets/
 tmp/
