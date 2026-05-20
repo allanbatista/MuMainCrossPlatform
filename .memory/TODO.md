@@ -53,3 +53,9 @@ remain for later if full guild parity is still required.
 `guild-join` is now done. The next guild parity slice can wire
 `guild_create_request` or the remaining guild union management flows if full
 guild parity is still required.
+
+# [medium] Gens live ranking bridge
+
+The new Gens shell is visible and smokeable, but it still only reflects the
+local `GensManager` snapshot. The next slice should bridge the legacy Gens
+ranking refresh and response decoding if live parity is still required.

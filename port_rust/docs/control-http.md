@@ -7,10 +7,11 @@ Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
 jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
 character select/world da Bevy runtime e a shell visual correspondente; no
 modo `--headless`, continua sendo um smoke server deterministico. As rotas
-`friend`, `guild` e `duel` tambem espelham as shells visiveis, e `friend`
-e `guild` aceitam comandos de subview para testar as telas internas. Quando a
-sessao responde com as listas sociais, o runtime sobrepoe o roster/score/roles
-decodificados no shell correspondente ate o logout ou disconnect.
+`friend`, `guild`, `duel`, `events` e `gens` tambem espelham as shells visiveis, e
+`friend` e `guild` aceitam comandos de subview para testar as telas internas.
+Quando a sessao responde com as listas sociais, o runtime sobrepoe o
+roster/score/roles decodificados no shell correspondente ate o logout ou
+disconnect.
 `character-create` abre a shell visivel de criacao, e `create-character`
 submete o nome informado para o worker de bootstrap.
 
@@ -79,6 +80,8 @@ Exemplo:
 - `trade`
 - `party`
 - `gate`
+- `events`
+- `gens`
 - `friend`
 - `friend-add`
 - `friend-delete`
@@ -107,7 +110,7 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `character-create`,
 `create-character`, `loading`, `world`, `chat`, `npc`, `select-character`, `shop`, `game-shop`,
-`trade`, `party`, `gate`, `friend`, `friend-roster`, `friend-inbox`,
+`trade`, `party`, `gate`, `events`, `gens`, `friend`, `friend-roster`, `friend-inbox`,
 `friend-compose`, `friend-chat-rooms`, `guild`, `guild-summary`,
 `guild-members`, `guild-union`, `guild-no-guild`, `guild-error`,
 `guild-role-assign`, `duel`, `quests`, `mu-helper`, `login-success` e
@@ -127,7 +130,9 @@ character select.
 para enviar mensagem publica quando a sessao esta logada.
 `mu-helper` abre a shell visivel do MU Helper com o snapshot existente do
 runtime. `duel` abre a shell visivel de duel com o snapshot existente do
-runtime. `friend-roster`, `friend-inbox`, `friend-compose` e
+runtime. `events` abre a shell visivel de events com o snapshot existente do
+EventManager. `gens` abre a shell visivel de Gens com o snapshot existente do
+GensManager. `friend-roster`, `friend-inbox`, `friend-compose` e
 `friend-chat-rooms` selecionam as subvisoes da janela de friend;
 `friend-add` e `friend-delete` enviam as requisicoes de add/delete do friend
 atraves da sessao viva e aceitam o nome no body ou em `friend=`; se o nome
@@ -170,6 +175,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=trade'
 curl -X POST 'http://127.0.0.1:12345/command?name=party'
 curl -X POST 'http://127.0.0.1:12345/command?name=gate'
+curl -X POST 'http://127.0.0.1:12345/command?name=events'
+curl -X POST 'http://127.0.0.1:12345/command?name=gens'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-compose'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-chat-rooms'

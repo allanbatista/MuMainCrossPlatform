@@ -16,6 +16,8 @@ separate gameplay resources plus UI snapshot modules.
   parameters, countdown, reward text and result text.
 - `mu_ui::events::events_screen()` covers the entry, countdown, reward,
   result and error views used by the event windows.
+- The Rust client also exposes the events route as a visible Bevy shell and
+  the local control HTTP smoke path can open it with `events`.
 
 ## Duel
 
@@ -32,6 +34,8 @@ separate gameplay resources plus UI snapshot modules.
   ranking, team name, title name and reward availability.
 - `mu_ui::gens::gens_ranking_screen()` exposes the HUD overlay used for the
   ranking and join/reward states.
+- The Rust client also exposes the Gens HUD route as a visible Bevy shell and
+  the local control HTTP smoke path can open it with `gens`.
 
 The packet helpers for these flows live in `mu_protocol::quests`,
 `mu_protocol::events`, and `mu_protocol::social`.

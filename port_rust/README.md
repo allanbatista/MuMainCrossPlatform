@@ -123,6 +123,12 @@ sessao de jogo completa.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.
+- A camada de events esta documentada em `docs/quests-events-duel-gens.md` e
+  agora tambem abre uma shell visivel no runtime grafico, acionavel por
+  `events` no smoke local.
+- A camada de Gens esta documentada em `docs/quests-events-duel-gens.md` e
+  agora tambem abre uma shell visivel no runtime grafico, acionavel por
+  `gens` no smoke local.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
   snapshots de party info/list e o consumo do `PartyManager`.
 - A camada de siege warfare esta documentada em `docs/siege-warfare.md` e
@@ -179,7 +185,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|duel|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 

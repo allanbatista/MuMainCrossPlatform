@@ -27,6 +27,8 @@ pub enum ControlCommand {
     Trade,
     Party,
     Gate,
+    Events,
+    Gens,
     Friend,
     Guild,
     FriendAdd,
@@ -75,6 +77,8 @@ impl ControlCommand {
             Self::Trade => "trade",
             Self::Party => "party",
             Self::Gate => "gate",
+            Self::Events => "events",
+            Self::Gens => "gens",
             Self::Friend => "friend",
             Self::Guild => "guild",
             Self::FriendAdd => "friend-add",
@@ -127,6 +131,8 @@ impl ControlCommand {
             "trade" => Some(Self::Trade),
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
+            "events" => Some(Self::Events),
+            "gens" => Some(Self::Gens),
             "friend" => Some(Self::Friend),
             "guild" => Some(Self::Guild),
             "friend-add" | "friend_add" => Some(Self::FriendAdd),
@@ -296,6 +302,18 @@ impl ControlSnapshot {
             ControlCommand::Gate => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Gate;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Events => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Events;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Gens => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Hud;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -1122,7 +1140,7 @@ mod tests {
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_mu_helper_and_social_aliases() {
+    fn command_parser_recognizes_game_shop_mu_helper_events_gens_and_social_aliases() {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -1201,6 +1219,13 @@ mod tests {
         assert_eq!(ControlCommand::Friend.as_str(), "friend");
         assert_eq!(ControlCommand::parse("guild"), Some(ControlCommand::Guild));
         assert_eq!(ControlCommand::Guild.as_str(), "guild");
+        assert_eq!(
+            ControlCommand::parse("events"),
+            Some(ControlCommand::Events)
+        );
+        assert_eq!(ControlCommand::Events.as_str(), "events");
+        assert_eq!(ControlCommand::parse("gens"), Some(ControlCommand::Gens));
+        assert_eq!(ControlCommand::Gens.as_str(), "gens");
         assert_eq!(
             ControlCommand::parse("friend-add"),
             Some(ControlCommand::FriendAdd)
@@ -1519,6 +1544,20 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=events HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"events""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=gens HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"hud""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=friend-compose HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"friend""#));
@@ -1561,7 +1600,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 20);
+        assert_eq!(final_snapshot.command_count, 22);
     }
 
     #[test]

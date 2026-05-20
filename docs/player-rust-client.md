@@ -102,6 +102,12 @@ in the local config file instead of being typed every time.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.
+- The events route now opens a visible Bevy shell that mirrors the event
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `events`.
+- The Gens HUD route now opens a visible Bevy shell that mirrors the Gens
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `gens`.
 - The party route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The gate route now opens a visible Bevy shell that can be driven from the
@@ -111,7 +117,7 @@ in the local config file instead of being typed every time.
 - The MU Helper route now opens a visible Bevy shell that mirrors the helper
   runtime snapshot and can be driven from the local control HTTP smoke path
   with `mu-helper`.
-- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, quests, and GameShop
+- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, events, Gens, quests, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
@@ -165,6 +171,10 @@ in the local config file instead of being typed every time.
   role in `role=`, and the assignment type in `type=`.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
+- `POST /command?name=events` can step into the visible events route shell for
+  local QA smoke.
+- `POST /command?name=gens` can step into the visible Gens HUD route shell
+  for local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for
   local QA smoke.
 - `POST /command?name=gate` can step into the visible gate route shell for
