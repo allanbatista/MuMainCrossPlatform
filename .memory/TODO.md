@@ -42,3 +42,8 @@ and guild data still remain for a later slice.
 Friend add/delete control-plane commands are now wired through the live
 session bridge, but the guild-side action commands and any remaining social
 management flows still need their own slice if parity is still required.
+
+# [medium] Remaining guild action follow-up
+
+`guild-role-assign` is done; guild join/create/union packet commands still
+remain for later if full guild parity is still required.

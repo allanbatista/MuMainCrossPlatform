@@ -14,7 +14,7 @@ use camino::Utf8Path;
 use mu_gameplay::{CharacterClass, MovementCommand};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
-use mu_protocol::guild::guild_list_request;
+use mu_protocol::guild::{guild_list_request, guild_role_assign_request};
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
@@ -71,13 +71,21 @@ pub(crate) enum BootstrapSignal {
 #[derive(Debug)]
 pub(crate) enum BootstrapCommand {
     Walk(MovementCommand),
-    Chat { sender: String, message: String },
+    Chat {
+        sender: String,
+        message: String,
+    },
     SelectCharacter(String),
     CreateCharacter(String),
     FriendListRequest,
     FriendAdd(String),
     FriendDelete(String),
     GuildListRequest,
+    GuildRoleAssign {
+        player_name: String,
+        role: u8,
+        assignment_type: u8,
+    },
 }
 
 #[derive(Debug, Resource)]
@@ -284,6 +292,25 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::GuildListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_guild_role_assign_request(
+        &self,
+        player_name: impl Into<String>,
+        role: u8,
+        assignment_type: u8,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildRoleAssign {
+                player_name: player_name.into(),
+                role,
+                assignment_type,
+            })
             .is_ok()
     }
 
@@ -970,6 +997,19 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::GuildRoleAssign {
+            player_name,
+            role,
+            assignment_type,
+        } => {
+            let packet = guild_role_assign_request(role, player_name, assignment_type)
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -1072,11 +1112,13 @@ mod tests {
     use bevy::input::ButtonInput;
     use camino::Utf8PathBuf;
     use mu_gameplay::MovementCommand;
+    use mu_network::Session;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
     use mu_protocol::guild::guild_list_request;
+    use mu_protocol::guild::guild_role_assign_request;
     use mu_protocol::login::{create_character, request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{
@@ -1341,6 +1383,74 @@ mod tests {
             BootstrapCommand::GuildListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn guild_role_assign_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_guild_role_assign_request("Astra", 64, 2));
+
+        match command_receiver
+            .try_recv()
+            .expect("guild role-assign command missing")
+        {
+            BootstrapCommand::GuildRoleAssign {
+                player_name,
+                role,
+                assignment_type,
+            } => {
+                assert_eq!(player_name, "Astra");
+                assert_eq!(role, 64);
+                assert_eq!(assignment_type, 2);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn guild_role_assign_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::GuildRoleAssign {
+                player_name: "Astra".to_string(),
+                role: 64,
+                assignment_type: 2,
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            received,
+            guild_role_assign_request(64, b"Astra", 2).unwrap()
+        );
     }
 
     #[test]

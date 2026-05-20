@@ -152,6 +152,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=guild` can step into the visible guild route shell for
   local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` select the matching guild subview.
+- `POST /command?name=guild-role-assign` queues the guild role-assignment
+  packet through the live session. Pass the target player in `player=`, the
+  role in `role=`, and the assignment type in `type=`.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for

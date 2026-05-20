@@ -40,6 +40,7 @@ pub enum ControlCommand {
     GuildUnion,
     GuildNoGuild,
     GuildError,
+    GuildRoleAssign,
     Duel,
     Quests,
     MuHelper,
@@ -86,6 +87,7 @@ impl ControlCommand {
             Self::GuildUnion => "guild-union",
             Self::GuildNoGuild => "guild-no-guild",
             Self::GuildError => "guild-error",
+            Self::GuildRoleAssign => "guild-role-assign",
             Self::Duel => "duel",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
@@ -138,6 +140,7 @@ impl ControlCommand {
             "guild-union" | "guild_union" => Some(Self::GuildUnion),
             "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
             "guild-error" | "guild_error" => Some(Self::GuildError),
+            "guild-role-assign" | "guild_role_assign" => Some(Self::GuildRoleAssign),
             "duel" => Some(Self::Duel),
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
@@ -162,6 +165,9 @@ pub struct ControlSnapshot {
     pub last_command: Option<ControlCommand>,
     pub selected_character_name: Option<String>,
     pub friend_name: Option<String>,
+    pub guild_player_name: Option<String>,
+    pub guild_role: Option<u8>,
+    pub guild_assignment_type: Option<u8>,
     pub friend_screen_state: Option<FriendScreenState>,
     pub guild_screen_state: Option<GuildScreenState>,
     pub command_count: u64,
@@ -176,6 +182,9 @@ impl ControlSnapshot {
             last_command: None,
             selected_character_name: None,
             friend_name: None,
+            guild_player_name: None,
+            guild_role: None,
+            guild_assignment_type: None,
             friend_screen_state: None,
             guild_screen_state: None,
             command_count: 0,
@@ -369,6 +378,13 @@ impl ControlSnapshot {
                 self.guild_screen_state = Some(GuildScreenState::Error);
                 false
             }
+            ControlCommand::GuildRoleAssign => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Members);
+                false
+            }
             ControlCommand::Duel => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Duel;
@@ -448,6 +464,19 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let guild_player_name = self
+            .guild_player_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
+        let guild_role = self
+            .guild_role
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let guild_assignment_type = self
+            .guild_assignment_type
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let friend_screen_state = self
             .friend_screen_state
             .map(|state| format!("\"{}\"", state.as_str()))
@@ -458,13 +487,16 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
             selected_character_name,
             friend_name,
+            guild_player_name,
+            guild_role,
+            guild_assignment_type,
             friend_screen_state,
             guild_screen_state,
             self.command_count
@@ -727,6 +759,22 @@ fn route_request(
                     snapshot.friend_name = Some(friend_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::GuildRoleAssign => {
+                    let Some((player_name, role, assignment_type)) =
+                        guild_role_assign_from_request(&request)
+                    else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing guild role assignment payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.guild_player_name = Some(player_name);
+                    snapshot.guild_role = Some(role);
+                    snapshot.guild_assignment_type = Some(assignment_type);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::CreateCharacter => {
                     let Some(character_name) = character_name_from_request(&request) else {
                         return HttpResponse::json(
@@ -915,6 +963,31 @@ fn friend_name_from_request(request: &HttpRequest) -> Option<String> {
         })
 }
 
+fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, u8)> {
+    let player_name = query_value(&request.query, "player")
+        .or_else(|| query_value(&request.body, "player"))?
+        .trim()
+        .to_string();
+
+    if player_name.is_empty() {
+        return None;
+    }
+
+    let role = query_value(&request.query, "role")
+        .or_else(|| query_value(&request.body, "role"))?
+        .trim()
+        .parse::<u8>()
+        .ok()?;
+
+    let assignment_type = query_value(&request.query, "type")
+        .or_else(|| query_value(&request.body, "type"))?
+        .trim()
+        .parse::<u8>()
+        .ok()?;
+
+    Some((player_name, role, assignment_type))
+}
+
 #[derive(Debug, Clone)]
 struct HttpRequest {
     method: String,
@@ -996,7 +1069,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
         );
     }
 
@@ -1047,6 +1120,18 @@ mod tests {
             Some(ControlCommand::CreateCharacter)
         );
         assert_eq!(ControlCommand::CreateCharacter.as_str(), "create-character");
+        assert_eq!(
+            ControlCommand::parse("guild-role-assign"),
+            Some(ControlCommand::GuildRoleAssign)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_role_assign"),
+            Some(ControlCommand::GuildRoleAssign)
+        );
+        assert_eq!(
+            ControlCommand::GuildRoleAssign.as_str(),
+            "guild-role-assign"
+        );
         assert_eq!(
             ControlCommand::parse("options"),
             Some(ControlCommand::Options)
@@ -1472,6 +1557,48 @@ mod tests {
         );
         assert!(state_body.contains(r#""friend_name":null"#));
         assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn guild_role_assign_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-role-assign HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild role assignment payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-role-assign&player=Astra&role=bad&type=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild role assignment payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-role-assign&player=Astra&role=64&type=2 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""guild_player_name":"Astra""#));
+        assert!(body.contains(r#""guild_role":64"#));
+        assert!(body.contains(r#""guild_assignment_type":2"#));
+        assert!(body.contains(r#""guild_screen_state":"members""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""guild_player_name":"Astra""#));
+        assert!(state_body.contains(r#""guild_role":64"#));
+        assert!(state_body.contains(r#""guild_assignment_type":2"#));
+        assert!(state_body.contains(r#""command_count":1"#));
 
         handle.request_shutdown();
         let _ = handle.join();

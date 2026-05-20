@@ -293,6 +293,16 @@ fn sync_control_http_snapshot_to_runtime(
                 let _ = bootstrap.queue_friend_delete_request(friend_name);
             }
         }
+        Some(ControlCommand::GuildRoleAssign) => {
+            if let (Some(player_name), Some(role), Some(assignment_type)) = (
+                snapshot.guild_player_name.as_deref(),
+                snapshot.guild_role,
+                snapshot.guild_assignment_type,
+            ) {
+                let _ =
+                    bootstrap.queue_guild_role_assign_request(player_name, role, assignment_type);
+            }
+        }
         _ => {}
     }
 
@@ -506,6 +516,52 @@ mod tests {
         {
             crate::bootstrap_runtime::BootstrapCommand::FriendDelete(friend_name) => {
                 assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_guild_role_assign() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.guild_player_name = Some("Astra".to_string());
+            snapshot.guild_role = Some(64);
+            snapshot.guild_assignment_type = Some(2);
+            snapshot.apply_command(ControlCommand::GuildRoleAssign);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("guild role-assign command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::GuildRoleAssign {
+                player_name,
+                role,
+                assignment_type,
+            } => {
+                assert_eq!(player_name, "Astra");
+                assert_eq!(role, 64);
+                assert_eq!(assignment_type, 2);
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
