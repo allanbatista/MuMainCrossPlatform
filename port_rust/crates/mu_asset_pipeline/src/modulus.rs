@@ -2,9 +2,9 @@ mod mars;
 mod rc5;
 mod threeway;
 
-use cipher::consts::U32;
 use cast5::cipher::{Array as Cast5Block, BlockCipherDecrypt as _, KeyInit as _};
 use cast5::Cast5;
+use cipher::consts::U32;
 use gost_crypto::{Gost28147, SBOX_CRYPTOPRO};
 use idea::cipher::Block as IdeaBlock;
 use idea::Idea;
@@ -46,10 +46,15 @@ impl ModulusCipher {
         match algorithm & 7 {
             0 => {
                 if key.len() < TEA_KEY_SIZE {
-                    return Err(format!("TEA key too short: {} < {}", key.len(), TEA_KEY_SIZE));
+                    return Err(format!(
+                        "TEA key too short: {} < {}",
+                        key.len(),
+                        TEA_KEY_SIZE
+                    ));
                 }
-                let key = TeaBlock::clone_from_slice(&key[..TEA_KEY_SIZE]);
-                Ok(Self::Tea(Tea32::new(&key)))
+                let mut key_block = TeaBlock::default();
+                key_block.copy_from_slice(&key[..TEA_KEY_SIZE]);
+                Ok(Self::Tea(Tea32::new(&key_block)))
             }
             1 => {
                 if key.len() < THREE_WAY_KEY_SIZE {
@@ -59,7 +64,9 @@ impl ModulusCipher {
                         THREE_WAY_KEY_SIZE
                     ));
                 }
-                Ok(Self::ThreeWay(ThreeWayCipher::new(&key[..THREE_WAY_KEY_SIZE])))
+                Ok(Self::ThreeWay(ThreeWayCipher::new(
+                    &key[..THREE_WAY_KEY_SIZE],
+                )))
             }
             2 => {
                 if key.len() < CAST5_KEY_SIZE {
@@ -69,30 +76,47 @@ impl ModulusCipher {
                         CAST5_KEY_SIZE
                     ));
                 }
-                let key = Cast5Block::clone_from_slice(&key[..CAST5_KEY_SIZE]);
-                Ok(Self::Cast5(Cast5::new(&key)))
+                let cipher = Cast5::new_from_slice(&key[..CAST5_KEY_SIZE])
+                    .map_err(|error| error.to_string())?;
+                Ok(Self::Cast5(cipher))
             }
             3 => {
                 if key.len() < TEA_KEY_SIZE {
-                    return Err(format!("RC5 key too short: {} < {}", key.len(), TEA_KEY_SIZE));
+                    return Err(format!(
+                        "RC5 key too short: {} < {}",
+                        key.len(),
+                        TEA_KEY_SIZE
+                    ));
                 }
                 Ok(Self::Rc5(Rc5Cipher::new(&key[..TEA_KEY_SIZE], RC5_ROUNDS)))
             }
             4 => {
                 if key.len() < TEA_KEY_SIZE {
-                    return Err(format!("RC6 key too short: {} < {}", key.len(), TEA_KEY_SIZE));
+                    return Err(format!(
+                        "RC6 key too short: {} < {}",
+                        key.len(),
+                        TEA_KEY_SIZE
+                    ));
                 }
                 Ok(Self::Rc6(Rc6::<U32>::new(&key[..TEA_KEY_SIZE], RC6_ROUNDS)))
             }
             5 => {
                 if key.len() < MARS_KEY_SIZE {
-                    return Err(format!("MARS key too short: {} < {}", key.len(), MARS_KEY_SIZE));
+                    return Err(format!(
+                        "MARS key too short: {} < {}",
+                        key.len(),
+                        MARS_KEY_SIZE
+                    ));
                 }
                 Ok(Self::Mars(MarsCipher::new(&key[..MARS_KEY_SIZE])))
             }
             6 => {
                 if key.len() < IDEA_KEY_SIZE {
-                    return Err(format!("IDEA key too short: {} < {}", key.len(), IDEA_KEY_SIZE));
+                    return Err(format!(
+                        "IDEA key too short: {} < {}",
+                        key.len(),
+                        IDEA_KEY_SIZE
+                    ));
                 }
                 let cipher = Idea::new_from_slice(&key[..IDEA_KEY_SIZE])
                     .map_err(|error| error.to_string())?;
@@ -100,7 +124,11 @@ impl ModulusCipher {
             }
             7 => {
                 if key.len() < GOST_KEY_SIZE {
-                    return Err(format!("GOST key too short: {} < {}", key.len(), GOST_KEY_SIZE));
+                    return Err(format!(
+                        "GOST key too short: {} < {}",
+                        key.len(),
+                        GOST_KEY_SIZE
+                    ));
                 }
                 let key = key[..GOST_KEY_SIZE]
                     .try_into()
@@ -127,7 +155,8 @@ impl ModulusCipher {
     fn decrypt_block(&self, block: &mut [u8]) -> Result<(), String> {
         match self {
             Self::Tea(cipher) => {
-                let mut buffer = TeaBlock::clone_from_slice(block);
+                let mut buffer = TeaBlock::default();
+                buffer.copy_from_slice(block);
                 cipher.decrypt_block(&mut buffer);
                 block.copy_from_slice(buffer.as_slice());
                 Ok(())
@@ -137,7 +166,8 @@ impl ModulusCipher {
                 Ok(())
             }
             Self::Cast5(cipher) => {
-                let mut buffer = Cast5Block::clone_from_slice(block);
+                let mut buffer = Cast5Block::default();
+                buffer.copy_from_slice(block);
                 cipher.decrypt_block(&mut buffer);
                 block.copy_from_slice(buffer.as_slice());
                 Ok(())
@@ -147,9 +177,7 @@ impl ModulusCipher {
                 Ok(())
             }
             Self::Rc6(cipher) => {
-                let decrypted = cipher
-                    .decrypt(block)
-                    .map_err(|error| error.to_string())?;
+                let decrypted = cipher.decrypt(block).map_err(|error| error.to_string())?;
                 block.copy_from_slice(&decrypted);
                 Ok(())
             }
@@ -158,7 +186,8 @@ impl ModulusCipher {
                 Ok(())
             }
             Self::Idea(cipher) => {
-                let mut buffer = IdeaBlock::<Idea>::clone_from_slice(block);
+                let mut buffer = IdeaBlock::<Idea>::default();
+                buffer.copy_from_slice(block);
                 cipher.decrypt_block(&mut buffer);
                 block.copy_from_slice(buffer.as_slice());
                 Ok(())

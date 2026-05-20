@@ -7,11 +7,11 @@ use mu_assets::{sha256_hex, AssetManifestEntry};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::modulus::decrypt_modulus_payload;
 use crate::terrain::{
     has_modulus_magic, is_encrypted_terrain_stem, map_file_decrypt, normalized_extension,
     normalized_stem, rows_from_u8, terrain_output_relative_path, terrain_size, write_json_file,
 };
-use crate::modulus::decrypt_modulus_payload;
 
 const TERRAIN_MAP_KIND: &str = "terrain-map";
 const TERRAIN_TILE_COUNT: usize = 256 * 256;

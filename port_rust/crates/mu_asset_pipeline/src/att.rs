@@ -6,12 +6,12 @@ use mu_assets::{sha256_hex, AssetManifestEntry};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::modulus::decrypt_modulus_payload;
 use crate::terrain::{
     apply_bux_convert, has_modulus_magic, is_encrypted_terrain_stem, map_file_decrypt,
     normalized_extension, normalized_stem, rows_from_u16, terrain_output_relative_path,
     terrain_size, write_json_file,
 };
-use crate::modulus::decrypt_modulus_payload;
 
 const TERRAIN_ATTRIBUTE_KIND: &str = "terrain-attribute";
 const TERRAIN_TILE_COUNT: usize = 256 * 256;
@@ -107,12 +107,12 @@ pub(crate) fn decode_terrain_attribute_bytes(
     raw: &[u8],
 ) -> Result<TerrainAttributeJson, TerrainAttributeError> {
     let mut decoded = if has_modulus_magic(raw) {
-        apply_bux_convert(
-            &decrypt_modulus_payload(raw).map_err(|message| TerrainAttributeError::ParseSource {
+        apply_bux_convert(&decrypt_modulus_payload(raw).map_err(|message| {
+            TerrainAttributeError::ParseSource {
                 path: path.to_path_buf(),
                 message,
-            })?,
-        )
+            }
+        })?)
     } else if is_encrypted_terrain_stem(&normalized_stem(path)) {
         apply_bux_convert(&map_file_decrypt(raw))
     } else {
