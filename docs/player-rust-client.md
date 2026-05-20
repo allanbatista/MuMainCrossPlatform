@@ -41,6 +41,8 @@ in the local config file instead of being typed every time.
   inventory shell.
 - The NPC and shop routes now open visible Bevy shells that can be driven
   from the runtime or the local control HTTP smoke path.
+- The chat route now opens a visible Bevy shell that can be driven from the
+  runtime or the local control HTTP smoke path.
 - The trade route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The party route now opens a visible Bevy shell that can be driven from the
@@ -49,7 +51,7 @@ in the local config file instead of being typed every time.
   runtime or the local control HTTP smoke path.
 - The quests route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
-- The world, HUD, inventory, NPC/shop, trade, party, gate, quests, MU Helper, and GameShop
+- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, quests, MU Helper, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
@@ -69,6 +71,8 @@ in the local config file instead of being typed every time.
   and `command_count`.
 - `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
+- `POST /command?name=chat` can step into the visible chat route shell for
+  local QA smoke.
 - `POST /command?name=npc|shop` can step into the visible NPC and shop route
   shells for local QA smoke.
 - `POST /command?name=trade` can step into the visible trade route shell for

@@ -17,6 +17,7 @@ pub enum ControlCommand {
     CharacterSelect,
     Loading,
     World,
+    Chat,
     Npc,
     Shop,
     Trade,
@@ -42,6 +43,7 @@ impl ControlCommand {
             Self::CharacterSelect => "character-select",
             Self::Loading => "loading",
             Self::World => "world",
+            Self::Chat => "chat",
             Self::Npc => "npc",
             Self::Shop => "shop",
             Self::Trade => "trade",
@@ -71,6 +73,7 @@ impl ControlCommand {
             }
             "loading" => Some(Self::Loading),
             "world" => Some(Self::World),
+            "chat" => Some(Self::Chat),
             "npc" => Some(Self::Npc),
             "shop" => Some(Self::Shop),
             "trade" => Some(Self::Trade),
@@ -150,6 +153,12 @@ impl ControlSnapshot {
             ControlCommand::World => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::World;
+                false
+            }
+            ControlCommand::Chat => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Chat;
+                self.session_phase = SessionPhase::LoggedIn;
                 false
             }
             ControlCommand::Npc => {
@@ -702,6 +711,11 @@ mod tests {
         assert_eq!(snapshot.ui_route, UiRoute::CharacterSelect);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
+        snapshot.apply_command(ControlCommand::Chat);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Chat);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
         snapshot.apply_command(ControlCommand::Npc);
 
         assert_eq!(snapshot.ui_route, UiRoute::Npc);
@@ -764,6 +778,13 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=chat HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"chat""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=npc HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"npc""#));
@@ -812,7 +833,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 9);
+        assert_eq!(final_snapshot.command_count, 10);
     }
 
     #[test]

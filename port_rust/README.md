@@ -34,6 +34,8 @@ sessao de jogo completa.
   `--control-http` para smoke local.
 - A rota `Quests` agora mostra uma shell visual propria e pode ser aberta
   pelo `--control-http` para smoke local.
+- A rota `Chat` agora mostra uma shell visual propria e pode ser aberta pelo
+  `--control-http` para smoke local.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; no runtime grafico, ele tambem espelha o fluxo de
   login/server select/character select/world. Detalhes em
@@ -77,6 +79,8 @@ sessao de jogo completa.
   para manter a superficie de world/screenshot consistente.
 - A camada de quests, events, duel e gens esta documentada em
   `docs/quests-events-duel-gens.md`.
+- A camada de chat esta documentada em `docs/player-rust-client.md` e
+  `docs/control-http.md` via a rota visual e o smoke local.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
   runtime de catalog/details/storage/empty/error, a seguranca transacional e a
   UI snapshot do jogo.
@@ -121,8 +125,9 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|loading|world|npc|shop|trade|login-success|login-failure|
-  party|gate|quests|logout-login|logout-character|disconnect|exit|ping` para
+  character-select|loading|world|chat|npc|shop|trade|login-success|
+  login-failure|party|gate|quests|logout-login|logout-character|disconnect|
+  exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
