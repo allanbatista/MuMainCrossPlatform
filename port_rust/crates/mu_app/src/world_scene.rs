@@ -2,19 +2,20 @@ use std::fs;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::gltf::GltfAssetLabel;
+use bevy::input::mouse::MouseWheel;
 use bevy::math::primitives::Cuboid;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::{
     AlphaMode, App, AssetServer, Assets, Camera3d, Color, Commands, Component, DirectionalLight,
-    Entity, EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res,
-    ResMut, Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
+    Entity, EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, MessageReader, Name,
+    Plugin, Query, Res, ResMut, Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
 };
 use camino::Utf8Path;
 use mu_assets::TerrainWorldSummary;
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
 use mu_ui::{UiRoute, UiShellState};
 
-use crate::{ClientRuntime, GraphicalRuntimeConfig};
+use crate::{ClientRuntime, Config, GraphicalRuntimeConfig};
 
 const WORLD_POSITION_SCALE: f32 = 0.05;
 const WORLD_TERRAIN_AMPLITUDE: f32 = 1.0;
@@ -25,6 +26,7 @@ const WORLD_TERRAIN_LIGHTMAP_OFFSET: f32 = 0.02;
 const WORLD_TERRAIN_LIGHTMAP_OPACITY: f32 = 0.65;
 const WORLD_CAMERA_HEIGHT_FACTOR: f32 = 1.8;
 const WORLD_CAMERA_DISTANCE_FACTOR: f32 = 2.2;
+const WORLD_CAMERA_ZOOM_STEP: i32 = 150;
 const WORLD_RENDER_ENTITY_LIMIT: usize = 8;
 const WORLD_LIGHT_LEVEL: f32 = 30_000.0;
 
@@ -42,7 +44,7 @@ struct WorldSceneMarker {
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct WorldSceneCamera {
-    follow_offset: Vec3,
+    base_offset: Vec3,
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,8 +59,10 @@ impl Plugin for WorldScenePlugin {
             Update,
             (
                 sync_world_scene_system,
+                apply_world_scene_camera_zoom_system.after(sync_world_scene_system),
                 sync_world_scene_transforms_system
-                    .after(crate::world_motion::apply_world_motion_system),
+                    .after(crate::world_motion::apply_world_motion_system)
+                    .after(apply_world_scene_camera_zoom_system),
                 sync_world_scene_camera_system.after(sync_world_scene_transforms_system),
             )
                 .chain(),
@@ -71,7 +75,8 @@ fn sync_world_scene_system(
     mut state: ResMut<WorldSceneState>,
     ui_shell: Res<UiShellState>,
     client_runtime: Res<ClientRuntime>,
-    config: Res<GraphicalRuntimeConfig>,
+    runtime_config: Res<GraphicalRuntimeConfig>,
+    camera_config: Res<Config>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -101,8 +106,9 @@ fn sync_world_scene_system(
         &mut meshes,
         &mut materials,
         world_bundle,
-        config.asset_root.as_deref(),
+        runtime_config.asset_root.as_deref(),
         client_runtime.render_entities().catalog(),
+        camera_config.camera.zoom_scale(),
         &mut state,
     );
     state.world_id = Some(summary.world);
@@ -135,6 +141,7 @@ fn sync_world_scene_camera_system(
     ui_shell: Res<UiShellState>,
     client_runtime: Res<ClientRuntime>,
     state: Res<WorldSceneState>,
+    config: Res<Config>,
     mut cameras: Query<(&WorldSceneCamera, &mut Transform)>,
 ) {
     if ui_shell.current() != UiRoute::World
@@ -150,11 +157,49 @@ fn sync_world_scene_camera_system(
     };
 
     let local_player_translation = world_transform(&local_player.pose).translation;
+    let zoom_scale = config.camera.zoom_scale();
 
     for (camera, mut transform) in cameras.iter_mut() {
-        *transform = Transform::from_translation(local_player_translation + camera.follow_offset)
+        let follow_offset = camera.base_offset * zoom_scale;
+        *transform = Transform::from_translation(local_player_translation + follow_offset)
             .looking_at(local_player_translation, Vec3::Y);
     }
+}
+
+fn apply_world_scene_camera_zoom_system(
+    ui_shell: Res<UiShellState>,
+    client_runtime: Res<ClientRuntime>,
+    state: Res<WorldSceneState>,
+    mut config: ResMut<Config>,
+    mut mouse_wheel_reader: Option<MessageReader<MouseWheel>>,
+) {
+    let Some(mut mouse_wheel_reader) = mouse_wheel_reader.take() else {
+        return;
+    };
+
+    let world_camera_active = ui_shell.current() == UiRoute::World
+        && client_runtime.world_ready()
+        && client_runtime.render_entities_ready()
+        && !state.entities.is_empty();
+
+    for event in mouse_wheel_reader.read() {
+        if !world_camera_active {
+            continue;
+        }
+
+        let _ = apply_world_camera_zoom_delta(&mut config, event.y);
+    }
+}
+
+fn apply_world_camera_zoom_delta(config: &mut Config, wheel_delta: f32) -> bool {
+    let zoom_delta = (wheel_delta * WORLD_CAMERA_ZOOM_STEP as f32).round() as i32;
+    if zoom_delta == 0 {
+        return false;
+    }
+
+    config.camera.zoom -= zoom_delta;
+    config.camera = config.camera.normalized();
+    true
 }
 
 fn clear_world_scene(commands: &mut Commands, state: &mut WorldSceneState) {
@@ -172,10 +217,13 @@ fn spawn_world_scene(
     world_bundle: &mu_gameplay::TerrainWorldBundle,
     asset_root: Option<&Utf8Path>,
     catalog: &RenderEntityCatalog,
+    camera_zoom_scale: f32,
     state: &mut WorldSceneState,
 ) {
     let summary = world_bundle.summary();
-    state.entities.push(spawn_world_camera(commands, &summary));
+    state
+        .entities
+        .push(spawn_world_camera(commands, &summary, camera_zoom_scale));
     state.entities.push(spawn_world_light(commands));
     state.entities.extend(spawn_world_terrain(
         commands,
@@ -188,14 +236,19 @@ fn spawn_world_scene(
     spawn_world_entities(commands, asset_server, meshes, materials, catalog, state);
 }
 
-fn spawn_world_camera(commands: &mut Commands, summary: &TerrainWorldSummary) -> Entity {
-    let follow_offset = world_camera_follow_offset(summary);
+fn spawn_world_camera(
+    commands: &mut Commands,
+    summary: &TerrainWorldSummary,
+    camera_zoom_scale: f32,
+) -> Entity {
+    let base_offset = world_camera_follow_offset(summary);
+    let follow_offset = base_offset * camera_zoom_scale;
 
     commands
         .spawn((
             Camera3d::default(),
             Transform::from_translation(follow_offset).looking_at(Vec3::ZERO, Vec3::Y),
-            WorldSceneCamera { follow_offset },
+            WorldSceneCamera { base_offset },
             Name::new(format!("world-camera-{}", summary.world)),
         ))
         .id()
@@ -736,12 +789,13 @@ fn render_entity_for_marker<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_world_terrain_blend_mesh, build_world_terrain_mesh, world_terrain_lightmap_path,
-        world_terrain_texture_paths, WorldSceneCamera, WorldSceneMarker, WorldScenePlugin,
-        WorldSceneState, WorldSceneTerrain, WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
+        apply_world_camera_zoom_delta, build_world_terrain_blend_mesh, build_world_terrain_mesh,
+        world_terrain_lightmap_path, world_terrain_texture_paths, WorldSceneCamera,
+        WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
+        WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
-    use crate::ClientRuntime;
     use crate::GraphicalRuntimeConfig;
+    use crate::{ClientRuntime, Config};
     use bevy::asset::AssetPlugin;
     use bevy::mesh::VertexAttributeValues;
     use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, Name, SceneRoot};
@@ -788,6 +842,7 @@ mod tests {
             offline_fixture: None,
             evidence_dir: None,
         });
+        app.insert_resource(Config::default());
         app.insert_resource(ClientRuntime::new());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::Mesh>::default());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::StandardMaterial>::default());
@@ -1154,6 +1209,82 @@ mod tests {
         let updated_offset = camera_translation - local_translation;
 
         assert!((updated_offset - initial_offset).length_squared() < f32::EPSILON);
+    }
+
+    #[test]
+    fn world_scene_camera_scales_with_saved_zoom() {
+        let mut app = spawn_ready_app();
+        app.world_mut().resource_mut::<Config>().camera.zoom = 2500;
+        load_world(&mut app);
+
+        let (camera_entity, local_marker_entity, base_offset, zoom_scale) = {
+            let state = app.world().resource::<WorldSceneState>();
+            let world = app.world();
+            let camera = world
+                .entity(
+                    *state
+                        .entities
+                        .iter()
+                        .find(|entity| world.entity(**entity).contains::<Camera3d>())
+                        .expect("world camera should exist"),
+                )
+                .get::<WorldSceneCamera>()
+                .expect("world camera should track base offset");
+            let camera_entity = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| world.entity(*entity).contains::<Camera3d>())
+                .expect("world camera should exist");
+            let local_marker_entity = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| {
+                    world
+                        .entity(*entity)
+                        .get::<WorldSceneMarker>()
+                        .map(|marker| {
+                            marker.family == RenderEntityFamily::LocalPlayer && marker.key == "0"
+                        })
+                        .unwrap_or(false)
+                })
+                .expect("local player marker should exist");
+
+            (
+                camera_entity,
+                local_marker_entity,
+                camera.base_offset,
+                world.resource::<Config>().camera.zoom_scale(),
+            )
+        };
+
+        let world = app.world();
+        let camera_translation = world
+            .entity(camera_entity)
+            .get::<bevy::prelude::Transform>()
+            .unwrap()
+            .translation;
+        let local_translation = world
+            .entity(local_marker_entity)
+            .get::<bevy::prelude::Transform>()
+            .unwrap()
+            .translation;
+        let actual_offset = camera_translation - local_translation;
+        let expected_offset = base_offset * zoom_scale;
+
+        assert!((actual_offset - expected_offset).length_squared() < f32::EPSILON);
+    }
+
+    #[test]
+    fn world_scene_camera_zoom_delta_clamps_to_the_config_range() {
+        let mut config = Config::default();
+
+        assert!(apply_world_camera_zoom_delta(&mut config, 1.0));
+        assert_eq!(config.camera.zoom, 1585);
+
+        assert!(apply_world_camera_zoom_delta(&mut config, -20.0));
+        assert_eq!(config.camera.zoom, 3000);
     }
 
     #[test]

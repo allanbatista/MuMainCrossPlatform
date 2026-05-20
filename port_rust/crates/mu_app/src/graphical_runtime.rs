@@ -7,11 +7,11 @@ use bevy::app::AppExit;
 use bevy::asset::AssetPlugin;
 use bevy::log::LogPlugin;
 use bevy::prelude::{
-    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, MessageWriter, PluginGroup,
-    PostUpdate, PreUpdate, Res, ResMut, Resource, Startup,
+    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, IntoScheduleConfigs, MessageReader,
+    MessageWriter, PluginGroup, PostUpdate, PreUpdate, Res, ResMut, Resource, Startup,
 };
 use bevy::window::{Window, WindowPlugin, WindowResolution};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
     EquipmentPlugin, GameShopPlugin, InventoryPlugin, MovementPlugin, MuHelperRuntimePlugin,
@@ -37,6 +37,7 @@ use crate::trade_shell::TradeShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
+use crate::Config;
 use crate::{AppState, Cli, ClientRuntime};
 
 const WINDOW_TITLE: &str = "MU Rust Client";
@@ -97,18 +98,21 @@ pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
 
 pub fn build_graphical_app(cli: &Cli, client_runtime: ClientRuntime) -> App {
     let config = GraphicalRuntimeConfig::from_cli(cli);
+    let client_config = load_graphical_config(&config.config_path);
     let mut app = App::new();
     app.add_plugins(default_plugins(&config));
-    configure_project_plugins(&mut app, config, client_runtime);
+    configure_project_plugins(&mut app, config, client_config, client_runtime);
     app
 }
 
 fn configure_project_plugins(
     app: &mut App,
     config: GraphicalRuntimeConfig,
+    client_config: Config,
     client_runtime: ClientRuntime,
 ) {
     app.insert_resource(config)
+        .insert_resource(client_config)
         .insert_resource(client_runtime)
         .insert_resource(ClearColor(CLEAR_COLOR))
         .add_plugins((
@@ -158,9 +162,42 @@ fn configure_project_plugins(
             (
                 sync_control_http_snapshot_from_runtime,
                 request_app_exit_when_control_http_exit,
+                save_graphical_config_on_exit_system.after(request_app_exit_when_control_http_exit),
             ),
         )
         .add_systems(Startup, setup_boot_camera_and_login_route);
+}
+
+fn load_graphical_config(path: impl AsRef<Utf8Path>) -> Config {
+    match Config::load(path) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("failed to load config: {error}");
+            Config::default()
+        }
+    }
+}
+
+fn save_graphical_config(config: &Config, path: impl AsRef<Utf8Path>) {
+    if let Err(error) = config.save(path) {
+        eprintln!("failed to save config: {error}");
+    }
+}
+
+fn save_graphical_config_on_exit_system(
+    config: Res<Config>,
+    runtime_config: Res<GraphicalRuntimeConfig>,
+    mut app_exit: Option<MessageReader<AppExit>>,
+) {
+    let Some(mut app_exit) = app_exit.take() else {
+        return;
+    };
+
+    if app_exit.read().next().is_none() {
+        return;
+    }
+
+    save_graphical_config(&config, &runtime_config.config_path);
 }
 
 fn default_plugins(config: &GraphicalRuntimeConfig) -> impl PluginGroup {
@@ -265,7 +302,7 @@ mod tests {
         GraphicalRuntimeConfig,
     };
     use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
-    use crate::{AppState, Cli, ClientRuntime, SessionPhase, SessionState};
+    use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
@@ -290,13 +327,16 @@ mod tests {
         configure_project_plugins(
             &mut app,
             GraphicalRuntimeConfig::from_cli(&cli),
+            Config::default(),
             ClientRuntime::new(),
         );
         let config = app.world().resource::<GraphicalRuntimeConfig>();
+        let client_config = app.world().resource::<Config>();
 
         assert_eq!(config.asset_root, cli.asset_root);
         assert_eq!(config.server, cli.server);
         assert_eq!(config.config_path, cli.config_path());
+        assert_eq!(client_config.camera.zoom, 1735);
     }
 
     #[test]

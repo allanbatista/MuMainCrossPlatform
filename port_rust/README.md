@@ -27,7 +27,8 @@ sessao de jogo completa.
   map, o lightmap do terreno do bundle, marcadores de player amostrados e
   modelos convertidos reais para objects, NPCs e monstros.
 - A camera do world route agora segue o avatar local para manter o movimento
-  enquadrado enquanto a cena 3D esta ativa.
+  enquadrado enquanto a cena 3D esta ativa; a roda do mouse ajusta o zoom e
+  o valor fica salvo em `[Camera] zoom` ao sair do cliente grafico.
 - O world route tambem mostra uma HUD visivel com as gauges e botoes do frame
   principal legado enquanto a cena 3D esta ativa.
 - O world route tambem mostra o stack visual de HUD com chat, minimap e
@@ -63,7 +64,7 @@ sessao de jogo completa.
   `docs/face_server.md`.
 - As configuracoes persistidas ficam em `config/client.toml`; elas cobrem
   video, audio, camera, controles, performance, rede e idioma, e nao gravam
-  segredos como senha ou token. O zoom orbital fica salvo em `[Camera] zoom`.
+  segredos como senha ou token. O zoom da camera fica salvo em `[Camera] zoom`.
 - O sistema de camera e os presets de zoom estao documentados em
   `docs/camera-system.md` e `docs/camera-config-zoom.md`.
 - A janela de options compartilhada usa o mesmo `config/client.toml` em login, character

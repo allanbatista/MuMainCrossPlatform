@@ -1,3 +1,4 @@
+use bevy::prelude::Resource;
 use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::Settings as AudioSettings;
 use mu_input::Bindings;
@@ -17,9 +18,11 @@ const DEFAULT_REDUCE_EFFECTS: bool = false;
 const DEFAULT_LAST_SERVER: &str = "127.127.127.127:44406";
 const DEFAULT_LANGUAGE: &str = "en";
 const DEFAULT_CAMERA_ZOOM: i32 = 1735;
+const MIN_CAMERA_ZOOM: i32 = 600;
+const MAX_CAMERA_ZOOM: i32 = 3000;
 const MIN_WINDOW_DIMENSION: u32 = 1;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Resource, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub video: VideoSettings,
@@ -209,7 +212,7 @@ impl Default for LocaleSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CameraSettings {
     pub zoom: i32,
@@ -217,7 +220,13 @@ pub struct CameraSettings {
 
 impl CameraSettings {
     pub fn normalized(self) -> Self {
-        self
+        Self {
+            zoom: self.zoom.clamp(MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM),
+        }
+    }
+
+    pub fn zoom_scale(&self) -> f32 {
+        self.zoom as f32 / DEFAULT_CAMERA_ZOOM as f32
     }
 }
 
@@ -266,9 +275,11 @@ fn canonical_locale(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, LocaleSettings};
+    use super::{CameraSettings, Config, LocaleSettings};
     use camino::Utf8PathBuf;
     use std::fs;
+
+    const EPSILON: f32 = 0.0001;
 
     fn temp_root() -> Utf8PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -357,5 +368,23 @@ mod tests {
         .normalized();
 
         assert_eq!(locale.language, "zh-TW");
+    }
+
+    #[test]
+    fn camera_zoom_normalizes_to_the_legacy_range() {
+        let low = CameraSettings { zoom: 0 }.normalized();
+        let high = CameraSettings { zoom: 9999 }.normalized();
+
+        assert_eq!(low.zoom, 600);
+        assert_eq!(high.zoom, 3000);
+    }
+
+    #[test]
+    fn camera_zoom_scale_matches_the_default_zoom() {
+        let default = CameraSettings::default();
+        let zoomed_in = CameraSettings { zoom: 2048 };
+
+        assert!((default.zoom_scale() - 1.0).abs() < EPSILON);
+        assert!((zoomed_in.zoom_scale() - (2048.0 / 1735.0)).abs() < EPSILON);
     }
 }
