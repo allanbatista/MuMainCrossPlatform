@@ -8,7 +8,7 @@ use mu_ui::{
     GuildUnionEntry, UiRoute, UiShellState,
 };
 
-use crate::SessionPhase;
+use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
 const CARD_MAX_WIDTH: f32 = 960.0;
@@ -35,6 +35,7 @@ pub(crate) struct GuildShellPlugin;
 struct GuildShellKey {
     route: UiRoute,
     phase: SessionPhase,
+    control_http_state: Option<GuildScreenState>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -65,9 +66,17 @@ fn sync_guild_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
+    control_http: Option<Res<ControlHttpState>>,
     mut state: ResMut<GuildShellState>,
 ) {
-    let current = guild_shell_key(ui_shell.current(), session_state.phase());
+    let control_http_state = control_http
+        .as_deref()
+        .and_then(guild_screen_state_for_control_http);
+    let current = guild_shell_key(
+        ui_shell.current(),
+        session_state.phase(),
+        control_http_state,
+    );
 
     let Some(key) = current else {
         clear_guild_shell(&mut commands, &mut state);
@@ -80,7 +89,7 @@ fn sync_guild_shell_system(
 
     clear_guild_shell(&mut commands, &mut state);
 
-    let Some(view) = guild_shell_view(key.route, key.phase) else {
+    let Some(view) = guild_shell_view(key.route, key.phase, key.control_http_state) else {
         return;
     };
 
@@ -89,24 +98,37 @@ fn sync_guild_shell_system(
     state.key = Some(key);
 }
 
-fn guild_shell_key(route: UiRoute, phase: SessionPhase) -> Option<GuildShellKey> {
+fn guild_shell_key(
+    route: UiRoute,
+    phase: SessionPhase,
+    control_http_state: Option<GuildScreenState>,
+) -> Option<GuildShellKey> {
     if !guild_shell_visible(route, phase) {
         return None;
     }
 
-    Some(GuildShellKey { route, phase })
+    Some(GuildShellKey {
+        route,
+        phase,
+        control_http_state,
+    })
 }
 
 fn guild_shell_visible(route: UiRoute, phase: SessionPhase) -> bool {
     route == UiRoute::Guild && phase != SessionPhase::Disconnected
 }
 
-fn guild_shell_view(route: UiRoute, phase: SessionPhase) -> Option<GuildShellView> {
+fn guild_shell_view(
+    route: UiRoute,
+    phase: SessionPhase,
+    control_http_state: Option<GuildScreenState>,
+) -> Option<GuildShellView> {
     if !guild_shell_visible(route, phase) {
         return None;
     }
 
-    let screen = guild_screen(guild_screen_state_for_phase(phase));
+    let state = control_http_state.unwrap_or_else(|| guild_screen_state_for_phase(phase));
+    let screen = guild_screen(state);
 
     Some(GuildShellView {
         title: screen.title,
@@ -122,6 +144,12 @@ fn guild_screen_state_for_phase(phase: SessionPhase) -> GuildScreenState {
         SessionPhase::LoggedIn => GuildScreenState::Summary,
         SessionPhase::Disconnected => GuildScreenState::NoGuild,
     }
+}
+
+fn guild_screen_state_for_control_http(
+    control_http: &ControlHttpState,
+) -> Option<GuildScreenState> {
+    control_http.snapshot().guild_screen_state
 }
 
 fn guild_shell_body(screen: &GuildScreen, phase: SessionPhase) -> String {
@@ -417,11 +445,24 @@ mod tests {
             GuildScreenState::NoGuild
         );
 
-        let view = guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn).expect("guild view");
+        let view =
+            guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn, None).expect("guild view");
         assert!(view.body.contains("state=summary"));
 
-        let view =
-            guild_shell_view(UiRoute::Guild, SessionPhase::ReadyForLogin).expect("guild view");
+        let view = guild_shell_view(UiRoute::Guild, SessionPhase::ReadyForLogin, None)
+            .expect("guild view");
         assert!(view.body.contains("state=no-guild"));
+    }
+
+    #[test]
+    fn guild_shell_prefers_control_http_override() {
+        let view = guild_shell_view(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            Some(GuildScreenState::Union),
+        )
+        .expect("guild view");
+
+        assert!(view.body.contains("state=union"));
     }
 }

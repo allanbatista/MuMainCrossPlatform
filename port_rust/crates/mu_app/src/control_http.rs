@@ -6,7 +6,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::{AppState, SessionPhase};
 use bevy::prelude::Resource;
-use mu_ui::UiRoute;
+use mu_ui::{FriendScreenState, GuildScreenState, UiRoute};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlCommand {
@@ -27,6 +27,15 @@ pub enum ControlCommand {
     Gate,
     Friend,
     Guild,
+    FriendRoster,
+    FriendInbox,
+    FriendCompose,
+    FriendChatRooms,
+    GuildSummary,
+    GuildMembers,
+    GuildUnion,
+    GuildNoGuild,
+    GuildError,
     Duel,
     Quests,
     MuHelper,
@@ -60,6 +69,15 @@ impl ControlCommand {
             Self::Gate => "gate",
             Self::Friend => "friend",
             Self::Guild => "guild",
+            Self::FriendRoster => "friend-roster",
+            Self::FriendInbox => "friend-inbox",
+            Self::FriendCompose => "friend-compose",
+            Self::FriendChatRooms => "friend-chat-rooms",
+            Self::GuildSummary => "guild-summary",
+            Self::GuildMembers => "guild-members",
+            Self::GuildUnion => "guild-union",
+            Self::GuildNoGuild => "guild-no-guild",
+            Self::GuildError => "guild-error",
             Self::Duel => "duel",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
@@ -97,6 +115,17 @@ impl ControlCommand {
             "gate" => Some(Self::Gate),
             "friend" => Some(Self::Friend),
             "guild" => Some(Self::Guild),
+            "friend-roster" | "friend_roster" => Some(Self::FriendRoster),
+            "friend-inbox" | "friend_inbox" => Some(Self::FriendInbox),
+            "friend-compose" | "friend_compose" => Some(Self::FriendCompose),
+            "friend-chat-rooms" | "friend_chat_rooms" | "friend-chat_rooms" => {
+                Some(Self::FriendChatRooms)
+            }
+            "guild-summary" | "guild_summary" => Some(Self::GuildSummary),
+            "guild-members" | "guild_members" => Some(Self::GuildMembers),
+            "guild-union" | "guild_union" => Some(Self::GuildUnion),
+            "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
+            "guild-error" | "guild_error" => Some(Self::GuildError),
             "duel" => Some(Self::Duel),
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
@@ -120,6 +149,8 @@ pub struct ControlSnapshot {
     pub session_phase: SessionPhase,
     pub last_command: Option<ControlCommand>,
     pub selected_character_name: Option<String>,
+    pub friend_screen_state: Option<FriendScreenState>,
+    pub guild_screen_state: Option<GuildScreenState>,
     pub command_count: u64,
 }
 
@@ -131,6 +162,8 @@ impl ControlSnapshot {
             session_phase: initial_session_phase(state),
             last_command: None,
             selected_character_name: None,
+            friend_screen_state: None,
+            guild_screen_state: None,
             command_count: 0,
         }
     }
@@ -229,12 +262,77 @@ impl ControlSnapshot {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Friend;
                 self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = None;
                 false
             }
             ControlCommand::Guild => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Guild;
                 self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = None;
+                false
+            }
+            ControlCommand::FriendRoster => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = Some(FriendScreenState::Roster);
+                false
+            }
+            ControlCommand::FriendInbox => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = Some(FriendScreenState::Inbox);
+                false
+            }
+            ControlCommand::FriendCompose => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = Some(FriendScreenState::Compose);
+                false
+            }
+            ControlCommand::FriendChatRooms => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = Some(FriendScreenState::ChatRooms);
+                false
+            }
+            ControlCommand::GuildSummary => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Summary);
+                false
+            }
+            ControlCommand::GuildMembers => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Members);
+                false
+            }
+            ControlCommand::GuildUnion => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Union);
+                false
+            }
+            ControlCommand::GuildNoGuild => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::NoGuild);
+                false
+            }
+            ControlCommand::GuildError => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Error);
                 false
             }
             ControlCommand::Duel => {
@@ -311,14 +409,24 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let friend_screen_state = self
+            .friend_screen_state
+            .map(|state| format!("\"{}\"", state.as_str()))
+            .unwrap_or_else(|| "null".to_string());
+        let guild_screen_state = self
+            .guild_screen_state
+            .map(|state| format!("\"{}\"", state.as_str()))
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
             selected_character_name,
+            friend_screen_state,
+            guild_screen_state,
             self.command_count
         )
     }
@@ -767,7 +875,7 @@ impl HttpResponse {
 mod tests {
     use super::{spawn, ControlCommand, ControlSnapshot};
     use crate::{AppState, SessionPhase};
-    use mu_ui::UiRoute;
+    use mu_ui::{FriendScreenState, GuildScreenState, UiRoute};
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
@@ -793,12 +901,12 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":1}"#
         );
     }
 
     #[test]
-    fn command_parser_recognizes_game_shop_and_mu_helper_aliases() {
+    fn command_parser_recognizes_game_shop_mu_helper_and_social_view_aliases() {
         assert_eq!(
             ControlCommand::parse("game-shop"),
             Some(ControlCommand::GameShop)
@@ -838,8 +946,80 @@ mod tests {
         assert_eq!(ControlCommand::Friend.as_str(), "friend");
         assert_eq!(ControlCommand::parse("guild"), Some(ControlCommand::Guild));
         assert_eq!(ControlCommand::Guild.as_str(), "guild");
+        assert_eq!(
+            ControlCommand::parse("friend-roster"),
+            Some(ControlCommand::FriendRoster)
+        );
+        assert_eq!(
+            ControlCommand::parse("friend_inbox"),
+            Some(ControlCommand::FriendInbox)
+        );
+        assert_eq!(
+            ControlCommand::parse("friend-compose"),
+            Some(ControlCommand::FriendCompose)
+        );
+        assert_eq!(
+            ControlCommand::parse("friend-chat-rooms"),
+            Some(ControlCommand::FriendChatRooms)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-summary"),
+            Some(ControlCommand::GuildSummary)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_members"),
+            Some(ControlCommand::GuildMembers)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-union"),
+            Some(ControlCommand::GuildUnion)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-no-guild"),
+            Some(ControlCommand::GuildNoGuild)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-error"),
+            Some(ControlCommand::GuildError)
+        );
         assert_eq!(ControlCommand::parse("duel"), Some(ControlCommand::Duel));
         assert_eq!(ControlCommand::Duel.as_str(), "duel");
+    }
+
+    #[test]
+    fn snapshot_tracks_social_view_overrides() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.apply_command(ControlCommand::FriendCompose);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Friend);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(
+            snapshot.friend_screen_state,
+            Some(FriendScreenState::Compose)
+        );
+        assert_eq!(snapshot.guild_screen_state, None);
+
+        snapshot.apply_command(ControlCommand::GuildMembers);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(
+            snapshot.friend_screen_state,
+            Some(FriendScreenState::Compose)
+        );
+        assert_eq!(snapshot.guild_screen_state, Some(GuildScreenState::Members));
+
+        snapshot.apply_command(ControlCommand::Friend);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Friend);
+        assert_eq!(snapshot.friend_screen_state, None);
+        assert_eq!(snapshot.guild_screen_state, Some(GuildScreenState::Members));
+
+        snapshot.apply_command(ControlCommand::Guild);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.guild_screen_state, None);
     }
 
     #[test]
@@ -1030,6 +1210,20 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=friend-compose HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"friend""#));
+        assert!(body.contains(r#""friend_screen_state":"compose""#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=guild-members HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"guild""#));
+        assert!(body.contains(r#""guild_screen_state":"members""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=mu-helper HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"mu-helper""#));
@@ -1050,7 +1244,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 15);
+        assert_eq!(final_snapshot.command_count, 17);
     }
 
     #[test]

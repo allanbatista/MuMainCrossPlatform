@@ -75,10 +75,12 @@ in the local config file instead of being typed every time.
   runtime or the local control HTTP smoke path.
 - The friend route now opens a visible Bevy shell that mirrors the mail
   manager snapshot and can be driven from the local control HTTP smoke path
-  with `friend`.
+  with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
+  `friend-chat-rooms`.
 - The guild route now opens a visible Bevy shell that mirrors the guild
   snapshot and can be driven from the local control HTTP smoke path with
-  `guild`.
+  `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
+  and `guild-error`.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.
@@ -124,9 +126,11 @@ in the local config file instead of being typed every time.
 - `POST /command?name=trade` can step into the visible trade route shell for
   local QA smoke.
 - `POST /command?name=friend` can step into the visible friend route shell
-  for local QA smoke.
+  for local QA smoke. `friend-roster`, `friend-inbox`, `friend-compose`, and
+  `friend-chat-rooms` select the matching friend subview.
 - `POST /command?name=guild` can step into the visible guild route shell for
-  local QA smoke.
+  local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
+  `guild-no-guild`, and `guild-error` select the matching guild subview.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for

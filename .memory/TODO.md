@@ -23,3 +23,10 @@ actions if parity is still required.
 The Rust client now exposes a visible duel shell, but live duel interaction
 and networked duel state changes remain out of scope for this slice. The next
 duel-related pass should wire the interactive flow if parity is still needed.
+
+# [medium] Friend/guild live packet wiring
+
+The friend and guild shells now support local control-http view overrides,
+but the actual friend, letter, and guild gameplay packet handlers are still
+snapshot-only. The next slice should wire the live networking path if parity
+is still required.

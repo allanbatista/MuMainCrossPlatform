@@ -13,8 +13,12 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
 
 - `POST /command?name=friend` opens the friend shell in `mu_client` and
   mirrors the current `MailManager` snapshot.
+- `POST /command?name=friend-roster`, `friend-inbox`, `friend-compose`, and
+  `friend-chat-rooms` smoke the matching friend subviews.
 - `POST /command?name=guild` opens the guild shell in `mu_client` and mirrors
   the current guild snapshot model.
+- `POST /command?name=guild-summary`, `guild-members`, `guild-union`,
+  `guild-no-guild`, and `guild-error` smoke the matching guild subviews.
 - Both shells clear when the route changes away or the session disconnects.
 
 ## Friend

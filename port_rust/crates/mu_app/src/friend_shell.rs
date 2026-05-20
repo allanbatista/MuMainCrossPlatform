@@ -9,7 +9,7 @@ use mu_ui::{
     LetterEntry, UiRoute, UiShellState,
 };
 
-use crate::SessionPhase;
+use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
 const CARD_MAX_WIDTH: f32 = 960.0;
@@ -39,6 +39,7 @@ struct FriendShellKey {
     route: UiRoute,
     phase: SessionPhase,
     mail: MailManager,
+    control_http_state: Option<FriendScreenState>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -70,9 +71,18 @@ fn sync_friend_shell_system(
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
     mail: Res<MailManager>,
+    control_http: Option<Res<ControlHttpState>>,
     mut state: ResMut<FriendShellState>,
 ) {
-    let current = friend_shell_key(ui_shell.current(), session_state.phase(), &mail);
+    let control_http_state = control_http
+        .as_deref()
+        .and_then(friend_screen_state_for_control_http);
+    let current = friend_shell_key(
+        ui_shell.current(),
+        session_state.phase(),
+        &mail,
+        control_http_state,
+    );
 
     let Some(key) = current else {
         clear_friend_shell(&mut commands, &mut state);
@@ -85,7 +95,8 @@ fn sync_friend_shell_system(
 
     clear_friend_shell(&mut commands, &mut state);
 
-    let Some(view) = friend_shell_view(key.route, key.phase, &key.mail) else {
+    let Some(view) = friend_shell_view(key.route, key.phase, &key.mail, key.control_http_state)
+    else {
         return;
     };
 
@@ -98,6 +109,7 @@ fn friend_shell_key(
     route: UiRoute,
     phase: SessionPhase,
     mail: &MailManager,
+    control_http_state: Option<FriendScreenState>,
 ) -> Option<FriendShellKey> {
     if !friend_shell_visible(route, phase) {
         return None;
@@ -107,6 +119,7 @@ fn friend_shell_key(
         route,
         phase,
         mail: mail.clone(),
+        control_http_state,
     })
 }
 
@@ -118,12 +131,13 @@ fn friend_shell_view(
     route: UiRoute,
     phase: SessionPhase,
     mail: &MailManager,
+    control_http_state: Option<FriendScreenState>,
 ) -> Option<FriendShellView> {
     if !friend_shell_visible(route, phase) {
         return None;
     }
 
-    let state = friend_screen_state_for_mail(mail);
+    let state = control_http_state.unwrap_or_else(|| friend_screen_state_for_mail(mail));
     let screen = friend_screen(state, mail);
 
     Some(FriendShellView {
@@ -141,6 +155,12 @@ fn friend_screen_state_for_mail(mail: &MailManager) -> FriendScreenState {
         MailMode::Compose => FriendScreenState::Compose,
         MailMode::Error => FriendScreenState::Error,
     }
+}
+
+fn friend_screen_state_for_control_http(
+    control_http: &ControlHttpState,
+) -> Option<FriendScreenState> {
+    control_http.snapshot().friend_screen_state
 }
 
 fn friend_shell_body(screen: &FriendScreen, phase: SessionPhase, mail: &MailManager) -> String {
@@ -453,13 +473,13 @@ mod tests {
             friend_screen_state_for_mail(&mail),
             FriendScreenState::Roster
         );
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
             .expect("friend shell view");
         assert!(view.body.contains("state=roster"));
 
         let mut mail = MailManager::new();
         mail.select_letter(0x0102_0304);
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
@@ -469,7 +489,7 @@ mod tests {
 
         let mut mail = MailManager::new();
         mail.set_compose("Blade", "Re: Castle prep", "Meet at Lorencia.");
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
@@ -479,12 +499,27 @@ mod tests {
 
         let mut mail = MailManager::new();
         mail.mark_error();
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
             FriendScreenState::Error
         );
         assert!(view.body.contains("state=error"));
+    }
+
+    #[test]
+    fn friend_shell_prefers_control_http_override() {
+        let mail = MailManager::new();
+
+        let view = friend_shell_view(
+            UiRoute::Friend,
+            SessionPhase::LoggedIn,
+            &mail,
+            Some(FriendScreenState::ChatRooms),
+        )
+        .expect("friend shell view");
+
+        assert!(view.body.contains("state=chat-rooms"));
     }
 }

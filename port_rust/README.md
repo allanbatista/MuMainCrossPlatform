@@ -97,7 +97,10 @@ sessao de jogo completa.
   `docs/trade-player-shop-mail.md`.
 - A camada de friend e guild esta documentada em `docs/friend-guild.md`.
 - A camada de friend e guild agora tambem abre shells visiveis no runtime
-  grafico e pode ser acionada por `friend` e `guild` no smoke local.
+  grafico e pode ser acionada por `friend` e `guild` no smoke local; os
+  comandos `friend-roster`, `friend-inbox`, `friend-compose`,
+  `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
+  `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.
