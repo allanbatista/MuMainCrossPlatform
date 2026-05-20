@@ -4,6 +4,9 @@ use mu_assets::{TerrainSceneObject, TerrainWorldSummary};
 use crate::world::WorldManager;
 
 const SNAPSHOT_OBJECT_SAMPLE_LIMIT: usize = 2;
+pub const TERRAIN_TILE_SCALE: f64 = 100.0;
+pub const TERRAIN_TILE_CENTER_OFFSET: f64 = 0.5;
+pub const LOCAL_PLAYER_HEIGHT: f64 = 1.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorldEntitiesState {
@@ -59,6 +62,18 @@ impl Default for WorldEntityPose {
     fn default() -> Self {
         Self::identity()
     }
+}
+
+pub fn world_position_from_tile(position_x: u8, position_y: u8) -> [f64; 3] {
+    [
+        tile_center(position_x),
+        LOCAL_PLAYER_HEIGHT,
+        tile_center(position_y),
+    ]
+}
+
+pub fn world_tile_from_position(position: [f64; 3]) -> [u8; 2] {
+    [tile_index(position[0]), tile_index(position[2])]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -219,6 +234,24 @@ impl WorldEntitiesManager {
         self.local_player.as_mut()
     }
 
+    pub fn local_player_key(&self) -> Option<u32> {
+        self.local_player
+            .as_ref()
+            .map(|local_player| local_player.key)
+    }
+
+    pub fn local_player_position(&self) -> Option<[f64; 3]> {
+        self.local_player
+            .as_ref()
+            .map(|local_player| local_player.pose.position)
+    }
+
+    pub fn local_player_tile_position(&self) -> Option<[u8; 2]> {
+        self.local_player
+            .as_ref()
+            .map(|local_player| world_tile_from_position(local_player.pose.position))
+    }
+
     pub fn remote_players(&self) -> &[WorldPlayerSpawn] {
         &self.remote_players
     }
@@ -256,6 +289,18 @@ impl WorldEntitiesManager {
 
     pub fn clear_local_player(&mut self) {
         self.local_player = None;
+    }
+
+    pub fn set_local_player_position(&mut self, position: [f64; 3]) {
+        let Some(local_player) = self.local_player.as_mut() else {
+            return;
+        };
+
+        local_player.pose.position = position;
+    }
+
+    pub fn set_local_player_tile_position(&mut self, position_x: u8, position_y: u8) {
+        self.set_local_player_position(world_position_from_tile(position_x, position_y));
     }
 
     pub fn translate_local_player(&mut self, delta: [f64; 3]) {
@@ -376,13 +421,32 @@ fn file_stem(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
+fn tile_center(tile: u8) -> f64 {
+    (f64::from(tile) + TERRAIN_TILE_CENTER_OFFSET) * TERRAIN_TILE_SCALE
+}
+
+fn tile_index(value: f64) -> u8 {
+    if !value.is_finite() {
+        return 0;
+    }
+
+    let tile = (value / TERRAIN_TILE_SCALE).floor();
+    if tile <= 0.0 {
+        0
+    } else if tile >= u8::MAX as f64 {
+        u8::MAX
+    } else {
+        tile as u8
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bevy::prelude::App;
 
     use super::{
-        WorldEntitiesManager, WorldEntitiesPlugin, WorldEntitiesState, WorldEntityPose,
-        WorldObjectSpawn, WorldPlayerRole, WorldPlayerSpawn,
+        world_position_from_tile, WorldEntitiesManager, WorldEntitiesPlugin, WorldEntitiesState,
+        WorldEntityPose, WorldObjectSpawn, WorldPlayerRole, WorldPlayerSpawn,
     };
 
     #[test]
@@ -472,5 +536,24 @@ mod tests {
 
         let local_player = manager.local_player().unwrap();
         assert_eq!(local_player.pose.position, [5.0, 2.0, 1.5]);
+    }
+
+    #[test]
+    fn world_entities_manager_sets_authoritative_local_player_tile_position() {
+        let mut manager = WorldEntitiesManager::new();
+        manager.set_local_player(WorldPlayerSpawn::new(
+            WorldPlayerRole::Local,
+            "Hero",
+            17,
+            "data/character/dark_knight.glb",
+            WorldEntityPose::new([1.0, 2.0, 3.0], [0.0, 90.0, 0.0], [1.0, 1.0, 1.0]),
+        ));
+
+        manager.set_local_player_tile_position(3, 4);
+
+        let local_player = manager.local_player().unwrap();
+        assert_eq!(local_player.pose.position, world_position_from_tile(3, 4));
+        assert_eq!(manager.local_player_tile_position(), Some([3, 4]));
+        assert_eq!(manager.local_player_key(), Some(17));
     }
 }

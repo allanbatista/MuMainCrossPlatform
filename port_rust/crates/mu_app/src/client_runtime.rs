@@ -165,6 +165,17 @@ impl ClientRuntime {
         self.world_error = None;
     }
 
+    pub fn set_local_player_position(&mut self, position: [f64; 3]) {
+        self.world_entities.set_local_player_position(position);
+        self.sync_world_projection();
+    }
+
+    pub fn set_local_player_tile_position(&mut self, position_x: u8, position_y: u8) {
+        self.world_entities
+            .set_local_player_tile_position(position_x, position_y);
+        self.sync_world_projection();
+    }
+
     pub fn translate_local_player(&mut self, delta: [f64; 3]) {
         self.world_entities.translate_local_player(delta);
         self.sync_world_projection();
@@ -448,6 +459,38 @@ mod tests {
         assert!(runtime.snapshot().contains("world=ready"));
         assert!(runtime.snapshot().contains("party_number=0"));
         assert!(runtime.snapshot().contains("render_entities=ready"));
+    }
+
+    #[test]
+    fn runtime_applies_authoritative_local_player_tile_position() {
+        let world_root = repo_world_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let mut runtime = ClientRuntime::new();
+
+        runtime.load_world_bundle(bundle);
+        runtime.set_local_player_tile_position(3, 4);
+
+        let expected = mu_gameplay::world_position_from_tile(3, 4);
+        assert_eq!(
+            runtime
+                .world_entities()
+                .local_player()
+                .unwrap()
+                .pose
+                .position,
+            expected
+        );
+        assert_eq!(
+            runtime
+                .render_entities()
+                .catalog()
+                .local_player
+                .as_ref()
+                .unwrap()
+                .pose
+                .position,
+            expected
+        );
     }
 
     #[test]

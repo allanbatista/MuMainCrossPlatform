@@ -1,7 +1,7 @@
-# No pending work
+# Pending work
 
-The previously listed follow-ups were already completed in code or were stale
-after later port work landed. Add new entries here only for real pending work.
+Track real follow-up work here. Remove entries only when the debt is no longer
+relevant.
 
 # [critical]Complete playable Rust Bevy parity
 
@@ -19,3 +19,9 @@ The local avatar is now seeded and moves in the world shell, but the motion is
 still client-side. Next work is to replace the placeholder spawn with real
 game-server authority, keep remote/local pose sync consistent, and begin the
 HUD/chat/inventory hooks that build the playable loop.
+
+# [medium]Session-backed UI flow
+
+The movement-authority slice is done. Next work is to finish the
+login/server-select/character-select HUD flow in the Bevy runtime so the
+client can progress through the UI instead of only booting into world state.

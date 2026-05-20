@@ -52,8 +52,9 @@ pub use duel::{
     MAX_DUEL_CHANNELS, MAX_DUEL_PLAYERS, MAX_USERNAME_SIZE,
 };
 pub use entities::{
-    WorldEntitiesManager, WorldEntitiesPlugin, WorldEntitiesState, WorldEntityPose,
-    WorldObjectSpawn, WorldPlayerRole, WorldPlayerSpawn,
+    world_position_from_tile, world_tile_from_position, WorldEntitiesManager, WorldEntitiesPlugin,
+    WorldEntitiesState, WorldEntityPose, WorldObjectSpawn, WorldPlayerRole, WorldPlayerSpawn,
+    LOCAL_PLAYER_HEIGHT, TERRAIN_TILE_CENTER_OFFSET, TERRAIN_TILE_SCALE,
 };
 pub use equipment::{EquipmentError, EquipmentManager, EquipmentPlugin, MAX_EQUIPMENT_SLOTS};
 pub use events::{EventKind, EventManager, EventMode, EventPlugin};
