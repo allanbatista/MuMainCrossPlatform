@@ -4,13 +4,24 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use crate::AppState;
+use crate::{AppState, SessionPhase};
+use bevy::prelude::Resource;
+use mu_ui::UiRoute;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlCommand {
     Boot,
     AssetCheckFailed,
     ReadyForLogin,
+    ServerSelect,
+    CharacterSelect,
+    Loading,
+    World,
+    LoginSuccess,
+    LoginFailure,
+    LogoutLogin,
+    LogoutCharacter,
+    Disconnect,
     Exit,
     Ping,
 }
@@ -21,6 +32,15 @@ impl ControlCommand {
             Self::Boot => "boot",
             Self::AssetCheckFailed => "asset-check-failed",
             Self::ReadyForLogin => "ready-for-login",
+            Self::ServerSelect => "server-select",
+            Self::CharacterSelect => "character-select",
+            Self::Loading => "loading",
+            Self::World => "world",
+            Self::LoginSuccess => "login-success",
+            Self::LoginFailure => "login-failure",
+            Self::LogoutLogin => "logout-login",
+            Self::LogoutCharacter => "logout-character",
+            Self::Disconnect => "disconnect",
             Self::Exit => "exit",
             Self::Ping => "ping",
         }
@@ -31,6 +51,19 @@ impl ControlCommand {
             "boot" => Some(Self::Boot),
             "asset-check-failed" | "asset_check_failed" => Some(Self::AssetCheckFailed),
             "ready-for-login" | "ready_for_login" => Some(Self::ReadyForLogin),
+            "server-select" | "server_select" | "server-list" | "server_list" => {
+                Some(Self::ServerSelect)
+            }
+            "character-select" | "character_select" | "character-list" | "character_list" => {
+                Some(Self::CharacterSelect)
+            }
+            "loading" => Some(Self::Loading),
+            "world" => Some(Self::World),
+            "login-success" | "login_success" => Some(Self::LoginSuccess),
+            "login-failure" | "login_failure" => Some(Self::LoginFailure),
+            "logout-login" | "logout_login" => Some(Self::LogoutLogin),
+            "logout-character" | "logout_character" => Some(Self::LogoutCharacter),
+            "disconnect" => Some(Self::Disconnect),
             "exit" => Some(Self::Exit),
             "ping" => Some(Self::Ping),
             _ => None,
@@ -41,6 +74,8 @@ impl ControlCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlSnapshot {
     pub state: AppState,
+    pub ui_route: UiRoute,
+    pub session_phase: SessionPhase,
     pub last_command: Option<ControlCommand>,
     pub command_count: u64,
 }
@@ -49,6 +84,8 @@ impl ControlSnapshot {
     pub fn new(state: AppState) -> Self {
         Self {
             state,
+            ui_route: initial_ui_route(state),
+            session_phase: initial_session_phase(state),
             last_command: None,
             command_count: 0,
         }
@@ -61,18 +98,76 @@ impl ControlSnapshot {
         match command {
             ControlCommand::Boot => {
                 self.state = AppState::Boot;
+                self.ui_route = UiRoute::Boot;
+                self.session_phase = SessionPhase::ReadyForLogin;
                 false
             }
             ControlCommand::AssetCheckFailed => {
                 self.state = AppState::AssetCheckFailed;
+                self.ui_route = UiRoute::Error;
+                self.session_phase = SessionPhase::ReadyForLogin;
                 false
             }
             ControlCommand::ReadyForLogin => {
                 self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Login;
+                self.session_phase = SessionPhase::ReadyForLogin;
+                false
+            }
+            ControlCommand::ServerSelect => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::ServerSelect;
+                false
+            }
+            ControlCommand::CharacterSelect => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterSelect;
+                false
+            }
+            ControlCommand::Loading => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Loading;
+                false
+            }
+            ControlCommand::World => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::World;
+                false
+            }
+            ControlCommand::LoginSuccess => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterSelect;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::LoginFailure => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Login;
+                self.session_phase = SessionPhase::ReadyForLogin;
+                false
+            }
+            ControlCommand::LogoutLogin => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Login;
+                self.session_phase = SessionPhase::ReadyForLogin;
+                false
+            }
+            ControlCommand::LogoutCharacter => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterSelect;
+                self.session_phase = SessionPhase::ReadyForLogin;
+                false
+            }
+            ControlCommand::Disconnect => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Login;
+                self.session_phase = SessionPhase::Disconnected;
                 false
             }
             ControlCommand::Exit => {
                 self.state = AppState::Exit;
+                self.ui_route = UiRoute::Error;
+                self.session_phase = SessionPhase::Disconnected;
                 true
             }
             ControlCommand::Ping => false,
@@ -86,11 +181,56 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"last_command\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"command_count\":{}}}",
             self.state.as_str(),
+            self.ui_route.slug(),
+            self.session_phase.as_str(),
             last_command,
             self.command_count
         )
+    }
+}
+
+#[derive(Debug, Clone, Resource)]
+pub struct ControlHttpState {
+    snapshot: Arc<Mutex<ControlSnapshot>>,
+    last_applied_command_count: u64,
+}
+
+impl ControlHttpState {
+    pub fn new(snapshot: Arc<Mutex<ControlSnapshot>>) -> Self {
+        Self {
+            snapshot,
+            last_applied_command_count: 0,
+        }
+    }
+
+    pub fn snapshot(&self) -> ControlSnapshot {
+        self.snapshot
+            .lock()
+            .expect("control snapshot mutex poisoned")
+            .clone()
+    }
+
+    pub fn last_applied_command_count(&self) -> u64 {
+        self.last_applied_command_count
+    }
+
+    pub fn mark_applied(&mut self, command_count: u64) {
+        self.last_applied_command_count = command_count;
+    }
+
+    pub fn sync_from_runtime(&self, ui_route: UiRoute, session_phase: SessionPhase) {
+        let mut snapshot = self
+            .snapshot
+            .lock()
+            .expect("control snapshot mutex poisoned");
+        snapshot.ui_route = ui_route;
+        snapshot.session_phase = session_phase;
+    }
+
+    pub fn shared_snapshot(&self) -> Arc<Mutex<ControlSnapshot>> {
+        Arc::clone(&self.snapshot)
     }
 }
 
@@ -105,6 +245,10 @@ pub struct ControlServerHandle {
 impl ControlServerHandle {
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+
+    pub fn shared_snapshot(&self) -> Arc<Mutex<ControlSnapshot>> {
+        Arc::clone(&self.snapshot)
     }
 
     pub fn snapshot(&self) -> ControlSnapshot {
@@ -169,6 +313,22 @@ pub fn serve(bind_addr: SocketAddr, initial_state: AppState) -> io::Result<()> {
     let shutdown = Arc::new(AtomicBool::new(false));
 
     serve_loop(listener, snapshot, shutdown)
+}
+
+fn initial_ui_route(state: AppState) -> UiRoute {
+    match state {
+        AppState::Boot => UiRoute::Boot,
+        AppState::AssetCheckFailed => UiRoute::Error,
+        AppState::ReadyForLogin => UiRoute::Login,
+        AppState::Exit => UiRoute::Error,
+    }
+}
+
+fn initial_session_phase(state: AppState) -> SessionPhase {
+    match state {
+        AppState::Exit => SessionPhase::Disconnected,
+        _ => SessionPhase::ReadyForLogin,
+    }
 }
 
 fn serve_loop(
@@ -445,7 +605,8 @@ impl HttpResponse {
 #[cfg(test)]
 mod tests {
     use super::{spawn, ControlCommand, ControlSnapshot};
-    use crate::AppState;
+    use crate::{AppState, SessionPhase};
+    use mu_ui::UiRoute;
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
@@ -471,8 +632,21 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","last_command":"ping","command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","command_count":1}"#
         );
+    }
+
+    #[test]
+    fn snapshot_tracks_route_and_session_state() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Login);
+        assert_eq!(snapshot.session_phase, SessionPhase::ReadyForLogin);
+
+        snapshot.apply_command(ControlCommand::LoginSuccess);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterSelect);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
     }
 
     #[test]
@@ -485,6 +659,8 @@ mod tests {
             "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""state":"boot""#));
+        assert!(body.contains(r#""ui_route":"boot""#));
+        assert!(body.contains(r#""session_phase":"ready-for-login""#));
 
         let (_, body) = send_request(
             address,
@@ -492,6 +668,15 @@ mod tests {
         );
         assert!(body.contains(r#""state":"ready-for-login""#));
         assert!(body.contains(r#""last_command":"ready-for-login""#));
+        assert!(body.contains(r#""ui_route":"login""#));
+        assert!(body.contains(r#""session_phase":"ready-for-login""#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=login-success HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"character-select""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
 
         let (_, body) = send_request(
             address,
@@ -501,7 +686,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 2);
+        assert_eq!(final_snapshot.command_count, 3);
     }
 
     #[test]

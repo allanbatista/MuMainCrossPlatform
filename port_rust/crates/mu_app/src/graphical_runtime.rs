@@ -1,9 +1,12 @@
 use std::process::ExitCode;
 
+use crate::control_http::{self, ControlHttpState};
+use crate::SessionState;
+use bevy::app::AppExit;
 use bevy::log::LogPlugin;
 use bevy::prelude::{
-    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, PluginGroup, ResMut, Resource,
-    Startup,
+    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, MessageWriter, PluginGroup,
+    PostUpdate, PreUpdate, Res, ResMut, Resource, Startup,
 };
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
@@ -18,7 +21,7 @@ use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
-use crate::{Cli, ClientRuntime};
+use crate::{AppState, Cli, ClientRuntime};
 
 const WINDOW_TITLE: &str = "MU Rust Client";
 const WINDOW_WIDTH: u32 = 1280;
@@ -49,8 +52,30 @@ impl GraphicalRuntimeConfig {
 }
 
 pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
+    let control_http = match cli.control_http {
+        Some(address) => match control_http::spawn(address, AppState::ReadyForLogin) {
+            Ok(handle) => Some(handle),
+            Err(error) => {
+                eprintln!("control-http bind failed: {error}");
+                return ExitCode::from(1);
+            }
+        },
+        None => None,
+    };
+
     let mut app = build_graphical_app(cli, client_runtime);
+    if let Some(handle) = control_http.as_ref() {
+        println!("control-http listening on http://{}", handle.address());
+        app.insert_resource(ControlHttpState::new(handle.shared_snapshot()));
+    }
+
     app.run();
+
+    if let Some(handle) = control_http {
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
     ExitCode::SUCCESS
 }
 
@@ -89,6 +114,14 @@ fn configure_project_plugins(
             BootstrapRuntimePlugin,
             WorldScenePlugin,
         ))
+        .add_systems(PreUpdate, sync_control_http_snapshot_to_runtime)
+        .add_systems(
+            PostUpdate,
+            (
+                sync_control_http_snapshot_from_runtime,
+                request_app_exit_when_control_http_exit,
+            ),
+        )
         .add_systems(Startup, setup_boot_camera_and_login_route);
 }
 
@@ -110,14 +143,74 @@ fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMu
     ui_shell.set_route(UiRoute::Login);
 }
 
+fn sync_control_http_snapshot_to_runtime(
+    control_http: Option<ResMut<ControlHttpState>>,
+    mut session_state: ResMut<SessionState>,
+    mut ui_shell: ResMut<UiShellState>,
+) {
+    let Some(mut control_http) = control_http else {
+        return;
+    };
+
+    let snapshot = control_http.snapshot();
+
+    if snapshot.command_count <= control_http.last_applied_command_count() {
+        return;
+    }
+
+    if ui_shell.current() != snapshot.ui_route {
+        ui_shell.set_route(snapshot.ui_route);
+    }
+
+    if session_state.phase() != snapshot.session_phase {
+        session_state.sync_phase(snapshot.session_phase);
+    }
+
+    control_http.mark_applied(snapshot.command_count);
+}
+
+fn sync_control_http_snapshot_from_runtime(
+    control_http: Option<ResMut<ControlHttpState>>,
+    session_state: Res<SessionState>,
+    ui_shell: Res<UiShellState>,
+) {
+    let Some(control_http) = control_http else {
+        return;
+    };
+
+    let snapshot = control_http.snapshot();
+    if snapshot.command_count != control_http.last_applied_command_count() {
+        return;
+    }
+
+    control_http.sync_from_runtime(ui_shell.current(), session_state.phase());
+}
+
+fn request_app_exit_when_control_http_exit(
+    control_http: Option<Res<ControlHttpState>>,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    let Some(control_http) = control_http else {
+        return;
+    };
+
+    if control_http.snapshot().state == AppState::Exit {
+        app_exit.write(AppExit::Success);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        configure_project_plugins, setup_boot_camera_and_login_route, GraphicalRuntimeConfig,
+        configure_project_plugins, request_app_exit_when_control_http_exit,
+        setup_boot_camera_and_login_route, sync_control_http_snapshot_to_runtime,
+        GraphicalRuntimeConfig,
     };
-    use crate::{Cli, ClientRuntime};
+    use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
+    use crate::{AppState, Cli, ClientRuntime, SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{UiRoute, UiShellState};
+    use std::sync::{Arc, Mutex};
 
     fn cli() -> Cli {
         Cli {
@@ -157,5 +250,52 @@ mod tests {
 
         let ui_shell = app.world().resource::<UiShellState>();
         assert_eq!(ui_shell.current(), UiRoute::Login);
+    }
+
+    #[test]
+    fn control_http_snapshot_drives_the_runtime_route_and_session() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        snapshot
+            .lock()
+            .expect("control snapshot mutex poisoned")
+            .apply_command(ControlCommand::LoginSuccess);
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(ControlHttpState::new(snapshot));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        app.update();
+
+        let ui_shell = app.world().resource::<UiShellState>();
+        let session_state = app.world().resource::<SessionState>();
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert_eq!(session_state.phase(), SessionPhase::LoggedIn);
+    }
+
+    #[test]
+    fn control_http_exit_requests_app_shutdown() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        snapshot
+            .lock()
+            .expect("control snapshot mutex poisoned")
+            .apply_command(ControlCommand::Exit);
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(ControlHttpState::new(snapshot));
+        app.add_systems(
+            bevy::prelude::PostUpdate,
+            request_app_exit_when_control_http_exit,
+        );
+
+        app.update();
+
+        assert!(app.should_exit().is_some());
     }
 }

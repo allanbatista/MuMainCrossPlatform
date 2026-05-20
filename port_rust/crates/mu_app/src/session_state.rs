@@ -41,6 +41,15 @@ impl SessionState {
         self.phase == SessionPhase::Disconnected
     }
 
+    pub fn sync_phase(&mut self, phase: SessionPhase) {
+        if self.phase == phase {
+            return;
+        }
+
+        self.phase = phase;
+        self.last_event = None;
+    }
+
     pub fn login_success(&mut self) -> bool {
         self.apply_event(SessionEvent::LoginSuccess)
     }

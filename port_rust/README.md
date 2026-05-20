@@ -18,7 +18,9 @@ sessao de jogo completa.
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
-  estado e enviar comandos; detalhes em `docs/control-http.md`.
+  estado e enviar comandos; no runtime grafico, ele tambem espelha o fluxo de
+  login/server select/character select/world. Detalhes em
+  `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes
   locais, sem persistencia, configurado inteiramente por CLI; detalhes em
   `docs/face_server.md`.
@@ -101,8 +103,10 @@ rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --
 O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
-- `POST /command?name=boot|asset-check-failed|ready-for-login|exit|ping` para
-  mudar o estado ou encerrar o processo.
+- `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
+  character-select|loading|world|login-success|login-failure|logout-login|
+  logout-character|disconnect|exit|ping` para mudar o estado ou encerrar o
+  processo/runtime grafico.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
 

@@ -4,9 +4,18 @@
 `--control-http`.
 
 Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
-jogo.
+jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
+character select/world da Bevy runtime; no modo `--headless`, continua sendo
+um smoke server deterministico.
 
 ## Como iniciar
+
+```bash
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
+  --control-http 127.0.0.1:0
+```
+
+Para smoke headless, use:
 
 ```bash
 rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
@@ -14,24 +23,24 @@ rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
   --control-http 127.0.0.1:0
 ```
 
-O binario imprime o estado inicial e a URL efetiva do servidor.
-Se a validacao de assets falhar no boot, o estado inicial sera
-`asset-check-failed` e o servidor continua disponivel para inspeção local.
-O mesmo runtime grafico usa `ready-for-login` como a superficie inicial de
-login antes de seguir para server select, character select e world.
+O binario imprime o estado inicial e a URL efetiva do servidor. Se a
+validacao de assets falhar no boot, o estado inicial sera `asset-check-failed`
+e o servidor continua disponivel para inspeção local.
 
 ## Consultar estado
 
 `GET /state` e `GET /` retornam JSON com o estado atual:
 
 - `state`
+- `ui_route`
+- `session_phase`
 - `last_command`
 - `command_count`
 
 Exemplo:
 
 ```json
-{"state":"boot","last_command":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -41,11 +50,22 @@ Exemplo:
 - `boot`
 - `asset-check-failed`
 - `ready-for-login`
+- `server-select`
+- `character-select`
+- `loading`
+- `world`
+- `login-success`
+- `login-failure`
+- `logout-login`
+- `logout-character`
+- `disconnect`
 - `exit`
 - `ping`
 
-`exit` atualiza o estado para `exit` e encerra o servidor. Os demais apenas
-atualizam o snapshot.
+`server-select`, `character-select`, `loading`, `world`, `login-success` e
+`login-failure` alteram a rota/session state do runtime grafico. `exit`
+atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
+grafico. Os demais apenas atualizam o snapshot.
 
 O comando tambem pode vir no corpo da requisicao como `name=...` ou como texto
 puro.
@@ -55,6 +75,8 @@ Exemplos:
 ```bash
 curl http://127.0.0.1:12345/state
 curl -X POST 'http://127.0.0.1:12345/command?name=ready-for-login'
+curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
+curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command' -d 'name=ping'
 curl -X POST 'http://127.0.0.1:12345/command' -d 'exit'
 ```

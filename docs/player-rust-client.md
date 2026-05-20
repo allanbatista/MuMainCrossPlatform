@@ -43,6 +43,17 @@ in the local config file instead of being typed every time.
 - When connected, movement requests are sent through the live session and the
   returned position updates reconcile the runtime pose.
 
+## QA / Dev Control Plane
+
+- Start the graphical client with `--control-http 127.0.0.1:0` to expose the
+  local HTTP automation surface while the Bevy window is running.
+- `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
+  and `command_count`.
+- `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|exit|ping`
+  can step the auth/bootstrap flow for local QA and smoke tests.
+- `exit` also shuts down the graphical Bevy process, which is handy for smoke
+  automation.
+
 ## If Something Fails
 
 - `asset-check-failed` means the converted asset root or manifest is wrong.

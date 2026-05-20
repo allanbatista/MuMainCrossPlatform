@@ -33,7 +33,7 @@ pub fn run(cli: Cli) -> ExitCode {
         }
     }
 
-    if let Some(address) = cli.control_http {
+    if !cli.headless && state == AppState::Boot {
         if let Err(error) = write_line(state.as_str()) {
             logging::error(
                 logging::COMPONENT_RUNTIME,
@@ -44,6 +44,10 @@ pub fn run(cli: Cli) -> ExitCode {
             return ExitCode::from(1);
         }
 
+        return run_graphical(&cli, runtime);
+    }
+
+    if let Some(address) = cli.control_http {
         match control_http::spawn(address, state) {
             Ok(handle) => {
                 if let Err(error) = write_line(&format!(
