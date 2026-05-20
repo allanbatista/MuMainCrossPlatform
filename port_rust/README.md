@@ -13,7 +13,10 @@ sessao de jogo completa.
   incremental antes de uma sessao jogavel completa. Esse boot ja mostra a
   shell visual de login/server select/character select, faz a transicao
   login -> server select -> character select -> world quando o fluxo de rede
-  entrega o handoff do mapa e, no world route, mostra uma world shell 3D
+  entrega o handoff do mapa; depois de `login-success`, ele pede
+  automaticamente a character list usando o byte legado do idioma
+  (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). No world route,
+  mostra uma world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
   map, marcadores de player amostrados e modelos convertidos reais para

@@ -28,7 +28,9 @@ in the local config file instead of being typed every time.
   selection while the client boots.
 - Character selection and character creation.
 - The Bevy bootstrap now carries the client from login to character select and
-  into the loaded world once the map handoff packet arrives.
+  immediately requests the character list using the legacy locale byte
+  (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`) before the
+  loaded world handoff starts.
 - The world now opens a visible Bevy world shell with a camera, lighting,
   a heightfield terrain derived from the loaded world bundle, a layered
   terrain surface from the bundle's first two converted texture slots plus

@@ -6,15 +6,17 @@ use std::time::Duration;
 
 use bevy::app::{App, Plugin};
 use bevy::prelude::{Commands, IntoScheduleConfigs, Res, ResMut, Resource, Startup, Update};
+use camino::Utf8Path;
 use mu_gameplay::MovementCommand;
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
+use mu_protocol::login::request_character_list;
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{UiRoute, UiShellState};
 use tokio::sync::mpsc as tokio_mpsc;
 
-use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
+use crate::{ClientRuntime, Config, GraphicalRuntimeConfig, SessionState};
 
 const SESSION_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 const SESSION_READ_TIMEOUT: Duration = Duration::from_millis(250);
@@ -146,8 +148,9 @@ pub(crate) fn bootstrap_startup(
         return;
     };
 
+    let character_list_language = character_list_language_byte(&config.config_path);
     let (sender, receiver) = mpsc::channel();
-    let command_sender = spawn_bootstrap_worker(address, sender);
+    let command_sender = spawn_bootstrap_worker(address, sender, character_list_language);
     commands.insert_resource(BootstrapRuntime::new(receiver, Some(command_sender)));
 }
 
@@ -328,6 +331,7 @@ fn apply_logout(kind: u8, bootstrap: &mut BootstrapRuntime, ui_shell: &mut UiShe
 fn spawn_bootstrap_worker(
     address: SocketAddr,
     sender: Sender<BootstrapSignal>,
+    character_list_language: u8,
 ) -> tokio_mpsc::UnboundedSender<BootstrapCommand> {
     let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
 
@@ -359,6 +363,7 @@ fn spawn_bootstrap_worker(
             };
 
             loop {
+                let previous_event = session.last_event();
                 tokio::select! {
                     maybe_command = command_receiver.recv() => {
                         let Some(command) = maybe_command else {
@@ -371,8 +376,6 @@ fn spawn_bootstrap_worker(
                         }
                     }
                     packet = session.receive() => {
-                        let previous_event = session.last_event();
-
                         let packet = match packet {
                             Ok(Some(packet)) => packet,
                             Ok(None) => {
@@ -388,6 +391,18 @@ fn spawn_bootstrap_worker(
                         if session.last_event() != previous_event {
                             if let Some(event) = session.last_event() {
                                 if !matches!(event, SessionEvent::Logout) {
+                                    if matches!(event, SessionEvent::LoginSuccess) {
+                                        if let Err(error) = send_character_list_request(
+                                            &mut session,
+                                            character_list_language,
+                                        )
+                                        .await
+                                        {
+                                            let _ = sender.send(BootstrapSignal::Error(error));
+                                            break;
+                                        }
+                                    }
+
                                     let _ = sender.send(BootstrapSignal::Session(event));
                                 }
                             }
@@ -415,6 +430,32 @@ fn spawn_bootstrap_worker(
     });
 
     command_sender
+}
+
+fn character_list_language_byte(config_path: impl AsRef<Utf8Path>) -> u8 {
+    let config = Config::load(config_path).unwrap_or_default();
+    legacy_language_byte(&config.locale.language)
+}
+
+fn legacy_language_byte(locale: &str) -> u8 {
+    match locale.trim().to_ascii_lowercase().as_str() {
+        "pt" | "por" => 1,
+        "es" | "spn" => 2,
+        _ => 0,
+    }
+}
+
+async fn send_character_list_request(
+    session: &mut Session,
+    character_list_language: u8,
+) -> Result<(), String> {
+    let packet =
+        request_character_list(character_list_language).map_err(|error| error.to_string())?;
+
+    session
+        .send(packet)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal> {
@@ -466,7 +507,8 @@ async fn send_bootstrap_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_bootstrap_signal, finish_world_bootstrap, BootstrapRuntime, BootstrapSignal,
+        apply_bootstrap_signal, finish_world_bootstrap, legacy_language_byte, BootstrapRuntime,
+        BootstrapSignal,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
@@ -475,6 +517,7 @@ mod tests {
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::encode_packet;
+    use mu_protocol::login::request_character_list;
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
     use mu_ui::{UiRoute, UiShellState};
@@ -503,6 +546,16 @@ mod tests {
 
     fn join_map_packet(map: u8) -> Vec<u8> {
         encode_packet(0xC1, 0xF3, 0x03, &[0, 0, map, 0]).unwrap()
+    }
+
+    #[test]
+    fn legacy_language_byte_maps_expected_aliases() {
+        assert_eq!(legacy_language_byte("en"), 0);
+        assert_eq!(legacy_language_byte("ENG"), 0);
+        assert_eq!(legacy_language_byte("pt"), 1);
+        assert_eq!(legacy_language_byte("por"), 1);
+        assert_eq!(legacy_language_byte("es"), 2);
+        assert_eq!(legacy_language_byte("spn"), 2);
     }
 
     #[test]
@@ -608,6 +661,7 @@ mod tests {
                 ConnectionScript::new()
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
+                    .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
                     .send_packet(join_map.clone())
                     .close(),
@@ -618,7 +672,7 @@ mod tests {
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
-            let command_sender = spawn_bootstrap_worker(server.address(), sender);
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
             BootstrapRuntime::new(receiver, Some(command_sender))
         };
         let config = config(Some(server.address().to_string()));
@@ -689,6 +743,7 @@ mod tests {
                 ConnectionScript::new()
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
+                    .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
                     .send_packet(join_map.clone())
                     .expect_packet(movement_request.clone())
@@ -701,7 +756,7 @@ mod tests {
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
-            let command_sender = spawn_bootstrap_worker(server.address(), sender);
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
             BootstrapRuntime::new(receiver, Some(command_sender))
         };
         let config = config(Some(server.address().to_string()));
@@ -812,6 +867,7 @@ mod tests {
                 ConnectionScript::new()
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
+                    .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
                     .send_packet(join_map.clone())
                     .expect_packet(chat_packet.clone())
@@ -823,7 +879,7 @@ mod tests {
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
-            let command_sender = spawn_bootstrap_worker(server.address(), sender);
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
             BootstrapRuntime::new(receiver, Some(command_sender))
         };
         let config = config(Some(server.address().to_string()));
