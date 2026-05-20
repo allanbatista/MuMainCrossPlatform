@@ -11,6 +11,8 @@ experience curve, and master-level experience curve.
   `is_master_experience_active(level)` match the legacy `CharacterManager`
   rules.
 - `CharacterClass::skin_index()` preserves the legacy render skin mapping.
+- `CharacterClass::display_name()` preserves the legacy client-facing class
+  labels used in character-select and related UI surfaces.
 - Master experience unlocks at level `400` for third classes.
 
 ## Base Stat Table

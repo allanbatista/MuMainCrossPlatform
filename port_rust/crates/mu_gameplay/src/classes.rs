@@ -128,6 +128,30 @@ impl CharacterClass {
         matches!(self.base_class(), Self::Elf | Self::Summoner)
     }
 
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Wizard => "Dark Wizard",
+            Self::Knight => "Dark Knight",
+            Self::Elf => "Fairy Elf",
+            Self::MagicGladiator => "Magic Gladiator",
+            Self::DarkLord => "Dark Lord",
+            Self::Summoner => "Summoner",
+            Self::RageFighter => "Rage Fighter",
+            Self::SoulMaster => "Soul Master",
+            Self::BladeKnight => "Blade Knight",
+            Self::MuseElf => "Muse Elf",
+            Self::BloodySummoner => "Bloody Summoner",
+            Self::GrandMaster => "Grand Master",
+            Self::BladeMaster => "Blade Master",
+            Self::HighElf => "High Elf",
+            Self::DuelMaster => "Duel Master",
+            Self::LordEmperor => "Lord Emperor",
+            Self::DimensionMaster => "Dimension Master",
+            Self::TempleKnight => "Temple Knight",
+            Self::Undefined => "Unknown",
+        }
+    }
+
     pub fn skin_index(self) -> CharacterSkinIndex {
         match self {
             Self::Wizard => CharacterSkinIndex::Wizard,
@@ -288,5 +312,15 @@ mod tests {
             CharacterClass::Undefined.skin_index(),
             CharacterSkinIndex::Undefined
         );
+    }
+
+    #[test]
+    fn display_names_match_the_legacy_class_labels() {
+        assert_eq!(CharacterClass::Wizard.display_name(), "Dark Wizard");
+        assert_eq!(CharacterClass::Knight.display_name(), "Dark Knight");
+        assert_eq!(CharacterClass::Elf.display_name(), "Fairy Elf");
+        assert_eq!(CharacterClass::GrandMaster.display_name(), "Grand Master");
+        assert_eq!(CharacterClass::TempleKnight.display_name(), "Temple Knight");
+        assert_eq!(CharacterClass::Undefined.display_name(), "Unknown");
     }
 }

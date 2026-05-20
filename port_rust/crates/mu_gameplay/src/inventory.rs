@@ -283,10 +283,9 @@ fn map_grid_error(error: crate::items::GridError) -> InventoryError {
 #[cfg(test)]
 mod tests {
     use super::{
-        InventoryManager, InventoryPlugin, InventorySlot, INVENTORY_EXTENSION_PAGE_COUNT,
-        INVENTORY_EXTENSION_PAGE_COLUMNS,
-        INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS, INVENTORY_MAIN_PAGE_ROWS,
-        INVENTORY_TOTAL_PAGE_COUNT,
+        InventoryManager, InventoryPlugin, InventorySlot, INVENTORY_EXTENSION_PAGE_COLUMNS,
+        INVENTORY_EXTENSION_PAGE_COUNT, INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS,
+        INVENTORY_MAIN_PAGE_ROWS, INVENTORY_TOTAL_PAGE_COUNT,
     };
     use crate::items::{Item, ItemPacketData, ItemSize};
     use bevy::prelude::App;
@@ -357,6 +356,9 @@ mod tests {
             None
         );
         assert_eq!(InventorySlot::new(5, 0).linear_index(), None);
-        assert_eq!(InventorySlot::from_linear(main_slots + 3), Some(InventorySlot::extension(0, 3)));
+        assert_eq!(
+            InventorySlot::from_linear(main_slots + 3),
+            Some(InventorySlot::extension(0, 3))
+        );
     }
 }

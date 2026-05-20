@@ -1,4 +1,5 @@
 use crate::{UiRoute, UiShellLayout, UiShellWidgetSet};
+use mu_gameplay::CharacterClass;
 
 const CHARACTER_SELECT_TITLE: &str = "Character Select";
 const LOADING_NOTICE: &str = "Loading character list...";
@@ -8,13 +9,45 @@ const ACTION_DENIED_NOTICE: &str = "The selected character cannot be used.";
 const ACCOUNT_BLOCK_NOTICE: &str = "Account block item active.";
 
 const READY_CHARACTERS: &[CharacterSelectCharacter] = &[
-    CharacterSelectCharacter::new(0, "Astra", 380, "Dark Knight", "Guildless", false, true),
-    CharacterSelectCharacter::new(1, "Selene", 297, "Fairy Elf", "Night Watch", true, false),
+    CharacterSelectCharacter::new(
+        0,
+        "Astra",
+        380,
+        CharacterClass::Knight.display_name(),
+        "Guildless",
+        false,
+        true,
+    ),
+    CharacterSelectCharacter::new(
+        1,
+        "Selene",
+        297,
+        CharacterClass::Elf.display_name(),
+        "Night Watch",
+        true,
+        false,
+    ),
 ];
 
 const ACTION_DENIED_CHARACTERS: &[CharacterSelectCharacter] = &[
-    CharacterSelectCharacter::new(0, "Astra", 380, "Dark Knight", "Guildless", false, false),
-    CharacterSelectCharacter::new(1, "Selene", 297, "Fairy Elf", "Night Watch", true, true),
+    CharacterSelectCharacter::new(
+        0,
+        "Astra",
+        380,
+        CharacterClass::Knight.display_name(),
+        "Guildless",
+        false,
+        false,
+    ),
+    CharacterSelectCharacter::new(
+        1,
+        "Selene",
+        297,
+        CharacterClass::Elf.display_name(),
+        "Night Watch",
+        true,
+        true,
+    ),
 ];
 
 const LOADING_BUTTONS: &[CharacterSelectButton] = &[
