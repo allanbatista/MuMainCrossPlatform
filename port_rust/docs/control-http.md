@@ -6,7 +6,8 @@
 Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
 jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
 character select/world da Bevy runtime e a shell visual correspondente; no
-modo `--headless`, continua sendo um smoke server deterministico.
+modo `--headless`, continua sendo um smoke server deterministico. As rotas
+`friend`, `guild` e `duel` tambem espelham as shells visiveis.
 
 ## Como iniciar
 
@@ -63,6 +64,9 @@ Exemplo:
 - `trade`
 - `party`
 - `gate`
+- `friend`
+- `guild`
+- `duel`
 - `quests`
 - `mu-helper`
 - `login-success`
@@ -75,7 +79,8 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `loading`, `world`, `chat`,
 `npc`, `select-character`, `shop`, `game-shop`, `trade`, `party`, `gate`,
-`quests`, `mu-helper`, `login-success` e `login-failure` alteram a
+`friend`, `guild`, `duel`, `quests`, `mu-helper`, `login-success` e `login-failure`
+alteram a
 rota/session state do runtime grafico. `options` abre a janela compartilhada
 de options no auth shell. `select-character` envia o nome recebido para o
 session worker e continua o bootstrap apenas quando o personagem for
@@ -85,6 +90,7 @@ character select.
 `chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
 para enviar mensagem publica quando a sessao esta logada.
 `mu-helper` abre a shell visivel do MU Helper com o snapshot existente do
+runtime. `duel` abre a shell visivel de duel com o snapshot existente do
 runtime. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
 grafico. Os demais apenas atualizam o snapshot.
@@ -109,6 +115,9 @@ curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=trade'
 curl -X POST 'http://127.0.0.1:12345/command?name=party'
 curl -X POST 'http://127.0.0.1:12345/command?name=gate'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild'
+curl -X POST 'http://127.0.0.1:12345/command?name=duel'
 curl -X POST 'http://127.0.0.1:12345/command?name=quests'
 curl -X POST 'http://127.0.0.1:12345/command?name=mu-helper'
 curl -X POST 'http://127.0.0.1:12345/command' -d 'name=ping'

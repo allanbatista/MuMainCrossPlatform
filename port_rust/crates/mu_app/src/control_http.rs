@@ -25,6 +25,9 @@ pub enum ControlCommand {
     Trade,
     Party,
     Gate,
+    Friend,
+    Guild,
+    Duel,
     Quests,
     MuHelper,
     LoginSuccess,
@@ -55,6 +58,9 @@ impl ControlCommand {
             Self::Trade => "trade",
             Self::Party => "party",
             Self::Gate => "gate",
+            Self::Friend => "friend",
+            Self::Guild => "guild",
+            Self::Duel => "duel",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
@@ -89,6 +95,9 @@ impl ControlCommand {
             "trade" => Some(Self::Trade),
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
+            "friend" => Some(Self::Friend),
+            "guild" => Some(Self::Guild),
+            "duel" => Some(Self::Duel),
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
@@ -213,6 +222,24 @@ impl ControlSnapshot {
             ControlCommand::Gate => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Gate;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Friend => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Guild => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Duel => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Duel;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -804,6 +831,15 @@ mod tests {
             Some(ControlCommand::Options)
         );
         assert_eq!(ControlCommand::Options.as_str(), "options");
+        assert_eq!(
+            ControlCommand::parse("friend"),
+            Some(ControlCommand::Friend)
+        );
+        assert_eq!(ControlCommand::Friend.as_str(), "friend");
+        assert_eq!(ControlCommand::parse("guild"), Some(ControlCommand::Guild));
+        assert_eq!(ControlCommand::Guild.as_str(), "guild");
+        assert_eq!(ControlCommand::parse("duel"), Some(ControlCommand::Duel));
+        assert_eq!(ControlCommand::Duel.as_str(), "duel");
     }
 
     #[test]
@@ -863,6 +899,21 @@ mod tests {
         snapshot.apply_command(ControlCommand::Gate);
 
         assert_eq!(snapshot.ui_route, UiRoute::Gate);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Friend);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Friend);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Guild);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Duel);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Duel);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
         snapshot.apply_command(ControlCommand::Quests);
@@ -986,13 +1037,20 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=duel HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"duel""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=exit HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""state":"exit""#));
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 14);
+        assert_eq!(final_snapshot.command_count, 15);
     }
 
     #[test]

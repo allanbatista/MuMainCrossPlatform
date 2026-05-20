@@ -7,6 +7,16 @@ The Rust port splits the legacy social windows into two `mu_ui` routes:
 - `guild` covers the guild summary, member management, union list, no-guild,
   and error states.
 
+## Runtime shells
+
+The graphical Rust client now exposes both routes as visible Bevy shells.
+
+- `POST /command?name=friend` opens the friend shell in `mu_client` and
+  mirrors the current `MailManager` snapshot.
+- `POST /command?name=guild` opens the guild shell in `mu_client` and mirrors
+  the current guild snapshot model.
+- Both shells clear when the route changes away or the session disconnects.
+
 ## Friend
 
 Use `friend_screen` with `FriendScreenState::{Roster, Inbox, Compose,

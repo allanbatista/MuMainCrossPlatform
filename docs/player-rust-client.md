@@ -69,6 +69,15 @@ in the local config file instead of being typed every time.
   public chat packet from the local player.
 - The trade route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
+- The friend route now opens a visible Bevy shell that mirrors the mail
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `friend`.
+- The guild route now opens a visible Bevy shell that mirrors the guild
+  snapshot and can be driven from the local control HTTP smoke path with
+  `guild`.
+- The duel route now opens a visible Bevy shell that mirrors the duel
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `duel`.
 - The party route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The gate route now opens a visible Bevy shell that can be driven from the
@@ -109,6 +118,12 @@ in the local config file instead of being typed every time.
 - `POST /command?name=game-shop` can step into the visible GameShop route
   shell for local QA smoke.
 - `POST /command?name=trade` can step into the visible trade route shell for
+  local QA smoke.
+- `POST /command?name=friend` can step into the visible friend route shell
+  for local QA smoke.
+- `POST /command?name=guild` can step into the visible guild route shell for
+  local QA smoke.
+- `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for
   local QA smoke.

@@ -23,6 +23,8 @@ separate gameplay resources plus UI snapshot modules.
   slots, channel list, spectator list and regenerated flag.
 - `mu_ui::duel::duel_screen()` mirrors the challenge, channel list, watching
   and error views.
+- The Rust client also exposes the duel route as a visible Bevy shell and
+  the local control HTTP smoke path can open it with `duel`.
 
 ## Gens
 

@@ -14,9 +14,9 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    EquipmentPlugin, GameShopPlugin, InventoryPlugin, MovementPlugin, MuHelperRuntimePlugin,
-    NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultPlugin, WorldEntitiesPlugin,
-    WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    DuelPlugin, EquipmentPlugin, GameShopPlugin, InventoryPlugin, MailPlugin, MovementPlugin,
+    MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultPlugin,
+    WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
@@ -25,8 +25,11 @@ use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
 use crate::chat_composer::ChatComposerPlugin;
 use crate::chat_shell::ChatShellPlugin;
+use crate::duel_shell::DuelShellPlugin;
+use crate::friend_shell::FriendShellPlugin;
 use crate::game_shop_shell::GameShopShellPlugin;
 use crate::gate_shell::GateShellPlugin;
+use crate::guild_shell::GuildShellPlugin;
 use crate::inventory_route::InventoryRoutePlugin;
 use crate::inventory_shell::InventoryShellPlugin;
 use crate::mu_helper_shell::MuHelperShellPlugin;
@@ -135,6 +138,8 @@ fn configure_project_plugins(
             EquipmentPlugin,
             VaultPlugin,
             GameShopPlugin,
+            MailPlugin,
+            DuelPlugin,
             TradePlugin,
             MuHelperRuntimePlugin,
         ))
@@ -147,7 +152,12 @@ fn configure_project_plugins(
             NpcShopShellPlugin,
             QuestsShellPlugin,
             PartyShellPlugin,
+        ))
+        .add_plugins((
             GateShellPlugin,
+            FriendShellPlugin,
+            GuildShellPlugin,
+            DuelShellPlugin,
             GameShopShellPlugin,
             TradeShellPlugin,
             MuHelperShellPlugin,
