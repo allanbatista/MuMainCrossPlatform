@@ -17,7 +17,7 @@ pub fn lahap_jewel_mix_request(
 ) -> Result<Vec<u8>, EncodeError> {
     encode_short_packet(
         0xC1,
-        0xBC,
+        0x32,
         &[operation, item, mixing_stack_size, unmixing_source_slot],
     )
 }
@@ -49,7 +49,7 @@ mod tests {
         );
         assert_eq!(
             lahap_jewel_mix_request(0, 1, 2, 3).unwrap(),
-            vec![0xC1, 0x07, 0xBC, 0x00, 0x01, 0x02, 0x03]
+            vec![0xC1, 0x07, 0x32, 0x00, 0x01, 0x02, 0x03]
         );
         assert_eq!(
             lucky_number_request(b"1234", b"5678", b"9012").unwrap(),
