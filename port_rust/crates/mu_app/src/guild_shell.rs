@@ -8,7 +8,7 @@ use mu_ui::{
     GuildUnionEntry, UiRoute, UiShellState,
 };
 
-use crate::bootstrap_runtime::BootstrapRuntime;
+use crate::bootstrap_runtime::{BootstrapRuntime, GuildRosterSnapshot};
 use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -32,11 +32,12 @@ const ERROR_ACCENT: Color = Color::srgb(0.95, 0.42, 0.42);
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct GuildShellPlugin;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct GuildShellKey {
     route: UiRoute,
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
+    live_roster: Option<GuildRosterSnapshot>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -79,10 +80,12 @@ fn sync_guild_shell_system(
     let control_http_state = control_http
         .as_deref()
         .and_then(guild_screen_state_for_control_http);
+    let live_roster = bootstrap.guild_roster_snapshot();
     let current = guild_shell_key(
         ui_shell.current(),
         session_state.phase(),
         control_http_state,
+        live_roster.clone(),
     );
 
     let Some(key) = current else {
@@ -102,7 +105,12 @@ fn sync_guild_shell_system(
 
     clear_guild_shell(&mut commands, &mut state);
 
-    let Some(view) = guild_shell_view(key.route, key.phase, key.control_http_state) else {
+    let Some(view) = guild_shell_view(
+        key.route,
+        key.phase,
+        key.control_http_state,
+        key.live_roster.clone(),
+    ) else {
         return;
     };
 
@@ -120,6 +128,7 @@ fn guild_shell_key(
     route: UiRoute,
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
+    live_roster: Option<GuildRosterSnapshot>,
 ) -> Option<GuildShellKey> {
     if !guild_shell_visible(route, phase) {
         return None;
@@ -129,6 +138,7 @@ fn guild_shell_key(
         route,
         phase,
         control_http_state,
+        live_roster,
     })
 }
 
@@ -158,13 +168,15 @@ fn guild_shell_view(
     route: UiRoute,
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
+    live_roster: Option<GuildRosterSnapshot>,
 ) -> Option<GuildShellView> {
     if !guild_shell_visible(route, phase) {
         return None;
     }
 
     let state = control_http_state.unwrap_or_else(|| guild_screen_state_for_phase(phase));
-    let screen = guild_screen(state);
+    let mut screen = guild_screen(state);
+    apply_live_guild_roster(&mut screen, live_roster.as_ref());
 
     Some(GuildShellView {
         title: screen.title,
@@ -172,6 +184,53 @@ fn guild_shell_view(
         body: guild_shell_body(&screen, phase),
         accent: accent_for_state(screen.state),
     })
+}
+
+fn apply_live_guild_roster(screen: &mut GuildScreen, live_roster: Option<&GuildRosterSnapshot>) {
+    let Some(live_roster) = live_roster else {
+        return;
+    };
+
+    let selected_member_name = screen.selected_member_name.as_deref();
+    let self_member_name = screen
+        .members
+        .iter()
+        .find(|member| member.is_self)
+        .map(|member| member.name.clone());
+    let mut members = live_roster.members.clone();
+
+    for member in &mut members {
+        member.selected = selected_member_name == Some(member.name.as_str());
+        member.is_self = self_member_name.as_deref() == Some(member.name.as_str());
+    }
+
+    if !members.iter().any(|member| member.selected) {
+        if let Some(first) = members.first_mut() {
+            first.selected = true;
+        }
+    }
+
+    let selected_member = members.iter().find(|member| member.selected).cloned();
+
+    screen.member_count = Some(members.len());
+    screen.guild_score = Some(live_roster.total_score);
+    screen.rival_guild_name = live_roster.rival_guild_name.clone();
+    screen.guild_master_name = members
+        .iter()
+        .find(|member| member.role == GuildMemberRole::Master)
+        .map(|member| member.name.clone());
+    screen.sub_master_name = members
+        .iter()
+        .find(|member| member.role == GuildMemberRole::SubMaster)
+        .map(|member| member.name.clone());
+    screen.battle_master_name = members
+        .iter()
+        .find(|member| member.role == GuildMemberRole::BattleMaster)
+        .map(|member| member.name.clone());
+    screen.members = members;
+    screen.selected_member_name = selected_member.as_ref().map(|member| member.name.clone());
+    screen.selected_member_role = selected_member.as_ref().map(|member| member.role);
+    screen.selected_member_server = selected_member.and_then(|member| member.server);
 }
 
 fn guild_screen_state_for_phase(phase: SessionPhase) -> GuildScreenState {
@@ -454,13 +513,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        guild_screen_state_for_phase, guild_shell_view, guild_shell_visible, GuildShellPlugin,
-        GuildShellRoot,
+        guild_screen_state_for_phase, guild_shell_key, guild_shell_view, guild_shell_visible,
+        GuildShellPlugin, GuildShellRoot,
     };
+    use crate::bootstrap_runtime::{BootstrapRuntime, GuildRosterSnapshot};
     use crate::control_http::{ControlHttpState, ControlSnapshot};
     use crate::{AppState, SessionPhase, SessionState};
     use bevy::prelude::App;
-    use mu_ui::{GuildScreenState, UiRoute, UiShellState};
+    use mu_ui::{GuildMemberEntry, GuildMemberRole, GuildScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
 
     fn guild_shell_root_count(world: &mut bevy::prelude::World) -> usize {
@@ -470,8 +530,36 @@ mod tests {
 
     fn guild_list_request_count(world: &bevy::prelude::World) -> usize {
         world
-            .resource::<crate::bootstrap_runtime::BootstrapRuntime>()
+            .resource::<BootstrapRuntime>()
             .guild_list_request_count()
+    }
+
+    fn live_guild_roster() -> GuildRosterSnapshot {
+        GuildRosterSnapshot {
+            result: 0x52,
+            count: 2,
+            total_score: 12_500,
+            score: 7,
+            rival_guild_name: Some("Red".to_owned()),
+            members: vec![
+                GuildMemberEntry {
+                    name: "Astra".to_owned(),
+                    number: 11,
+                    server: Some(3),
+                    role: GuildMemberRole::Master,
+                    selected: false,
+                    is_self: true,
+                },
+                GuildMemberEntry {
+                    name: "Blade".to_owned(),
+                    number: 22,
+                    server: Some(5),
+                    role: GuildMemberRole::SubMaster,
+                    selected: false,
+                    is_self: false,
+                },
+            ],
+        }
     }
 
     fn control_http_state(guild_screen_state: GuildScreenState) -> ControlHttpState {
@@ -507,11 +595,11 @@ mod tests {
             GuildScreenState::NoGuild
         );
 
-        let view =
-            guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn, None).expect("guild view");
+        let view = guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn, None, None)
+            .expect("guild view");
         assert!(view.body.contains("state=summary"));
 
-        let view = guild_shell_view(UiRoute::Guild, SessionPhase::ReadyForLogin, None)
+        let view = guild_shell_view(UiRoute::Guild, SessionPhase::ReadyForLogin, None, None)
             .expect("guild view");
         assert!(view.body.contains("state=no-guild"));
     }
@@ -522,10 +610,46 @@ mod tests {
             UiRoute::Guild,
             SessionPhase::LoggedIn,
             Some(GuildScreenState::Union),
+            None,
         )
         .expect("guild view");
 
         assert!(view.body.contains("state=union"));
+    }
+
+    #[test]
+    fn guild_shell_overlays_live_roster_snapshot() {
+        let view = guild_shell_view(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            None,
+            Some(live_guild_roster()),
+        )
+        .expect("guild view");
+
+        assert!(view.body.contains("guild_score=Some(12500)"));
+        assert!(view.body.contains("rival_guild_name=Some(\"Red\")"));
+        assert!(view.body.contains("guild_master_name=Some(\"Astra\")"));
+        assert!(view.body.contains("sub_master_name=Some(\"Blade\")"));
+        assert!(view.body.contains("battle_master_name=None"));
+        assert!(view.body.contains("name=Astra"));
+        assert!(view.body.contains("role=master"));
+        assert!(view.body.contains("name=Blade"));
+        assert!(view.body.contains("role=sub-master"));
+    }
+
+    #[test]
+    fn guild_shell_key_changes_with_live_roster_snapshot() {
+        let roster_a = Some(live_guild_roster());
+        let mut roster_b = live_guild_roster();
+        roster_b.members[1].role = GuildMemberRole::BattleMaster;
+
+        let key_a = guild_shell_key(UiRoute::Guild, SessionPhase::LoggedIn, None, roster_a)
+            .expect("guild key");
+        let key_b = guild_shell_key(UiRoute::Guild, SessionPhase::LoggedIn, None, Some(roster_b))
+            .expect("guild key");
+
+        assert_ne!(key_a, key_b);
     }
 
     #[test]

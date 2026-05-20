@@ -80,14 +80,17 @@ in the local config file instead of being typed every time.
 - The friend route now opens a visible Bevy shell that mirrors the mail
   manager snapshot and can be driven from the local control HTTP smoke path
   with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
-  `friend-chat-rooms`.
+  `friend-chat-rooms`; when the live friend list arrives, the shell overlays
+  the decoded roster and server-state data from the session.
 - The guild route now opens a visible Bevy shell that mirrors the guild
   snapshot and can be driven from the local control HTTP smoke path with
   `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
-  and `guild-error`.
+  and `guild-error`; when the live guild list arrives, the shell overlays the
+  decoded score, rival name, and member roles from the session.
 - When the friend or guild route opens while logged in, the client now sends
   the matching live list request once per activation before keeping the shell
-  on screen.
+  on screen, and the decoded roster state stays visible until logout or
+  disconnect clears it.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.

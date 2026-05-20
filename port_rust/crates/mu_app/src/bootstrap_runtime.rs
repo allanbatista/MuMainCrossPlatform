@@ -21,7 +21,8 @@ use mu_protocol::social::friend_list_request;
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
     character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
-    CharacterSelectScreenState, UiRoute, UiShellState,
+    CharacterSelectScreenState, FriendEntry, FriendPresence, GuildMemberEntry, GuildMemberRole,
+    UiRoute, UiShellState,
 };
 use tokio::sync::mpsc as tokio_mpsc;
 
@@ -31,6 +32,26 @@ const SESSION_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 const SESSION_READ_TIMEOUT: Duration = Duration::from_millis(250);
 const DEFAULT_CHARACTER_CREATE_CLASS: u8 = CharacterClass::Knight as u8;
 const CHARACTER_CREATE_FAILURE_MESSAGE: &str = "character creation failed";
+const FRIEND_LIST_ENTRY_LEN: usize = 11;
+const GUILD_LIST_ENTRY_LEN: usize = 13;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FriendRosterSnapshot {
+    pub(crate) memo_count: u8,
+    pub(crate) max_memo: u8,
+    pub(crate) count: u8,
+    pub(crate) friends: Vec<FriendEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GuildRosterSnapshot {
+    pub(crate) result: u8,
+    pub(crate) count: u8,
+    pub(crate) total_score: u32,
+    pub(crate) score: u8,
+    pub(crate) rival_guild_name: Option<String>,
+    pub(crate) members: Vec<GuildMemberEntry>,
+}
 
 #[derive(Debug)]
 pub(crate) enum BootstrapSignal {
@@ -40,6 +61,8 @@ pub(crate) enum BootstrapSignal {
     CharacterCreateSuccess,
     CharacterCreateFailure,
     Movement(MovementUpdate),
+    FriendRoster(FriendRosterSnapshot),
+    GuildRoster(GuildRosterSnapshot),
     Logout(u8),
     JoinMap(u8),
     Error(String),
@@ -64,6 +87,8 @@ pub struct BootstrapRuntime {
     character_select_index: Option<usize>,
     character_create_state: CharacterCreateScreenState,
     last_error: Option<String>,
+    friend_roster: Option<FriendRosterSnapshot>,
+    guild_roster: Option<GuildRosterSnapshot>,
     #[cfg(test)]
     friend_list_request_count: AtomicUsize,
     #[cfg(test)]
@@ -85,6 +110,8 @@ impl BootstrapRuntime {
             character_select_index: None,
             character_create_state: CharacterCreateScreenState::Ready,
             last_error: None,
+            friend_roster: None,
+            guild_roster: None,
             #[cfg(test)]
             friend_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
@@ -115,6 +142,27 @@ impl BootstrapRuntime {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
+    }
+
+    pub(crate) fn friend_roster_snapshot(&self) -> Option<FriendRosterSnapshot> {
+        self.friend_roster.clone()
+    }
+
+    pub(crate) fn guild_roster_snapshot(&self) -> Option<GuildRosterSnapshot> {
+        self.guild_roster.clone()
+    }
+
+    pub(crate) fn clear_social_rosters(&mut self) {
+        self.friend_roster = None;
+        self.guild_roster = None;
+    }
+
+    pub(crate) fn set_friend_roster_snapshot(&mut self, roster: Option<FriendRosterSnapshot>) {
+        self.friend_roster = roster;
+    }
+
+    pub(crate) fn set_guild_roster_snapshot(&mut self, roster: Option<GuildRosterSnapshot>) {
+        self.guild_roster = roster;
     }
 
     pub(crate) fn drain_signals(&self) -> Vec<BootstrapSignal> {
@@ -402,6 +450,14 @@ fn apply_bootstrap_signal(
             ui_shell.set_route(UiRoute::CharacterCreate);
         }
         BootstrapSignal::Movement(update) => apply_movement_update(update, client_runtime),
+        BootstrapSignal::FriendRoster(roster) => {
+            bootstrap.set_friend_roster_snapshot(Some(roster));
+            bootstrap.last_error = None;
+        }
+        BootstrapSignal::GuildRoster(roster) => {
+            bootstrap.set_guild_roster_snapshot(Some(roster));
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::Logout(kind) => apply_logout(kind, bootstrap, ui_shell),
         BootstrapSignal::JoinMap(map) => {
             bootstrap.pending_world_map = Some(map);
@@ -416,6 +472,7 @@ fn apply_bootstrap_signal(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some(message);
+            bootstrap.clear_social_rosters();
 
             if bootstrap.character_create_state() == CharacterCreateScreenState::Submitting {
                 bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
@@ -442,6 +499,7 @@ fn apply_session_event(
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
+            bootstrap.clear_social_rosters();
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
         SessionEvent::LoginFailure => {
@@ -451,6 +509,7 @@ fn apply_session_event(
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = Some("login failed".to_string());
+            bootstrap.clear_social_rosters();
             ui_shell.set_route(UiRoute::Login);
         }
         SessionEvent::Logout => {
@@ -458,6 +517,7 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.clear_social_rosters();
         }
         SessionEvent::Disconnect => {
             let pending_world_map = bootstrap.pending_world_map.is_some();
@@ -465,6 +525,7 @@ fn apply_session_event(
             let create_pending =
                 bootstrap.character_create_state() == CharacterCreateScreenState::Submitting;
             session_state.apply_event(event);
+            bootstrap.clear_social_rosters();
 
             if pending_world_map {
                 return;
@@ -510,6 +571,7 @@ fn apply_logout(kind: u8, bootstrap: &mut BootstrapRuntime, ui_shell: &mut UiShe
     bootstrap.clear_character_select_selection();
     bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
     bootstrap.last_error = None;
+    bootstrap.clear_social_rosters();
 
     match kind {
         1 => {
@@ -673,6 +735,10 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
     }
 
     match (frame.headcode, frame.subcode) {
+        (0xC0, _) => Some(match decode_friend_roster(frame) {
+            Ok(roster) => BootstrapSignal::FriendRoster(roster),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
         (0xF4, 0x06) => Some(BootstrapSignal::ServerList),
         (0xF4, 0x05) => Some(BootstrapSignal::Error("server is busy".to_string())),
         (0xF3, 0x00) => Some(BootstrapSignal::CharacterList),
@@ -683,7 +749,130 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
         },
         (0xF3, 0x03) => frame.payload.get(2).copied().map(BootstrapSignal::JoinMap),
         (0xF1, 0x02) => frame.payload.first().copied().map(BootstrapSignal::Logout),
+        (0xD1, 0x52) => Some(match decode_guild_roster(frame) {
+            Ok(roster) => BootstrapSignal::GuildRoster(roster),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
         _ => None,
+    }
+}
+
+fn decode_friend_roster(frame: &PacketFrame<'_>) -> Result<FriendRosterSnapshot, String> {
+    let payload = frame.payload;
+    if payload.len() < 2 {
+        return Err("friend list packet missing roster header".to_string());
+    }
+
+    let max_memo = payload[0];
+    let count = payload[1];
+    let entries = &payload[2..];
+    let expected_len = usize::from(count) * FRIEND_LIST_ENTRY_LEN;
+    if entries.len() < expected_len {
+        return Err(format!(
+            "friend list packet truncated: expected {expected_len} roster bytes, found {}",
+            entries.len()
+        ));
+    }
+
+    let friends = entries
+        .chunks_exact(FRIEND_LIST_ENTRY_LEN)
+        .take(usize::from(count))
+        .map(|entry| FriendEntry {
+            name: decode_legacy_name(&entry[..10]),
+            server: friend_entry_server(entry[10]),
+            presence: friend_presence_from_server(entry[10]),
+            selected: false,
+        })
+        .collect();
+
+    Ok(FriendRosterSnapshot {
+        memo_count: frame.subcode,
+        max_memo,
+        count,
+        friends,
+    })
+}
+
+fn decode_guild_roster(frame: &PacketFrame<'_>) -> Result<GuildRosterSnapshot, String> {
+    let payload = frame.payload;
+    if payload.len() < 14 {
+        return Err("guild list packet missing roster header".to_string());
+    }
+
+    let result = frame.subcode;
+    let count = payload[0];
+    let total_score = u32::from_le_bytes([payload[1], payload[2], payload[3], payload[4]]);
+    let score = payload[5];
+    let rival_guild_name = decode_legacy_name(&payload[6..14]);
+    let entries = &payload[14..];
+    let expected_len = usize::from(count) * GUILD_LIST_ENTRY_LEN;
+    if entries.len() < expected_len {
+        return Err(format!(
+            "guild list packet truncated: expected {expected_len} roster bytes, found {}",
+            entries.len()
+        ));
+    }
+
+    let members = entries
+        .chunks_exact(GUILD_LIST_ENTRY_LEN)
+        .take(usize::from(count))
+        .map(|entry| GuildMemberEntry {
+            name: decode_legacy_name(&entry[..10]),
+            number: entry[10],
+            server: guild_member_server(entry[11]),
+            role: guild_member_role(entry[12]),
+            selected: false,
+            is_self: false,
+        })
+        .collect();
+
+    Ok(GuildRosterSnapshot {
+        result,
+        count,
+        total_score,
+        score,
+        rival_guild_name: (!rival_guild_name.is_empty()).then_some(rival_guild_name),
+        members,
+    })
+}
+
+fn decode_legacy_name(bytes: &[u8]) -> String {
+    let end = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(bytes.len());
+    String::from_utf8_lossy(&bytes[..end]).into_owned()
+}
+
+fn friend_entry_server(server: u8) -> Option<u8> {
+    match server {
+        0xFC | 0xFD | 0xFE | 0xFF => None,
+        value => Some(value.saturating_add(1)),
+    }
+}
+
+fn friend_presence_from_server(server: u8) -> FriendPresence {
+    match server {
+        0xFD => FriendPresence::Busy,
+        0xFC | 0xFE | 0xFF => FriendPresence::Offline,
+        _ => FriendPresence::Online,
+    }
+}
+
+fn guild_member_server(current_server: u8) -> Option<u8> {
+    if current_server & 0x80 == 0 {
+        return None;
+    }
+
+    Some(current_server & 0x7F)
+}
+
+fn guild_member_role(status: u8) -> GuildMemberRole {
+    match status {
+        128 => GuildMemberRole::Master,
+        64 => GuildMemberRole::SubMaster,
+        32 => GuildMemberRole::BattleMaster,
+        _ => GuildMemberRole::Member,
     }
 }
 
@@ -857,7 +1046,9 @@ mod tests {
         game_server_entered, CharacterListEntry,
     };
     use mu_protocol::social::friend_list_request;
-    use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
+    use mu_ui::{
+        CharacterCreateScreenState, FriendPresence, GuildMemberRole, UiRoute, UiShellState,
+    };
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
@@ -886,6 +1077,43 @@ mod tests {
 
     fn join_map_packet(map: u8) -> Vec<u8> {
         encode_packet(0xC1, 0xF3, 0x03, &[0, 0, map, 0]).unwrap()
+    }
+
+    fn fixed_name<const N: usize>(value: &[u8]) -> [u8; N] {
+        let mut bytes = [0u8; N];
+        let len = value.len().min(N);
+        bytes[..len].copy_from_slice(&value[..len]);
+        bytes
+    }
+
+    fn friend_roster_packet() -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.push(8);
+        payload.push(2);
+        payload.extend_from_slice(&fixed_name::<10>(b"Astra"));
+        payload.push(2);
+        payload.extend_from_slice(&fixed_name::<10>(b"Blade"));
+        payload.push(0xFD);
+
+        encode_packet(0xC2, 0xC0, 0x02, &payload).unwrap()
+    }
+
+    fn guild_roster_packet() -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.push(2);
+        payload.extend_from_slice(&12_500u32.to_le_bytes());
+        payload.push(7);
+        payload.extend_from_slice(&fixed_name::<8>(b"Rivals"));
+        payload.extend_from_slice(&fixed_name::<10>(b"Astra"));
+        payload.push(11);
+        payload.push(0x83);
+        payload.push(128);
+        payload.extend_from_slice(&fixed_name::<10>(b"Blade"));
+        payload.push(22);
+        payload.push(0x00);
+        payload.push(64);
+
+        encode_packet(0xC2, 0xD1, 0x52, &payload).unwrap()
     }
 
     async fn drive_bootstrap_until_world(
@@ -1075,6 +1303,167 @@ mod tests {
             BootstrapCommand::GuildListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn friend_roster_packets_classify_and_update_runtime_state() {
+        let packet = friend_roster_packet();
+        let frame = decode_packet(&packet).expect("friend roster frame");
+        let roster = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::FriendRoster(roster)) => roster,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(roster.memo_count, 0x02);
+        assert_eq!(roster.max_memo, 8);
+        assert_eq!(roster.count, 2);
+        assert_eq!(roster.friends.len(), 2);
+        assert_eq!(roster.friends[0].name, "Astra");
+        assert_eq!(roster.friends[0].server, Some(3));
+        assert_eq!(roster.friends[0].presence, FriendPresence::Online);
+        assert_eq!(roster.friends[1].name, "Blade");
+        assert_eq!(roster.friends[1].server, None);
+        assert_eq!(roster.friends[1].presence, FriendPresence::Busy);
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendRoster(roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        let live_roster = bootstrap
+            .friend_roster_snapshot()
+            .expect("friend roster snapshot");
+        assert_eq!(live_roster.friends[0].name, "Astra");
+    }
+
+    #[test]
+    fn guild_roster_packets_classify_and_update_runtime_state() {
+        let packet = guild_roster_packet();
+        let frame = decode_packet(&packet).expect("guild roster frame");
+        let roster = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::GuildRoster(roster)) => roster,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(roster.result, 0x52);
+        assert_eq!(roster.count, 2);
+        assert_eq!(roster.total_score, 12_500);
+        assert_eq!(roster.score, 7);
+        assert_eq!(roster.rival_guild_name.as_deref(), Some("Rivals"));
+        assert_eq!(roster.members.len(), 2);
+        assert_eq!(roster.members[0].name, "Astra");
+        assert_eq!(roster.members[0].number, 11);
+        assert_eq!(roster.members[0].server, Some(3));
+        assert_eq!(roster.members[0].role, GuildMemberRole::Master);
+        assert_eq!(roster.members[1].name, "Blade");
+        assert_eq!(roster.members[1].server, None);
+        assert_eq!(roster.members[1].role, GuildMemberRole::SubMaster);
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::GuildRoster(roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        let live_roster = bootstrap
+            .guild_roster_snapshot()
+            .expect("guild roster snapshot");
+        assert_eq!(live_roster.members[0].name, "Astra");
+    }
+
+    #[test]
+    fn social_rosters_clear_on_logout_and_disconnect() {
+        let friend_packet = friend_roster_packet();
+        let friend_roster = match classify_bootstrap_packet(
+            &decode_packet(&friend_packet).expect("friend roster frame"),
+        ) {
+            Some(BootstrapSignal::FriendRoster(roster)) => roster,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+        let guild_packet = guild_roster_packet();
+        let guild_roster = match classify_bootstrap_packet(
+            &decode_packet(&guild_packet).expect("guild roster frame"),
+        ) {
+            Some(BootstrapSignal::GuildRoster(roster)) => roster,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        let mut bootstrap = BootstrapRuntime::idle();
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendRoster(friend_roster.clone()),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        apply_bootstrap_signal(
+            BootstrapSignal::GuildRoster(guild_roster.clone()),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert!(bootstrap.friend_roster_snapshot().is_some());
+        assert!(bootstrap.guild_roster_snapshot().is_some());
+
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Logout),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert!(bootstrap.friend_roster_snapshot().is_none());
+        assert!(bootstrap.guild_roster_snapshot().is_none());
+
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendRoster(friend_roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        apply_bootstrap_signal(
+            BootstrapSignal::GuildRoster(guild_roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Disconnect),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert!(bootstrap.friend_roster_snapshot().is_none());
+        assert!(bootstrap.guild_roster_snapshot().is_none());
     }
 
     #[test]

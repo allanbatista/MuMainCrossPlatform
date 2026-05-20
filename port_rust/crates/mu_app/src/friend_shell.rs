@@ -9,7 +9,7 @@ use mu_ui::{
     LetterEntry, UiRoute, UiShellState,
 };
 
-use crate::bootstrap_runtime::BootstrapRuntime;
+use crate::bootstrap_runtime::{BootstrapRuntime, FriendRosterSnapshot};
 use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -41,6 +41,7 @@ struct FriendShellKey {
     phase: SessionPhase,
     mail: MailManager,
     control_http_state: Option<FriendScreenState>,
+    live_roster: Option<FriendRosterSnapshot>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -84,11 +85,13 @@ fn sync_friend_shell_system(
     let control_http_state = control_http
         .as_deref()
         .and_then(friend_screen_state_for_control_http);
+    let live_roster = bootstrap.friend_roster_snapshot();
     let current = friend_shell_key(
         ui_shell.current(),
         session_state.phase(),
         &mail,
         control_http_state,
+        live_roster.clone(),
     );
 
     let Some(key) = current else {
@@ -108,8 +111,13 @@ fn sync_friend_shell_system(
 
     clear_friend_shell(&mut commands, &mut state);
 
-    let Some(view) = friend_shell_view(key.route, key.phase, &key.mail, key.control_http_state)
-    else {
+    let Some(view) = friend_shell_view(
+        key.route,
+        key.phase,
+        &key.mail,
+        key.control_http_state,
+        key.live_roster.clone(),
+    ) else {
         return;
     };
 
@@ -128,6 +136,7 @@ fn friend_shell_key(
     phase: SessionPhase,
     mail: &MailManager,
     control_http_state: Option<FriendScreenState>,
+    live_roster: Option<FriendRosterSnapshot>,
 ) -> Option<FriendShellKey> {
     if !friend_shell_visible(route, phase) {
         return None;
@@ -138,6 +147,7 @@ fn friend_shell_key(
         phase,
         mail: mail.clone(),
         control_http_state,
+        live_roster,
     })
 }
 
@@ -168,13 +178,15 @@ fn friend_shell_view(
     phase: SessionPhase,
     mail: &MailManager,
     control_http_state: Option<FriendScreenState>,
+    live_roster: Option<FriendRosterSnapshot>,
 ) -> Option<FriendShellView> {
     if !friend_shell_visible(route, phase) {
         return None;
     }
 
     let state = control_http_state.unwrap_or_else(|| friend_screen_state_for_mail(mail));
-    let screen = friend_screen(state, mail);
+    let mut screen = friend_screen(state, mail);
+    apply_live_friend_roster(&mut screen, live_roster.as_ref());
 
     Some(FriendShellView {
         title: screen.title,
@@ -182,6 +194,39 @@ fn friend_shell_view(
         body: friend_shell_body(&screen, phase, mail),
         accent: accent_for_state(screen.state),
     })
+}
+
+fn apply_live_friend_roster(screen: &mut FriendScreen, live_roster: Option<&FriendRosterSnapshot>) {
+    let Some(live_roster) = live_roster else {
+        return;
+    };
+
+    let selected_friend_name = screen.selected_friend.as_deref();
+    let mut friends = live_roster.friends.clone();
+
+    for friend in &mut friends {
+        friend.selected = selected_friend_name == Some(friend.name.as_str());
+    }
+
+    if !friends.iter().any(|friend| friend.selected) {
+        if let Some(first) = friends.first_mut() {
+            first.selected = true;
+        }
+    }
+
+    let selected_friend = friends
+        .iter()
+        .find(|friend| friend.selected)
+        .map(|friend| friend.name.clone());
+    let selected_friend_server = friends
+        .iter()
+        .find(|friend| friend.selected)
+        .and_then(|friend| friend.server);
+
+    screen.friend_count = friends.len();
+    screen.friends = friends;
+    screen.selected_friend = selected_friend;
+    screen.selected_friend_server = selected_friend_server;
 }
 
 fn friend_screen_state_for_mail(mail: &MailManager) -> FriendScreenState {
@@ -482,15 +527,15 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        friend_screen_state_for_mail, friend_shell_view, friend_shell_visible, FriendShellPlugin,
-        FriendShellRoot,
+        friend_screen_state_for_mail, friend_shell_key, friend_shell_view, friend_shell_visible,
+        FriendShellPlugin, FriendShellRoot,
     };
-    use crate::bootstrap_runtime::BootstrapRuntime;
+    use crate::bootstrap_runtime::{BootstrapRuntime, FriendRosterSnapshot};
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_gameplay::MailManager;
     use mu_gameplay::MailPlugin;
-    use mu_ui::{FriendScreenState, UiRoute, UiShellState};
+    use mu_ui::{FriendEntry, FriendPresence, FriendScreenState, UiRoute, UiShellState};
 
     fn friend_shell_root_count(world: &mut bevy::prelude::World) -> usize {
         let mut query = world.query::<&FriendShellRoot>();
@@ -501,6 +546,28 @@ mod tests {
         world
             .resource::<BootstrapRuntime>()
             .friend_list_request_count()
+    }
+
+    fn live_friend_roster() -> FriendRosterSnapshot {
+        FriendRosterSnapshot {
+            memo_count: 1,
+            max_memo: 8,
+            count: 2,
+            friends: vec![
+                FriendEntry {
+                    name: "Astra".to_owned(),
+                    server: Some(3),
+                    presence: FriendPresence::Online,
+                    selected: false,
+                },
+                FriendEntry {
+                    name: "Blade".to_owned(),
+                    server: None,
+                    presence: FriendPresence::Busy,
+                    selected: false,
+                },
+            ],
+        }
     }
 
     #[test]
@@ -526,13 +593,13 @@ mod tests {
             friend_screen_state_for_mail(&mail),
             FriendScreenState::Roster
         );
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None, None)
             .expect("friend shell view");
         assert!(view.body.contains("state=roster"));
 
         let mut mail = MailManager::new();
         mail.select_letter(0x0102_0304);
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
@@ -542,7 +609,7 @@ mod tests {
 
         let mut mail = MailManager::new();
         mail.set_compose("Blade", "Re: Castle prep", "Meet at Lorencia.");
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
@@ -552,7 +619,7 @@ mod tests {
 
         let mut mail = MailManager::new();
         mail.mark_error();
-        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None)
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None, None)
             .expect("friend shell view");
         assert_eq!(
             friend_screen_state_for_mail(&mail),
@@ -570,10 +637,57 @@ mod tests {
             SessionPhase::LoggedIn,
             &mail,
             Some(FriendScreenState::ChatRooms),
+            None,
         )
         .expect("friend shell view");
 
         assert!(view.body.contains("state=chat-rooms"));
+    }
+
+    #[test]
+    fn friend_shell_overlays_live_roster_snapshot() {
+        let mail = MailManager::new();
+        let view = friend_shell_view(
+            UiRoute::Friend,
+            SessionPhase::LoggedIn,
+            &mail,
+            None,
+            Some(live_friend_roster()),
+        )
+        .expect("friend shell view");
+
+        assert!(view.body.contains("friend_count=2"));
+        assert!(view.body.contains("name=Astra"));
+        assert!(view.body.contains("presence=online"));
+        assert!(view.body.contains("name=Blade"));
+        assert!(view.body.contains("presence=busy"));
+    }
+
+    #[test]
+    fn friend_shell_key_changes_with_live_roster_snapshot() {
+        let mail = MailManager::new();
+        let roster_a = Some(live_friend_roster());
+        let mut roster_b = live_friend_roster();
+        roster_b.friends[1].presence = FriendPresence::Offline;
+
+        let key_a = friend_shell_key(
+            UiRoute::Friend,
+            SessionPhase::LoggedIn,
+            &mail,
+            None,
+            roster_a,
+        )
+        .expect("friend key");
+        let key_b = friend_shell_key(
+            UiRoute::Friend,
+            SessionPhase::LoggedIn,
+            &mail,
+            None,
+            Some(roster_b),
+        )
+        .expect("friend key");
+
+        assert_ne!(key_a, key_b);
     }
 
     #[test]

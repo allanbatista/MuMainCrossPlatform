@@ -12,17 +12,21 @@ The Rust port splits the legacy social windows into two `mu_ui` routes:
 The graphical Rust client now exposes both routes as visible Bevy shells.
 
 - `POST /command?name=friend` opens the friend shell in `mu_client` and
-  mirrors the current `MailManager` snapshot.
+  mirrors the current `MailManager` snapshot, then overlays decoded friend
+  roster data from the live session when it arrives.
 - `POST /command?name=friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms` smoke the matching friend subviews.
 - `POST /command?name=guild` opens the guild shell in `mu_client` and mirrors
-  the current guild snapshot model.
+  the current guild snapshot model, then overlays decoded guild score,
+  rival-name, and member-role data from the live session when it arrives.
 - `POST /command?name=guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` smoke the matching guild subviews.
 - Both shells clear when the route changes away or the session disconnects.
 - When `friend` or `guild` opens while the session is logged in, the runtime
   queues the matching live list request once per activation and clears that
-  latch again when the route exits or the session logs out.
+  latch again when the route exits or the session logs out. The decoded
+  friend/guild roster data stays in the shell snapshot until logout or
+  disconnect clears it.
 
 ## Friend
 
@@ -31,7 +35,8 @@ ChatRooms, Error}`.
 
 The letter tab consumes `mu_gameplay::MailManager` for the selected letter and
 compose draft state. The roster tab keeps the friend list and friend-button
-alerts aligned with the legacy client.
+alerts aligned with the legacy client, and the live session overlay replaces
+the placeholder roster list once the decoded friend packet arrives.
 
 ```rust
 use mu_gameplay::MailManager;
@@ -52,7 +57,9 @@ Error}`.
 The summary tab shows the guild score, rival guild, and notices. The members
 tab exposes the master-only appoint, disband, and fire actions. The union tab
 shows allied guilds and the break/banish actions used by the legacy guild
-window.
+window. When the live guild list arrives, the summary and members data are
+overlaid with the decoded score, rival name, and member roles from the
+session.
 
 ```rust
 use mu_ui::{guild_screen, GuildScreenState};

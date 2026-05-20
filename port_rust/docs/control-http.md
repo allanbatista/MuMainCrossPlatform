@@ -8,7 +8,9 @@ jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
 character select/world da Bevy runtime e a shell visual correspondente; no
 modo `--headless`, continua sendo um smoke server deterministico. As rotas
 `friend`, `guild` e `duel` tambem espelham as shells visiveis, e `friend`
-e `guild` aceitam comandos de subview para testar as telas internas.
+e `guild` aceitam comandos de subview para testar as telas internas. Quando a
+sessao responde com as listas sociais, o runtime sobrepoe o roster/score/roles
+decodificados no shell correspondente ate o logout ou disconnect.
 `character-create` abre a shell visivel de criacao, e `create-character`
 submete o nome informado para o worker de bootstrap.
 

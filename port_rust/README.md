@@ -105,9 +105,12 @@ sessao de jogo completa.
   grafico e pode ser acionada por `friend` e `guild` no smoke local; os
   comandos `friend-roster`, `friend-inbox`, `friend-compose`,
   `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
-  `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis.
+  `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis. Quando
+  a sessao envia as respostas de listagem, o runtime decodifica friend/guild
+  e sobrepoe o roster/score/roles live no mesmo shell.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
-  vez a requisicao de listagem correspondente antes de manter a shell visivel.
+  vez a requisicao de listagem correspondente antes de manter a shell
+  visivel, e limpa o snapshot decodificado no logout ou disconnect.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.
