@@ -1,4 +1,6 @@
 use std::net::SocketAddr;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Mutex;
 use std::thread;
@@ -56,6 +58,12 @@ pub struct BootstrapRuntime {
     character_list_ready: bool,
     character_select_index: Option<usize>,
     last_error: Option<String>,
+    #[cfg(test)]
+    friend_list_request_count: AtomicUsize,
+    #[cfg(test)]
+    guild_list_request_count: AtomicUsize,
+    #[cfg(test)]
+    test_request_queues: bool,
 }
 
 impl BootstrapRuntime {
@@ -70,12 +78,25 @@ impl BootstrapRuntime {
             character_list_ready: false,
             character_select_index: None,
             last_error: None,
+            #[cfg(test)]
+            friend_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            guild_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            test_request_queues: false,
         }
     }
 
     pub(crate) fn idle() -> Self {
         let (_sender, receiver) = mpsc::channel();
         Self::new(receiver, None)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_stub() -> Self {
+        let mut runtime = Self::idle();
+        runtime.test_request_queues = true;
+        runtime
     }
 
     pub(crate) fn with_error(message: impl Into<String>) -> Self {
@@ -138,6 +159,13 @@ impl BootstrapRuntime {
     }
 
     pub(crate) fn queue_friend_list_request(&self) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.friend_list_request_count
+                .fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
         let Some(command_sender) = self.command_sender.as_ref() else {
             return false;
         };
@@ -148,6 +176,12 @@ impl BootstrapRuntime {
     }
 
     pub(crate) fn queue_guild_list_request(&self) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.guild_list_request_count.fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
         let Some(command_sender) = self.command_sender.as_ref() else {
             return false;
         };
@@ -155,6 +189,16 @@ impl BootstrapRuntime {
         command_sender
             .send(BootstrapCommand::GuildListRequest)
             .is_ok()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn friend_list_request_count(&self) -> usize {
+        self.friend_list_request_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn guild_list_request_count(&self) -> usize {
+        self.guild_list_request_count.load(Ordering::SeqCst)
     }
 
     pub(crate) fn character_list_ready(&self) -> bool {
@@ -871,7 +915,11 @@ mod tests {
 
         assert_eq!(ui_shell.current(), UiRoute::World);
         assert!(client_runtime.world_ready());
-        assert!(bootstrap.last_error().is_none());
+        assert!(
+            bootstrap.last_error().is_none(),
+            "unexpected bootstrap error: {:?}",
+            bootstrap.last_error()
+        );
     }
 
     #[test]

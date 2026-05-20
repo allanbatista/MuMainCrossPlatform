@@ -454,11 +454,34 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        guild_screen_state_for_phase, guild_shell_should_queue_live_request, guild_shell_view,
-        guild_shell_visible,
+        guild_screen_state_for_phase, guild_shell_view, guild_shell_visible, GuildShellPlugin,
+        GuildShellRoot,
     };
-    use crate::SessionPhase;
-    use mu_ui::{GuildScreenState, UiRoute};
+    use crate::control_http::{ControlHttpState, ControlSnapshot};
+    use crate::{AppState, SessionPhase, SessionState};
+    use bevy::prelude::App;
+    use mu_ui::{GuildScreenState, UiRoute, UiShellState};
+    use std::sync::{Arc, Mutex};
+
+    fn guild_shell_root_count(world: &mut bevy::prelude::World) -> usize {
+        let mut query = world.query::<&GuildShellRoot>();
+        query.iter(world).count()
+    }
+
+    fn guild_list_request_count(world: &bevy::prelude::World) -> usize {
+        world
+            .resource::<crate::bootstrap_runtime::BootstrapRuntime>()
+            .guild_list_request_count()
+    }
+
+    fn control_http_state(guild_screen_state: GuildScreenState) -> ControlHttpState {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        snapshot
+            .lock()
+            .expect("control snapshot poisoned")
+            .guild_screen_state = Some(guild_screen_state);
+        ControlHttpState::new(snapshot)
+    }
 
     #[test]
     fn guild_shell_visibility_follows_route_and_disconnect() {
@@ -507,17 +530,65 @@ mod tests {
 
     #[test]
     fn guild_shell_requests_live_data_once_per_logged_in_activation() {
-        assert!(guild_shell_should_queue_live_request(
-            SessionPhase::LoggedIn,
-            false
-        ));
-        assert!(!guild_shell_should_queue_live_request(
-            SessionPhase::LoggedIn,
-            true
-        ));
-        assert!(!guild_shell_should_queue_live_request(
-            SessionPhase::ReadyForLogin,
-            false
-        ));
+        let mut app = App::new();
+        app.add_plugins((mu_ui::UiShellPlugin, GuildShellPlugin));
+
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::Guild);
+        app.insert_resource(ui_shell);
+
+        let mut session_state = SessionState::new();
+        assert!(session_state.login_success());
+        app.insert_resource(session_state);
+
+        app.insert_resource(crate::bootstrap_runtime::BootstrapRuntime::test_stub());
+        app.insert_resource(control_http_state(GuildScreenState::Summary));
+
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 1);
+
+        {
+            let shared_snapshot = app.world().resource::<ControlHttpState>().shared_snapshot();
+            shared_snapshot
+                .lock()
+                .expect("control snapshot poisoned")
+                .guild_screen_state = Some(GuildScreenState::Union);
+        }
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::World);
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 0);
+        assert_eq!(guild_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::Guild);
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 2);
+
+        app.world_mut().resource_mut::<SessionState>().logout();
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 2);
+
+        app.world_mut()
+            .resource_mut::<SessionState>()
+            .login_success();
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 3);
     }
 }

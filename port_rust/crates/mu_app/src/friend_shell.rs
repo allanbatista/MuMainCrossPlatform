@@ -482,12 +482,26 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        friend_screen_state_for_mail, friend_shell_should_queue_live_request, friend_shell_view,
-        friend_shell_visible,
+        friend_screen_state_for_mail, friend_shell_view, friend_shell_visible, FriendShellPlugin,
+        FriendShellRoot,
     };
-    use crate::SessionPhase;
+    use crate::bootstrap_runtime::BootstrapRuntime;
+    use crate::{SessionPhase, SessionState};
+    use bevy::prelude::App;
     use mu_gameplay::MailManager;
-    use mu_ui::{FriendScreenState, UiRoute};
+    use mu_gameplay::MailPlugin;
+    use mu_ui::{FriendScreenState, UiRoute, UiShellState};
+
+    fn friend_shell_root_count(world: &mut bevy::prelude::World) -> usize {
+        let mut query = world.query::<&FriendShellRoot>();
+        query.iter(world).count()
+    }
+
+    fn friend_list_request_count(world: &bevy::prelude::World) -> usize {
+        world
+            .resource::<BootstrapRuntime>()
+            .friend_list_request_count()
+    }
 
     #[test]
     fn friend_shell_visibility_follows_route_and_disconnect() {
@@ -564,17 +578,62 @@ mod tests {
 
     #[test]
     fn friend_shell_requests_live_data_once_per_logged_in_activation() {
-        assert!(friend_shell_should_queue_live_request(
-            SessionPhase::LoggedIn,
-            false
-        ));
-        assert!(!friend_shell_should_queue_live_request(
-            SessionPhase::LoggedIn,
-            true
-        ));
-        assert!(!friend_shell_should_queue_live_request(
-            SessionPhase::ReadyForLogin,
-            false
-        ));
+        let mut app = App::new();
+        app.add_plugins((mu_ui::UiShellPlugin, FriendShellPlugin, MailPlugin));
+
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::Friend);
+        app.insert_resource(ui_shell);
+
+        let mut session_state = SessionState::new();
+        assert!(session_state.login_success());
+        app.insert_resource(session_state);
+
+        app.insert_resource(BootstrapRuntime::test_stub());
+
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 1);
+        assert_eq!(friend_list_request_count(app.world()), 1);
+
+        app.world_mut().resource_mut::<MailManager>().set_compose(
+            "Blade",
+            "Re: patrol",
+            "Meet at Davias.",
+        );
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 1);
+        assert_eq!(friend_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::World);
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 0);
+        assert_eq!(friend_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::Friend);
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 1);
+        assert_eq!(friend_list_request_count(app.world()), 2);
+
+        app.world_mut().resource_mut::<SessionState>().logout();
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 1);
+        assert_eq!(friend_list_request_count(app.world()), 2);
+
+        app.world_mut()
+            .resource_mut::<SessionState>()
+            .login_success();
+        app.update();
+
+        assert_eq!(friend_shell_root_count(app.world_mut()), 1);
+        assert_eq!(friend_list_request_count(app.world()), 3);
     }
 }
