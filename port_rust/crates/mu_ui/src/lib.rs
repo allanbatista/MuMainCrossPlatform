@@ -50,6 +50,7 @@ pub use admin_skill_editor::{
 pub use character_create::{
     character_create_screen, CharacterCreateAction, CharacterCreateButton,
     CharacterCreateClassEntry, CharacterCreateScreen, CharacterCreateScreenState,
+    CHARACTER_CREATE_NAME_MIN_LENGTH,
 };
 pub use character_select::{
     character_select_screen, CharacterSelectAction, CharacterSelectButton,

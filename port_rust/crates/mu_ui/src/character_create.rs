@@ -8,7 +8,7 @@ const SUBMITTING_NOTICE: &str = "Creating character...";
 const INVALID_NAME_NOTICE: &str = "Name must be at least 4 characters.";
 const ERROR_NOTICE: &str = "Character creation is unavailable.";
 
-const CHARACTER_CREATE_NAME_MIN_LENGTH: usize = 4;
+pub const CHARACTER_CREATE_NAME_MIN_LENGTH: usize = 4;
 
 const CHARACTER_CLASSES: [CharacterClass; 7] = [
     CharacterClass::Knight,
@@ -194,16 +194,12 @@ fn class_summary(class_: CharacterClass) -> &'static str {
         CharacterClass::Elf | CharacterClass::MuseElf | CharacterClass::HighElf => {
             "Flexible ranged support."
         }
-        CharacterClass::MagicGladiator | CharacterClass::DuelMaster => {
-            "Hybrid melee caster."
-        }
+        CharacterClass::MagicGladiator | CharacterClass::DuelMaster => "Hybrid melee caster.",
         CharacterClass::DarkLord | CharacterClass::LordEmperor => "Commanding dark warrior.",
         CharacterClass::Summoner
         | CharacterClass::BloodySummoner
         | CharacterClass::DimensionMaster => "Debuff-heavy magic user.",
-        CharacterClass::RageFighter | CharacterClass::TempleKnight => {
-            "Fast close-range striker."
-        }
+        CharacterClass::RageFighter | CharacterClass::TempleKnight => "Fast close-range striker.",
         CharacterClass::Undefined => "Unknown class.",
     }
 }

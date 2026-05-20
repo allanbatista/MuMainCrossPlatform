@@ -11,17 +11,17 @@ use bevy::input::keyboard::KeyCode;
 use bevy::input::ButtonInput;
 use bevy::prelude::{Commands, IntoScheduleConfigs, Res, ResMut, Resource, Startup, Update};
 use camino::Utf8Path;
-use mu_gameplay::MovementCommand;
+use mu_gameplay::{CharacterClass, MovementCommand};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
 use mu_protocol::guild::guild_list_request;
-use mu_protocol::login::{request_character_list, select_character};
+use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::friend_list_request;
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
-    character_select_screen, CharacterSelectCharacter, CharacterSelectScreenState, UiRoute,
-    UiShellState,
+    character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
+    CharacterSelectScreenState, UiRoute, UiShellState,
 };
 use tokio::sync::mpsc as tokio_mpsc;
 
@@ -29,12 +29,16 @@ use crate::{ClientRuntime, Config, GraphicalRuntimeConfig, SessionState};
 
 const SESSION_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 const SESSION_READ_TIMEOUT: Duration = Duration::from_millis(250);
+const DEFAULT_CHARACTER_CREATE_CLASS: u8 = CharacterClass::Knight as u8;
+const CHARACTER_CREATE_FAILURE_MESSAGE: &str = "character creation failed";
 
 #[derive(Debug)]
 pub(crate) enum BootstrapSignal {
     Session(SessionEvent),
     ServerList,
     CharacterList,
+    CharacterCreateSuccess,
+    CharacterCreateFailure,
     Movement(MovementUpdate),
     Logout(u8),
     JoinMap(u8),
@@ -42,10 +46,11 @@ pub(crate) enum BootstrapSignal {
 }
 
 #[derive(Debug)]
-enum BootstrapCommand {
+pub(crate) enum BootstrapCommand {
     Walk(MovementCommand),
     Chat { sender: String, message: String },
     SelectCharacter(String),
+    CreateCharacter(String),
     FriendListRequest,
     GuildListRequest,
 }
@@ -57,6 +62,7 @@ pub struct BootstrapRuntime {
     pending_world_map: Option<u8>,
     character_list_ready: bool,
     character_select_index: Option<usize>,
+    character_create_state: CharacterCreateScreenState,
     last_error: Option<String>,
     #[cfg(test)]
     friend_list_request_count: AtomicUsize,
@@ -67,7 +73,7 @@ pub struct BootstrapRuntime {
 }
 
 impl BootstrapRuntime {
-    fn new(
+    pub(crate) fn new(
         receiver: Receiver<BootstrapSignal>,
         command_sender: Option<tokio_mpsc::UnboundedSender<BootstrapCommand>>,
     ) -> Self {
@@ -77,6 +83,7 @@ impl BootstrapRuntime {
             pending_world_map: None,
             character_list_ready: false,
             character_select_index: None,
+            character_create_state: CharacterCreateScreenState::Ready,
             last_error: None,
             #[cfg(test)]
             friend_list_request_count: AtomicUsize::new(0),
@@ -158,6 +165,25 @@ impl BootstrapRuntime {
             .is_ok()
     }
 
+    pub(crate) fn queue_character_create_request(
+        &mut self,
+        character_name: impl Into<String>,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        let sent = command_sender
+            .send(BootstrapCommand::CreateCharacter(character_name.into()))
+            .is_ok();
+
+        if sent {
+            self.character_create_state = CharacterCreateScreenState::Submitting;
+        }
+
+        sent
+    }
+
     pub(crate) fn queue_friend_list_request(&self) -> bool {
         #[cfg(test)]
         if self.test_request_queues {
@@ -219,6 +245,14 @@ impl BootstrapRuntime {
 
     pub(crate) fn set_character_select_index(&mut self, index: Option<usize>) {
         self.character_select_index = index;
+    }
+
+    pub(crate) fn character_create_state(&self) -> CharacterCreateScreenState {
+        self.character_create_state
+    }
+
+    pub(crate) fn set_character_create_state(&mut self, state: CharacterCreateScreenState) {
+        self.character_create_state = state;
     }
 }
 
@@ -344,14 +378,28 @@ fn apply_bootstrap_signal(
         BootstrapSignal::ServerList => {
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::ServerSelect);
         }
         BootstrapSignal::CharacterList => {
             bootstrap.set_character_list_ready(true);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
+        }
+        BootstrapSignal::CharacterCreateSuccess => {
+            bootstrap.set_character_list_ready(true);
+            bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.last_error = None;
+            ui_shell.set_route(UiRoute::CharacterSelect);
+        }
+        BootstrapSignal::CharacterCreateFailure => {
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
+            bootstrap.last_error = Some(CHARACTER_CREATE_FAILURE_MESSAGE.to_string());
+            ui_shell.set_route(UiRoute::CharacterCreate);
         }
         BootstrapSignal::Movement(update) => apply_movement_update(update, client_runtime),
         BootstrapSignal::Logout(kind) => apply_logout(kind, bootstrap, ui_shell),
@@ -359,6 +407,7 @@ fn apply_bootstrap_signal(
             bootstrap.pending_world_map = Some(map);
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::Loading);
         }
@@ -367,7 +416,13 @@ fn apply_bootstrap_signal(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some(message);
-            ui_shell.set_route(UiRoute::Error);
+
+            if bootstrap.character_create_state() == CharacterCreateScreenState::Submitting {
+                bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
+                ui_shell.set_route(UiRoute::CharacterCreate);
+            } else {
+                ui_shell.set_route(UiRoute::Error);
+            }
         }
     }
 }
@@ -385,6 +440,7 @@ fn apply_session_event(
             bootstrap.pending_world_map = None;
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
@@ -393,6 +449,7 @@ fn apply_session_event(
             bootstrap.pending_world_map = None;
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = Some("login failed".to_string());
             ui_shell.set_route(UiRoute::Login);
         }
@@ -400,10 +457,13 @@ fn apply_session_event(
             session_state.apply_event(event);
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
         }
         SessionEvent::Disconnect => {
             let pending_world_map = bootstrap.pending_world_map.is_some();
             let world_ready = client_runtime.world_ready();
+            let create_pending =
+                bootstrap.character_create_state() == CharacterCreateScreenState::Submitting;
             session_state.apply_event(event);
 
             if pending_world_map {
@@ -414,6 +474,12 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some("connection lost".to_string());
+
+            if create_pending {
+                bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
+                ui_shell.set_route(UiRoute::CharacterCreate);
+                return;
+            }
 
             if !world_ready {
                 ui_shell.set_route(UiRoute::Error);
@@ -442,6 +508,7 @@ fn apply_logout(kind: u8, bootstrap: &mut BootstrapRuntime, ui_shell: &mut UiShe
     bootstrap.pending_world_map = None;
     bootstrap.set_character_list_ready(false);
     bootstrap.clear_character_select_selection();
+    bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
     bootstrap.last_error = None;
 
     match kind {
@@ -609,6 +676,11 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
         (0xF4, 0x06) => Some(BootstrapSignal::ServerList),
         (0xF4, 0x05) => Some(BootstrapSignal::Error("server is busy".to_string())),
         (0xF3, 0x00) => Some(BootstrapSignal::CharacterList),
+        (0xF3, 0x01) => match frame.payload.first().copied() {
+            Some(1) => Some(BootstrapSignal::CharacterCreateSuccess),
+            Some(_) => Some(BootstrapSignal::CharacterCreateFailure),
+            _ => None,
+        },
         (0xF3, 0x03) => frame.payload.get(2).copied().map(BootstrapSignal::JoinMap),
         (0xF1, 0x02) => frame.payload.first().copied().map(BootstrapSignal::Logout),
         _ => None,
@@ -645,6 +717,15 @@ async fn send_bootstrap_command(
         }
         BootstrapCommand::SelectCharacter(character_name) => {
             send_character_select_request(session, character_name).await
+        }
+        BootstrapCommand::CreateCharacter(character_name) => {
+            let packet = create_character(character_name, DEFAULT_CHARACTER_CREATE_CLASS)
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
         }
         BootstrapCommand::FriendListRequest => {
             let packet = friend_list_request().map_err(|error| error.to_string())?;
@@ -754,8 +835,9 @@ fn character_is_selected(character: &CharacterSelectCharacter) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_bootstrap_signal, apply_character_select_input, finish_world_bootstrap,
-        legacy_language_byte, BootstrapCommand, BootstrapRuntime, BootstrapSignal,
+        apply_bootstrap_signal, apply_character_select_input, classify_bootstrap_packet,
+        finish_world_bootstrap, legacy_language_byte, BootstrapCommand, BootstrapRuntime,
+        BootstrapSignal, DEFAULT_CHARACTER_CREATE_CLASS,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
@@ -765,13 +847,17 @@ mod tests {
     use mu_gameplay::MovementCommand;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
+    use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
     use mu_protocol::guild::guild_list_request;
-    use mu_protocol::login::{request_character_list, select_character};
+    use mu_protocol::login::{create_character, request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
-    use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
+    use mu_protocol::session::{
+        character_creation_failed, character_creation_successful, character_list_extended,
+        game_server_entered, CharacterListEntry,
+    };
     use mu_protocol::social::friend_list_request;
-    use mu_ui::{UiRoute, UiShellState};
+    use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
@@ -989,6 +1075,239 @@ mod tests {
             BootstrapCommand::GuildListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn character_create_request_marks_the_state_submitting_and_queues_the_name() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_character_create_request("Astra"));
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Submitting
+        );
+
+        match command_receiver
+            .try_recv()
+            .expect("create character command missing")
+        {
+            BootstrapCommand::CreateCharacter(character_name) => {
+                assert_eq!(character_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn character_create_packets_classify_success_and_failure() {
+        let success = character_creation_successful(b"Astra", 0, 255, 1, 32, b"preview")
+            .expect("success packet");
+        let success_frame = decode_packet(&success).expect("success packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&success_frame),
+            Some(BootstrapSignal::CharacterCreateSuccess)
+        ));
+
+        let failure = character_creation_failed().expect("failure packet");
+        let failure_frame = decode_packet(&failure).expect("failure packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&failure_frame),
+            Some(BootstrapSignal::CharacterCreateFailure)
+        ));
+
+        let failure_two = encode_packet(0xC1, 0xF3, 0x01, &[2]).expect("failure2 packet");
+        let failure_two_frame = decode_packet(&failure_two).expect("failure2 packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&failure_two_frame),
+            Some(BootstrapSignal::CharacterCreateFailure)
+        ));
+    }
+
+    #[tokio::test]
+    async fn fake_server_packets_drive_the_character_create_request_worker() {
+        let server_list = mu_protocol::connect::encode_server_list_response(&[
+            mu_protocol::connect::ServerEntry::new(7, 42),
+        ])
+        .unwrap();
+        let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
+        let character_list = character_list_extended(
+            1,
+            2,
+            true,
+            &[CharacterListEntry {
+                slot_index: 0,
+                name: b"Astra",
+                level: 255,
+                status: 32,
+                is_item_block_active: false,
+                appearance: b"appearance-data",
+                guild_position: 0,
+            }],
+        )
+        .unwrap();
+        let create_character_request =
+            create_character(b"Astra", DEFAULT_CHARACTER_CREATE_CLASS).unwrap();
+        let create_character_success =
+            character_creation_successful(b"Astra", 0, 255, 1, 32, b"preview").unwrap();
+        let server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .send_packet(server_list.clone())
+                    .send_packet(login_success.clone())
+                    .expect_packet(request_character_list(0).unwrap())
+                    .send_packet(character_list.clone())
+                    .expect_packet(create_character_request.clone())
+                    .send_packet(create_character_success.clone())
+                    .delay(Duration::from_millis(50))
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let mut bootstrap = {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
+            BootstrapRuntime::new(receiver, Some(command_sender))
+        };
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            if ui_shell.current() == UiRoute::CharacterSelect && bootstrap.character_list_ready() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        ui_shell.set_route(UiRoute::CharacterCreate);
+        assert!(bootstrap.queue_character_create_request("Astra"));
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Submitting
+        );
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            if ui_shell.current() == UiRoute::CharacterSelect
+                && bootstrap.character_create_state() == CharacterCreateScreenState::Ready
+            {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        server.finish().await.unwrap();
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Ready
+        );
+        assert!(bootstrap.last_error().is_none());
+    }
+
+    #[test]
+    fn character_create_signal_updates_the_visible_route_state() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_create_state(CharacterCreateScreenState::Submitting);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::CharacterCreateSuccess,
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Ready
+        );
+        assert!(bootstrap.character_list_ready());
+    }
+
+    #[test]
+    fn character_create_failure_keeps_the_create_route_in_error() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_create_state(CharacterCreateScreenState::Submitting);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::CharacterCreate);
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::CharacterCreateFailure,
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterCreate);
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Error
+        );
+    }
+
+    #[test]
+    fn character_create_disconnect_keeps_the_create_route_in_error() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_create_state(CharacterCreateScreenState::Submitting);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::CharacterCreate);
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Disconnect),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(
+            session_state.phase(),
+            mu_network::SessionPhase::Disconnected
+        );
+        assert_eq!(ui_shell.current(), UiRoute::CharacterCreate);
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Error
+        );
     }
 
     #[test]

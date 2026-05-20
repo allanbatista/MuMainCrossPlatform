@@ -6,7 +6,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::{AppState, SessionPhase};
 use bevy::prelude::Resource;
-use mu_ui::{FriendScreenState, GuildScreenState, UiRoute};
+use mu_ui::{FriendScreenState, GuildScreenState, UiRoute, CHARACTER_CREATE_NAME_MIN_LENGTH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlCommand {
@@ -17,6 +17,7 @@ pub enum ControlCommand {
     Options,
     CharacterSelect,
     CharacterCreate,
+    CreateCharacter,
     Loading,
     World,
     Chat,
@@ -60,6 +61,7 @@ impl ControlCommand {
             Self::Options => "options",
             Self::CharacterSelect => "character-select",
             Self::CharacterCreate => "character-create",
+            Self::CreateCharacter => "create-character",
             Self::Loading => "loading",
             Self::World => "world",
             Self::Chat => "chat",
@@ -107,6 +109,7 @@ impl ControlCommand {
                 Some(Self::CharacterSelect)
             }
             "character-create" | "character_create" => Some(Self::CharacterCreate),
+            "create-character" | "create_character" => Some(Self::CreateCharacter),
             "loading" => Some(Self::Loading),
             "world" => Some(Self::World),
             "chat" => Some(Self::Chat),
@@ -214,6 +217,12 @@ impl ControlSnapshot {
                 self.ui_route = UiRoute::CharacterCreate;
                 self.session_phase = SessionPhase::LoggedIn;
                 self.selected_character_name = None;
+                false
+            }
+            ControlCommand::CreateCharacter => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterCreate;
+                self.session_phase = SessionPhase::LoggedIn;
                 false
             }
             ControlCommand::Loading => {
@@ -666,13 +675,34 @@ fn route_request(
             let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
             let should_shutdown = match command {
                 ControlCommand::SelectCharacter => {
-                    let Some(character_name) = selection_character_name(&request) else {
+                    let Some(character_name) = character_name_from_request(&request) else {
                         return HttpResponse::json(
                             400,
                             "Bad Request",
                             r#"{"error":"missing character name"}"#.to_string(),
                         );
                     };
+
+                    snapshot.selected_character_name = Some(character_name);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::CreateCharacter => {
+                    let Some(character_name) = character_name_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing character name"}"#.to_string(),
+                        );
+                    };
+
+                    if character_name.trim().len() < CHARACTER_CREATE_NAME_MIN_LENGTH {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"character name must be at least 4 characters"}"#
+                                .to_string(),
+                        );
+                    }
 
                     snapshot.selected_character_name = Some(character_name);
                     snapshot.apply_command(command)
@@ -816,7 +846,7 @@ fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-fn selection_character_name(request: &HttpRequest) -> Option<String> {
+fn character_name_from_request(request: &HttpRequest) -> Option<String> {
     query_value(&request.query, "character")
         .or_else(|| query_value(&request.body, "character"))
         .map(str::to_string)
@@ -953,6 +983,15 @@ mod tests {
             Some(ControlCommand::CharacterCreate)
         );
         assert_eq!(ControlCommand::CharacterCreate.as_str(), "character-create");
+        assert_eq!(
+            ControlCommand::parse("create-character"),
+            Some(ControlCommand::CreateCharacter)
+        );
+        assert_eq!(
+            ControlCommand::parse("create_character"),
+            Some(ControlCommand::CreateCharacter)
+        );
+        assert_eq!(ControlCommand::CreateCharacter.as_str(), "create-character");
         assert_eq!(
             ControlCommand::parse("options"),
             Some(ControlCommand::Options)
@@ -1172,6 +1211,15 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=create-character&character=Astra HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"character-create""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""last_command":"create-character""#));
+        assert!(body.contains(r#""selected_character_name":"Astra""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=select-character HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nConnection: close\r\n\r\nAstra",
         );
         assert!(body.contains(r#""ui_route":"character-select""#));
@@ -1277,7 +1325,31 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 18);
+        assert_eq!(final_snapshot.command_count, 19);
+    }
+
+    #[test]
+    fn create_character_rejects_short_names() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=create-character&character=Aba HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains("character name must be at least 4 characters"));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""ui_route":"login""#));
+        assert!(state_body.contains(r#""selected_character_name":null"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
     }
 
     #[test]

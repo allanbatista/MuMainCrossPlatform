@@ -132,7 +132,7 @@ fn auth_shell_view(
         UiRoute::ServerSelect => Some(server_select_view(phase)),
         UiRoute::Options => Some(options_view(phase)),
         UiRoute::CharacterSelect => Some(character_select_view(phase, bootstrap)),
-        UiRoute::CharacterCreate => Some(character_create_view(phase)),
+        UiRoute::CharacterCreate => Some(character_create_view(phase, bootstrap)),
         UiRoute::Error => Some(error_view(phase)),
         _ => None,
     }
@@ -233,12 +233,21 @@ fn character_select_view(
     }
 }
 
-fn character_create_view(phase: SessionPhase) -> AuthShellView {
-    let screen = if phase == SessionPhase::Disconnected {
-        character_create_screen(CharacterCreateScreenState::Error)
+fn character_create_view(
+    phase: SessionPhase,
+    bootstrap: Option<&BootstrapRuntime>,
+) -> AuthShellView {
+    let screen_state = bootstrap.map_or(CharacterCreateScreenState::Ready, |bootstrap| {
+        bootstrap.character_create_state()
+    });
+    let screen_state = if screen_state == CharacterCreateScreenState::Error
+        || phase != SessionPhase::Disconnected
+    {
+        screen_state
     } else {
-        character_create_screen(CharacterCreateScreenState::Ready)
+        CharacterCreateScreenState::Error
     };
+    let screen = character_create_screen(screen_state);
 
     AuthShellView {
         title: screen.title,
@@ -823,8 +832,9 @@ mod tests {
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{
-        login_screen, CharacterSelectAction, CharacterSelectButton, CharacterSelectCharacter,
-        LoginField, LoginScreenState, ServerEntry, ServerSelectAction, UiRoute, UiShellState,
+        login_screen, CharacterCreateScreenState, CharacterSelectAction, CharacterSelectButton,
+        CharacterSelectCharacter, LoginField, LoginScreenState, ServerEntry, ServerSelectAction,
+        UiRoute, UiShellState,
     };
 
     #[test]
@@ -930,6 +940,39 @@ mod tests {
         assert!(view.body.contains("STR"));
         assert!(view.body.contains("Create"));
         assert!(view.body.contains("Cancel"));
+    }
+
+    #[test]
+    fn character_create_shell_uses_the_submitting_state_when_pending() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_create_state(CharacterCreateScreenState::Submitting);
+
+        let view = auth_shell_view(
+            UiRoute::CharacterCreate,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character create shell missing");
+
+        assert!(view.status.contains("route=character-create"));
+        assert!(view.body.contains("Creating character..."));
+        assert!(view.body.contains("Create (disabled)"));
+    }
+
+    #[test]
+    fn character_create_shell_uses_the_error_state_when_the_request_fails() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
+
+        let view = auth_shell_view(
+            UiRoute::CharacterCreate,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character create shell missing");
+
+        assert!(view.body.contains("Character creation is unavailable."));
+        assert!(view.body.contains("Create (disabled)"));
     }
 
     #[test]

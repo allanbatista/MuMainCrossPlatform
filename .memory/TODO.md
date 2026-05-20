@@ -36,9 +36,3 @@ is still required.
 The friend and guild routes now trigger their live list requests on login,
 but the response decoding and snapshot population for the roster, letters,
 and guild data still remain for a later slice.
-
-# [medium] Character create packet wiring
-
-The character-create shell now renders locally and the control HTTP smoke
-command opens it, but the actual create-character packet submission and name
-validation/network response handling still need a later networking slice.

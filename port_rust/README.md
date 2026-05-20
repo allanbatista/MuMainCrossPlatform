@@ -21,7 +21,9 @@ sessao de jogo completa.
   `--control-http` usando o nome no body ou em `character=`. A rota visivel
   `character-create` tambem pode ser aberta pelo comando `character-create`
   no `--control-http`, mostrando a lista base de classes, o prompt de nome e
-  os botoes create/cancel. Na tela de character select, use `Up`/`Down` ou
+  os botoes create/cancel; `create-character` envia o nome para o worker,
+  valida o minimo de 4 chars no control plane e reage ao retorno de
+  sucesso/falha da rede. Na tela de character select, use `Up`/`Down` ou
   `Left`/`Right` e `Enter` para escolher um personagem sem depender do
   control-http. No world route, mostra uma
   world shell 3D
@@ -164,7 +166,7 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|character-create|select-character|loading|world|chat|npc|shop|game-shop|
+  character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
   trade|mu-helper|login-success|login-failure|party|gate|friend|guild|duel|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.

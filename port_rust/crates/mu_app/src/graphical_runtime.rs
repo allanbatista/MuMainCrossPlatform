@@ -19,7 +19,7 @@ use mu_gameplay::{
     WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
-use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
+use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
 
 use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
@@ -240,7 +240,7 @@ fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMu
 
 fn sync_control_http_snapshot_to_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
-    bootstrap: Option<Res<BootstrapRuntime>>,
+    bootstrap: Option<ResMut<BootstrapRuntime>>,
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
 ) {
@@ -262,13 +262,28 @@ fn sync_control_http_snapshot_to_runtime(
         session_state.sync_phase(snapshot.session_phase);
     }
 
-    if matches!(snapshot.last_command, Some(ControlCommand::SelectCharacter)) {
-        if let (Some(bootstrap), Some(character_name)) = (
-            bootstrap.as_deref(),
-            snapshot.selected_character_name.as_deref(),
-        ) {
-            let _ = bootstrap.queue_character_select_request(character_name);
+    let Some(mut bootstrap) = bootstrap else {
+        control_http.mark_applied(snapshot.command_count);
+        return;
+    };
+
+    match snapshot.last_command {
+        Some(ControlCommand::CharacterCreate) => {
+            bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
         }
+        Some(ControlCommand::SelectCharacter) => {
+            if let Some(character_name) = snapshot.selected_character_name.as_deref() {
+                let _ = bootstrap.queue_character_select_request(character_name);
+            }
+        }
+        Some(ControlCommand::CreateCharacter) => {
+            if let Some(character_name) = snapshot.selected_character_name.as_deref() {
+                if !bootstrap.queue_character_create_request(character_name) {
+                    bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
+                }
+            }
+        }
+        _ => {}
     }
 
     control_http.mark_applied(snapshot.command_count);
@@ -311,11 +326,13 @@ mod tests {
         setup_boot_camera_and_login_route, sync_control_http_snapshot_to_runtime,
         GraphicalRuntimeConfig,
     };
+    use crate::bootstrap_runtime::BootstrapRuntime;
     use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
     use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
-    use mu_ui::{UiRoute, UiShellState};
+    use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
+    use tokio::sync::mpsc as tokio_mpsc;
 
     fn cli() -> Cli {
         Cli {
@@ -383,6 +400,49 @@ mod tests {
 
         assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
         assert_eq!(session_state.phase(), SessionPhase::LoggedIn);
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_character_create_submit() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.apply_command(ControlCommand::CharacterCreate);
+            snapshot.selected_character_name = Some("Astra".to_string());
+            snapshot.apply_command(ControlCommand::CreateCharacter);
+        }
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("create character command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::CreateCharacter(character_name) => {
+                assert_eq!(character_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        let bootstrap = app.world().resource::<BootstrapRuntime>();
+        assert_eq!(
+            bootstrap.character_create_state(),
+            CharacterCreateScreenState::Submitting
+        );
     }
 
     #[test]

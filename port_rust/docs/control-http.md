@@ -9,6 +9,8 @@ character select/world da Bevy runtime e a shell visual correspondente; no
 modo `--headless`, continua sendo um smoke server deterministico. As rotas
 `friend`, `guild` e `duel` tambem espelham as shells visiveis, e `friend`
 e `guild` aceitam comandos de subview para testar as telas internas.
+`character-create` abre a shell visivel de criacao, e `create-character`
+submete o nome informado para o worker de bootstrap.
 
 ## Como iniciar
 
@@ -37,6 +39,7 @@ e o servidor continua disponivel para inspeção local.
 - `ui_route`
 - `session_phase`
 - `last_command`
+- `selected_character_name`
 - `friend_screen_state`
 - `guild_screen_state`
 - `command_count`
@@ -44,7 +47,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_screen_state":null,"guild_screen_state":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -58,6 +61,7 @@ Exemplo:
 - `options`
 - `character-select`
 - `character-create`
+- `create-character`
 - `select-character`
 - `loading`
 - `world`
@@ -91,7 +95,7 @@ Exemplo:
 - `ping`
 
 `server-select`, `options`, `character-select`, `character-create`,
-`loading`, `world`, `chat`, `npc`, `select-character`, `shop`, `game-shop`,
+`create-character`, `loading`, `world`, `chat`, `npc`, `select-character`, `shop`, `game-shop`,
 `trade`, `party`, `gate`, `friend`, `friend-roster`, `friend-inbox`,
 `friend-compose`, `friend-chat-rooms`, `guild`, `guild-summary`,
 `guild-members`, `guild-union`, `guild-no-guild`, `guild-error`, `duel`,
@@ -99,8 +103,12 @@ Exemplo:
 rota/session state do runtime grafico. `options` abre a janela compartilhada
 de options no auth shell. `character-create` abre a shell visivel de
 criacao com lista base de classes, prompt de nome e botoes create/cancel.
-`select-character` envia o nome recebido para o session worker e continua o
-bootstrap apenas quando o personagem for nomeado.
+`create-character` envia o nome recebido para o session worker e continua o
+bootstrap apenas quando o servidor confirma a criacao; o nome pode vir no
+body bruto, em `character=` ou como texto puro. Nomes com menos de 4
+caracteres ou ausentes retornam `400` no control plane. `select-character`
+envia o nome recebido para o session worker e continua o bootstrap apenas
+quando o personagem for nomeado.
 Se o nome vier vazio, a resposta sera `400` e o cliente continua em
 character select.
 `chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
@@ -126,6 +134,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
 curl -X POST 'http://127.0.0.1:12345/command?name=options'
 curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=character-create'
+curl -X POST 'http://127.0.0.1:12345/command?name=create-character&character=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
