@@ -73,3 +73,9 @@ GameShop, MU Helper, editor/admin, and log evidence on the packaged flow.
 `F7.S1.T1` through `F7.S2.T2` are still open after the audio runtime pass.
 Next concrete implementation work is the render asset loader, terrain/world
 stack, movement input, entity rendering, and particle/effects coverage.
+
+# [medium] Wire guild cache into consumers
+
+`GuildCache` now exists in `mu_gameplay`, but no runtime/UI surface reads it
+yet. Next pass should thread guild mark data into the guild/siege projection
+that actually renders marks.
