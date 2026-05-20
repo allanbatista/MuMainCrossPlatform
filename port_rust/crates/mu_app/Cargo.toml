@@ -9,8 +9,10 @@ camino.workspace = true
 clap.workspace = true
 mu_assets = { path = "../mu_assets" }
 mu_audio = { path = "../mu_audio" }
+mu_gameplay = { path = "../mu_gameplay" }
 mu_input = { path = "../mu_input" }
 mu_network = { path = "../mu_network" }
+mu_render = { path = "../mu_render" }
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true

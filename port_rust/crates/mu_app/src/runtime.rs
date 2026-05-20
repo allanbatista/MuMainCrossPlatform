@@ -1,11 +1,13 @@
 use std::io::{self, Write};
 use std::process::ExitCode;
 
+use crate::client_runtime::ClientRuntime;
 use crate::state::boot;
 use crate::{control_http, logging, AppState, Cli};
 
 pub fn run(cli: Cli) -> ExitCode {
-    let (state, asset_error) = boot(&cli);
+    let (mut state, asset_error) = boot(&cli);
+    let mut runtime = ClientRuntime::new();
 
     if let Some(error) = asset_error {
         logging::error(
@@ -14,6 +16,20 @@ pub fn run(cli: Cli) -> ExitCode {
             &error,
         );
         eprintln!("asset validation failed: {error}");
+    }
+
+    if state != AppState::AssetCheckFailed {
+        if let Some(asset_root) = &cli.asset_root {
+            if let Err(error) = runtime.load_render_assets(asset_root) {
+                logging::error(
+                    logging::COMPONENT_RUNTIME,
+                    logging::ERROR_ID_ASSET_VALIDATION_FAILED,
+                    &error,
+                );
+                eprintln!("asset validation failed: {error}");
+                state = AppState::AssetCheckFailed;
+            }
+        }
     }
 
     if let Some(address) = cli.control_http {
