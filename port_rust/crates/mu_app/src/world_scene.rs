@@ -1,3 +1,5 @@
+use std::fs;
+
 use bevy::asset::RenderAssetUsages;
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::primitives::Cuboid;
@@ -7,17 +9,20 @@ use bevy::prelude::{
     Entity, EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res,
     ResMut, Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
 };
+use camino::Utf8Path;
 use mu_assets::TerrainWorldSummary;
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
 use mu_ui::{UiRoute, UiShellState};
 
-use crate::ClientRuntime;
+use crate::{ClientRuntime, GraphicalRuntimeConfig};
 
 const WORLD_POSITION_SCALE: f32 = 0.05;
 const WORLD_TERRAIN_AMPLITUDE: f32 = 1.0;
 const WORLD_TERRAIN_FALLBACK_THICKNESS: f32 = 0.2;
 const WORLD_TERRAIN_TEXTURE_REPEAT: f32 = 8.0;
 const WORLD_TERRAIN_BLEND_OFFSET: f32 = 0.01;
+const WORLD_TERRAIN_LIGHTMAP_OFFSET: f32 = 0.02;
+const WORLD_TERRAIN_LIGHTMAP_OPACITY: f32 = 0.65;
 const WORLD_CAMERA_HEIGHT_FACTOR: f32 = 1.8;
 const WORLD_CAMERA_DISTANCE_FACTOR: f32 = 2.2;
 const WORLD_RENDER_ENTITY_LIMIT: usize = 8;
@@ -60,6 +65,7 @@ fn sync_world_scene_system(
     mut state: ResMut<WorldSceneState>,
     ui_shell: Res<UiShellState>,
     client_runtime: Res<ClientRuntime>,
+    config: Res<GraphicalRuntimeConfig>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -89,6 +95,7 @@ fn sync_world_scene_system(
         &mut meshes,
         &mut materials,
         world_bundle,
+        config.asset_root.as_deref(),
         client_runtime.render_entities().catalog(),
         &mut state,
     );
@@ -131,6 +138,7 @@ fn spawn_world_scene(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     world_bundle: &mu_gameplay::TerrainWorldBundle,
+    asset_root: Option<&Utf8Path>,
     catalog: &RenderEntityCatalog,
     state: &mut WorldSceneState,
 ) {
@@ -143,6 +151,7 @@ fn spawn_world_scene(
         meshes,
         materials,
         world_bundle,
+        asset_root,
     ));
     spawn_world_entities(commands, asset_server, meshes, materials, catalog, state);
 }
@@ -189,6 +198,7 @@ fn spawn_world_terrain(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     world_bundle: &mu_gameplay::TerrainWorldBundle,
+    asset_root: Option<&Utf8Path>,
 ) -> Vec<Entity> {
     let summary = world_bundle.summary();
     let extent = summary.terrain_size as f32 * WORLD_POSITION_SCALE;
@@ -222,6 +232,26 @@ fn spawn_world_terrain(
         format!("world-terrain-base-{}", summary.world),
     ));
 
+    if let Some(lightmap_path) = world_terrain_lightmap_path(asset_root, world_bundle) {
+        if let Some(lightmap_mesh) = build_world_terrain_mesh(&summary, &world_bundle.map) {
+            let lightmap_material =
+                build_world_terrain_lightmap_material(asset_server, Some(lightmap_path.as_str()));
+            entities.push(spawn_world_terrain_surface(
+                commands,
+                meshes,
+                materials,
+                lightmap_mesh,
+                lightmap_material,
+                Vec3::new(
+                    0.0,
+                    -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5 + WORLD_TERRAIN_LIGHTMAP_OFFSET,
+                    0.0,
+                ),
+                format!("world-terrain-lightmap-{}", summary.world),
+            ));
+        }
+    }
+
     if let (Some(blend_texture_path), Some(blend_mesh)) = (
         blend_texture_path,
         build_world_terrain_blend_mesh(&summary, &world_bundle.map),
@@ -244,6 +274,14 @@ fn spawn_world_terrain(
     }
 
     entities
+}
+
+fn world_terrain_lightmap_path(
+    asset_root: Option<&Utf8Path>,
+    world_bundle: &mu_gameplay::TerrainWorldBundle,
+) -> Option<String> {
+    let asset_root = asset_root?;
+    resolve_world_asset_path(asset_root, &world_bundle.config.lightmap)
 }
 
 fn build_world_terrain_mesh(
@@ -337,6 +375,24 @@ fn build_world_terrain_material(
     }
 }
 
+fn build_world_terrain_lightmap_material(
+    asset_server: &AssetServer,
+    texture_path: Option<&str>,
+) -> StandardMaterial {
+    let Some(texture_path) = texture_path else {
+        return solid_world_terrain_material();
+    };
+
+    StandardMaterial {
+        base_color: Color::srgba(1.0, 1.0, 1.0, WORLD_TERRAIN_LIGHTMAP_OPACITY),
+        base_color_texture: Some(asset_server.load(texture_path.to_owned())),
+        perceptual_roughness: 1.0,
+        cull_mode: None,
+        alpha_mode: AlphaMode::Blend,
+        ..Default::default()
+    }
+}
+
 fn solid_world_terrain_material() -> StandardMaterial {
     StandardMaterial {
         base_color: Color::srgb(0.12, 0.28, 0.12),
@@ -353,6 +409,29 @@ fn world_terrain_texture_paths(
     let base = texture_paths.next().map(String::as_str);
     let blend = texture_paths.next().map(String::as_str);
     (base, blend)
+}
+
+fn resolve_world_asset_path(asset_root: &Utf8Path, relative_path: &str) -> Option<String> {
+    let relative_path = Utf8Path::new(relative_path);
+    if asset_root.join(relative_path).exists() {
+        return Some(relative_path.to_string());
+    }
+
+    let parent = relative_path.parent().unwrap_or_else(|| Utf8Path::new(""));
+    let checked_in_fallback = parent.join("TerrainLight.png");
+    if asset_root.join(&checked_in_fallback).exists() {
+        return Some(checked_in_fallback.to_string());
+    }
+
+    let file_name = relative_path.file_name()?;
+    let directory = asset_root.join(parent);
+    let actual_name = fs::read_dir(&directory)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .find(|entry| entry.eq_ignore_ascii_case(file_name))?;
+
+    Some(parent.join(actual_name).to_string())
 }
 
 fn build_world_terrain_blend_mesh(
@@ -620,14 +699,15 @@ fn render_entity_for_marker<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_world_terrain_blend_mesh, build_world_terrain_mesh, world_terrain_texture_paths,
-        WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
-        WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
+        build_world_terrain_blend_mesh, build_world_terrain_mesh, world_terrain_lightmap_path,
+        world_terrain_texture_paths, WorldSceneMarker, WorldScenePlugin, WorldSceneState,
+        WorldSceneTerrain, WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
     use crate::ClientRuntime;
+    use crate::GraphicalRuntimeConfig;
     use bevy::asset::AssetPlugin;
     use bevy::mesh::VertexAttributeValues;
-    use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, SceneRoot};
+    use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, Name, SceneRoot};
     use bevy::{gltf::GltfPlugin, scene::ScenePlugin};
     use camino::Utf8PathBuf;
     use mu_assets::load_terrain_world_bundle;
@@ -663,6 +743,14 @@ mod tests {
             WorldScenePlugin,
         ));
         app.init_asset::<bevy::prelude::Image>();
+        app.insert_resource(GraphicalRuntimeConfig {
+            asset_root: Some(asset_root.clone()),
+            server: None,
+            config_path: Utf8PathBuf::from("config/client.toml"),
+            editor_admin: false,
+            offline_fixture: None,
+            evidence_dir: None,
+        });
         app.insert_resource(ClientRuntime::new());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::Mesh>::default());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::StandardMaterial>::default());
@@ -753,8 +841,15 @@ mod tests {
                 .iter()
                 .filter(|entity| world.entity(**entity).contains::<WorldSceneTerrain>())
                 .count(),
-            2
+            3
         );
+        assert!(state.entities.iter().any(|entity| {
+            world
+                .entity(*entity)
+                .get::<Name>()
+                .map(|name| name.as_str().contains("lightmap"))
+                .unwrap_or(false)
+        }));
         assert!(state
             .entities
             .iter()
@@ -889,6 +984,17 @@ mod tests {
                 .expect("bundle should include the last alpha sample"),
         ) / 255.0;
         assert!((last_color[3] - last_alpha).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn world_terrain_lightmap_path_resolves_the_checked_in_asset() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+
+        assert_eq!(
+            world_terrain_lightmap_path(Some(world_root.as_ref()), &bundle),
+            Some("data/world_1/TerrainLight.png".to_string())
+        );
     }
 
     #[test]
