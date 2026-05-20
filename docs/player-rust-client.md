@@ -42,6 +42,8 @@ in the local config file instead of being typed every time.
   inventory shell.
 - The NPC and shop routes now open visible Bevy shells that can be driven
   from the runtime or the local control HTTP smoke path.
+- The GameShop route now opens a visible Bevy shell that can be driven from
+  the runtime or the local control HTTP smoke path with `game-shop`.
 - The chat route now opens a visible Bevy shell with a draft line; when the
   session is logged in, typing printable text and pressing Enter sends a
   public chat packet from the local player.
@@ -78,6 +80,8 @@ in the local config file instead of being typed every time.
   draft.
 - `POST /command?name=npc|shop` can step into the visible NPC and shop route
   shells for local QA smoke.
+- `POST /command?name=game-shop` can step into the visible GameShop route
+  shell for local QA smoke.
 - `POST /command?name=trade` can step into the visible trade route shell for
   local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for

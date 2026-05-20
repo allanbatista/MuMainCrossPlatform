@@ -20,6 +20,7 @@ pub enum ControlCommand {
     Chat,
     Npc,
     Shop,
+    GameShop,
     Trade,
     Party,
     Gate,
@@ -46,6 +47,7 @@ impl ControlCommand {
             Self::Chat => "chat",
             Self::Npc => "npc",
             Self::Shop => "shop",
+            Self::GameShop => "game-shop",
             Self::Trade => "trade",
             Self::Party => "party",
             Self::Gate => "gate",
@@ -76,6 +78,7 @@ impl ControlCommand {
             "chat" => Some(Self::Chat),
             "npc" => Some(Self::Npc),
             "shop" => Some(Self::Shop),
+            "game-shop" | "game_shop" => Some(Self::GameShop),
             "trade" => Some(Self::Trade),
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
@@ -170,6 +173,12 @@ impl ControlSnapshot {
             ControlCommand::Shop => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Shop;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::GameShop => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::GameShop;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -700,6 +709,19 @@ mod tests {
     }
 
     #[test]
+    fn command_parser_recognizes_game_shop_aliases() {
+        assert_eq!(
+            ControlCommand::parse("game-shop"),
+            Some(ControlCommand::GameShop)
+        );
+        assert_eq!(
+            ControlCommand::parse("game_shop"),
+            Some(ControlCommand::GameShop)
+        );
+        assert_eq!(ControlCommand::GameShop.as_str(), "game-shop");
+    }
+
+    #[test]
     fn snapshot_tracks_route_and_session_state() {
         let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
 
@@ -724,6 +746,11 @@ mod tests {
         snapshot.apply_command(ControlCommand::Shop);
 
         assert_eq!(snapshot.ui_route, UiRoute::Shop);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::GameShop);
+
+        assert_eq!(snapshot.ui_route, UiRoute::GameShop);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
         snapshot.apply_command(ControlCommand::Trade);
@@ -799,6 +826,13 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=game-shop HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"game-shop""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=trade HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"trade""#));
@@ -833,7 +867,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 10);
+        assert_eq!(final_snapshot.command_count, 11);
     }
 
     #[test]

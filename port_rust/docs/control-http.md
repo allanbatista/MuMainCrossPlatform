@@ -57,6 +57,7 @@ Exemplo:
 - `chat`
 - `npc`
 - `shop`
+- `game-shop`
 - `trade`
 - `party`
 - `gate`
@@ -70,7 +71,7 @@ Exemplo:
 - `ping`
 
 `server-select`, `character-select`, `loading`, `world`, `chat`, `npc`,
-`shop`, `trade`, `party`, `gate`, `quests`, `login-success` e
+`shop`, `game-shop`, `trade`, `party`, `gate`, `quests`, `login-success` e
 `login-failure` alteram a rota/session state do runtime grafico. `chat` abre
 a shell visivel de chat, que agora aceita texto digitado e Enter para enviar
 mensagem publica quando a sessao esta logada. `exit`
@@ -90,6 +91,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
+curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=trade'
 curl -X POST 'http://127.0.0.1:12345/command?name=party'
 curl -X POST 'http://127.0.0.1:12345/command?name=gate'

@@ -85,8 +85,8 @@ sessao de jogo completa.
 - A camada de chat esta documentada em `docs/player-rust-client.md` e
   `docs/control-http.md` via a rota visual e o smoke local.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
-  runtime de catalog/details/storage/empty/error, a seguranca transacional e a
-  UI snapshot do jogo.
+  runtime de catalog/details/storage/empty/error, a seguranca transacional, a
+  UI snapshot do jogo e o shell visivel controlado por `game-shop`.
 - A camada de MU Helper esta documentada em `docs/mu-helper.md` e cobre o
   modelo de configuracao, o runtime de execucao e os estados ativo/inativo/
   bloqueado.
@@ -128,7 +128,7 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|loading|world|chat|npc|shop|trade|login-success|
+  character-select|loading|world|chat|npc|shop|game-shop|trade|login-success|
   login-failure|party|gate|quests|logout-login|logout-character|disconnect|
   exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
