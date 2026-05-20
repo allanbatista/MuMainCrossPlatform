@@ -8,6 +8,7 @@ use mu_ui::{
     GuildUnionEntry, UiRoute, UiShellState,
 };
 
+use crate::bootstrap_runtime::BootstrapRuntime;
 use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -42,6 +43,7 @@ struct GuildShellKey {
 struct GuildShellState {
     root: Option<Entity>,
     key: Option<GuildShellKey>,
+    guild_list_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,9 +68,14 @@ fn sync_guild_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
+    bootstrap: Res<BootstrapRuntime>,
     control_http: Option<Res<ControlHttpState>>,
     mut state: ResMut<GuildShellState>,
 ) {
+    if session_state.phase() != SessionPhase::LoggedIn {
+        state.guild_list_requested = false;
+    }
+
     let control_http_state = control_http
         .as_deref()
         .and_then(guild_screen_state_for_control_http);
@@ -80,10 +87,16 @@ fn sync_guild_shell_system(
 
     let Some(key) = current else {
         clear_guild_shell(&mut commands, &mut state);
+        state.guild_list_requested = false;
         return;
     };
 
     if state.key.as_ref() == Some(&key) && state.root.is_some() {
+        maybe_queue_guild_list_request(
+            &bootstrap,
+            session_state.phase(),
+            &mut state.guild_list_requested,
+        );
         return;
     }
 
@@ -96,6 +109,11 @@ fn sync_guild_shell_system(
     let root = spawn_guild_shell(&mut commands, &view);
     state.root = Some(root);
     state.key = Some(key);
+    maybe_queue_guild_list_request(
+        &bootstrap,
+        session_state.phase(),
+        &mut state.guild_list_requested,
+    );
 }
 
 fn guild_shell_key(
@@ -116,6 +134,24 @@ fn guild_shell_key(
 
 fn guild_shell_visible(route: UiRoute, phase: SessionPhase) -> bool {
     route == UiRoute::Guild && phase != SessionPhase::Disconnected
+}
+
+fn maybe_queue_guild_list_request(
+    bootstrap: &BootstrapRuntime,
+    phase: SessionPhase,
+    guild_list_requested: &mut bool,
+) {
+    if !guild_shell_should_queue_live_request(phase, *guild_list_requested) {
+        return;
+    }
+
+    if bootstrap.queue_guild_list_request() {
+        *guild_list_requested = true;
+    }
+}
+
+fn guild_shell_should_queue_live_request(phase: SessionPhase, requested: bool) -> bool {
+    phase == SessionPhase::LoggedIn && !requested
 }
 
 fn guild_shell_view(
@@ -417,7 +453,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{guild_screen_state_for_phase, guild_shell_view, guild_shell_visible};
+    use super::{
+        guild_screen_state_for_phase, guild_shell_should_queue_live_request, guild_shell_view,
+        guild_shell_visible,
+    };
     use crate::SessionPhase;
     use mu_ui::{GuildScreenState, UiRoute};
 
@@ -464,5 +503,21 @@ mod tests {
         .expect("guild view");
 
         assert!(view.body.contains("state=union"));
+    }
+
+    #[test]
+    fn guild_shell_requests_live_data_once_per_logged_in_activation() {
+        assert!(guild_shell_should_queue_live_request(
+            SessionPhase::LoggedIn,
+            false
+        ));
+        assert!(!guild_shell_should_queue_live_request(
+            SessionPhase::LoggedIn,
+            true
+        ));
+        assert!(!guild_shell_should_queue_live_request(
+            SessionPhase::ReadyForLogin,
+            false
+        ));
     }
 }

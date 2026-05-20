@@ -101,6 +101,8 @@ sessao de jogo completa.
   comandos `friend-roster`, `friend-inbox`, `friend-compose`,
   `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis.
+- Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
+  vez a requisicao de listagem correspondente antes de manter a shell visivel.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.

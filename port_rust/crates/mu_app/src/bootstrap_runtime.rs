@@ -12,8 +12,10 @@ use camino::Utf8Path;
 use mu_gameplay::MovementCommand;
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
+use mu_protocol::guild::guild_list_request;
 use mu_protocol::login::{request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
+use mu_protocol::social::friend_list_request;
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
     character_select_screen, CharacterSelectCharacter, CharacterSelectScreenState, UiRoute,
@@ -42,6 +44,8 @@ enum BootstrapCommand {
     Walk(MovementCommand),
     Chat { sender: String, message: String },
     SelectCharacter(String),
+    FriendListRequest,
+    GuildListRequest,
 }
 
 #[derive(Debug, Resource)]
@@ -130,6 +134,26 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::SelectCharacter(character_name.into()))
+            .is_ok()
+    }
+
+    pub(crate) fn queue_friend_list_request(&self) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::FriendListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_guild_list_request(&self) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildListRequest)
             .is_ok()
     }
 
@@ -578,6 +602,22 @@ async fn send_bootstrap_command(
         BootstrapCommand::SelectCharacter(character_name) => {
             send_character_select_request(session, character_name).await
         }
+        BootstrapCommand::FriendListRequest => {
+            let packet = friend_list_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::GuildListRequest => {
+            let packet = guild_list_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -682,11 +722,15 @@ mod tests {
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::encode_packet;
+    use mu_protocol::guild::guild_list_request;
     use mu_protocol::login::{request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
+    use mu_protocol::social::friend_list_request;
     use mu_ui::{UiRoute, UiShellState};
     use std::time::Duration;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
     use tokio::sync::mpsc as tokio_mpsc;
 
     fn world_root() -> Utf8PathBuf {
@@ -874,6 +918,32 @@ mod tests {
     }
 
     #[test]
+    fn friend_and_guild_list_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_friend_list_request());
+        assert!(bootstrap.queue_guild_list_request());
+
+        match command_receiver
+            .try_recv()
+            .expect("friend list command missing")
+        {
+            BootstrapCommand::FriendListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("guild list command missing")
+        {
+            BootstrapCommand::GuildListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn character_select_input_wraps_navigation_and_queues_the_selected_character() {
         let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
         let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
@@ -989,6 +1059,35 @@ mod tests {
         assert!(bootstrap.last_error().is_none());
 
         server.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fake_server_packets_drive_the_social_request_worker() {
+        let friend_request = friend_list_request().unwrap();
+        let guild_request = guild_list_request().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buffer = [0u8; 3];
+
+            stream.read_exact(&mut buffer).await.unwrap();
+            assert_eq!(buffer.as_slice(), friend_request.as_slice());
+
+            stream.read_exact(&mut buffer).await.unwrap();
+            assert_eq!(buffer.as_slice(), guild_request.as_slice());
+        });
+
+        let bootstrap = {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let command_sender = spawn_bootstrap_worker(address, sender, 0);
+            BootstrapRuntime::new(receiver, Some(command_sender))
+        };
+
+        assert!(bootstrap.queue_friend_list_request());
+        assert!(bootstrap.queue_guild_list_request());
+
+        server.await.unwrap();
     }
 
     #[tokio::test]

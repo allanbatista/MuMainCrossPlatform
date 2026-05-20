@@ -30,3 +30,9 @@ The friend and guild shells now support local control-http view overrides,
 but the actual friend, letter, and guild gameplay packet handlers are still
 snapshot-only. The next slice should wire the live networking path if parity
 is still required.
+
+# [medium] Friend/guild response decoding
+
+The friend and guild routes now trigger their live list requests on login,
+but the response decoding and snapshot population for the roster, letters,
+and guild data still remain for a later slice.

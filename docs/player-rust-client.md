@@ -81,6 +81,9 @@ in the local config file instead of being typed every time.
   snapshot and can be driven from the local control HTTP smoke path with
   `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
   and `guild-error`.
+- When the friend or guild route opens while logged in, the client now sends
+  the matching live list request once per activation before keeping the shell
+  on screen.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.

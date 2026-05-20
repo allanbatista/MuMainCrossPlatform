@@ -9,6 +9,7 @@ use mu_ui::{
     LetterEntry, UiRoute, UiShellState,
 };
 
+use crate::bootstrap_runtime::BootstrapRuntime;
 use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -46,6 +47,7 @@ struct FriendShellKey {
 struct FriendShellState {
     root: Option<Entity>,
     key: Option<FriendShellKey>,
+    friend_list_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -71,9 +73,14 @@ fn sync_friend_shell_system(
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
     mail: Res<MailManager>,
+    bootstrap: Res<BootstrapRuntime>,
     control_http: Option<Res<ControlHttpState>>,
     mut state: ResMut<FriendShellState>,
 ) {
+    if session_state.phase() != SessionPhase::LoggedIn {
+        state.friend_list_requested = false;
+    }
+
     let control_http_state = control_http
         .as_deref()
         .and_then(friend_screen_state_for_control_http);
@@ -86,10 +93,16 @@ fn sync_friend_shell_system(
 
     let Some(key) = current else {
         clear_friend_shell(&mut commands, &mut state);
+        state.friend_list_requested = false;
         return;
     };
 
     if state.key.as_ref() == Some(&key) && state.root.is_some() {
+        maybe_queue_friend_list_request(
+            &bootstrap,
+            session_state.phase(),
+            &mut state.friend_list_requested,
+        );
         return;
     }
 
@@ -103,6 +116,11 @@ fn sync_friend_shell_system(
     let root = spawn_friend_shell(&mut commands, &view);
     state.root = Some(root);
     state.key = Some(key);
+    maybe_queue_friend_list_request(
+        &bootstrap,
+        session_state.phase(),
+        &mut state.friend_list_requested,
+    );
 }
 
 fn friend_shell_key(
@@ -125,6 +143,24 @@ fn friend_shell_key(
 
 fn friend_shell_visible(route: UiRoute, phase: SessionPhase) -> bool {
     route == UiRoute::Friend && phase != SessionPhase::Disconnected
+}
+
+fn maybe_queue_friend_list_request(
+    bootstrap: &BootstrapRuntime,
+    phase: SessionPhase,
+    friend_list_requested: &mut bool,
+) {
+    if !friend_shell_should_queue_live_request(phase, *friend_list_requested) {
+        return;
+    }
+
+    if bootstrap.queue_friend_list_request() {
+        *friend_list_requested = true;
+    }
+}
+
+fn friend_shell_should_queue_live_request(phase: SessionPhase, requested: bool) -> bool {
+    phase == SessionPhase::LoggedIn && !requested
 }
 
 fn friend_shell_view(
@@ -445,7 +481,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{friend_screen_state_for_mail, friend_shell_view, friend_shell_visible};
+    use super::{
+        friend_screen_state_for_mail, friend_shell_should_queue_live_request, friend_shell_view,
+        friend_shell_visible,
+    };
     use crate::SessionPhase;
     use mu_gameplay::MailManager;
     use mu_ui::{FriendScreenState, UiRoute};
@@ -521,5 +560,21 @@ mod tests {
         .expect("friend shell view");
 
         assert!(view.body.contains("state=chat-rooms"));
+    }
+
+    #[test]
+    fn friend_shell_requests_live_data_once_per_logged_in_activation() {
+        assert!(friend_shell_should_queue_live_request(
+            SessionPhase::LoggedIn,
+            false
+        ));
+        assert!(!friend_shell_should_queue_live_request(
+            SessionPhase::LoggedIn,
+            true
+        ));
+        assert!(!friend_shell_should_queue_live_request(
+            SessionPhase::ReadyForLogin,
+            false
+        ));
     }
 }
