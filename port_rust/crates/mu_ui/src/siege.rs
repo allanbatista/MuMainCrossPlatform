@@ -1,6 +1,9 @@
+use std::convert::TryInto;
+
 use bevy::app::{App, Plugin};
 
 use crate::{UiRoute, UiShellLayout, UiShellWidgetSet};
+use mu_gameplay::{GuildCache, INVALID_GUILD_MARK_INDEX};
 
 const TITLE: &str = "Siege";
 const INACTIVE_NOTICE: &str = "Castle Siege is not active.";
@@ -176,13 +179,13 @@ impl Plugin for SiegeUiPlugin {
     fn build(&self, _app: &mut App) {}
 }
 
-pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
+pub fn siege_screen(state: SiegeScreenState, guild_cache: &GuildCache) -> SiegeScreen {
     let preset = match state {
         SiegeScreenState::Inactive => SiegeScreenPreset {
             battle_castle_active: false,
             created: false,
             guild_status: None,
-            guild_mark_index: None,
+            guild_key: None,
             time: None,
             mini_map_alpha: 1.0,
             skill_ui_visible: false,
@@ -201,7 +204,7 @@ pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
             battle_castle_active: true,
             created: false,
             guild_status: None,
-            guild_mark_index: None,
+            guild_key: None,
             time: Some(SiegeTime::new(0, 18, true)),
             mini_map_alpha: 0.9,
             skill_ui_visible: false,
@@ -220,7 +223,7 @@ pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
             battle_castle_active: true,
             created: true,
             guild_status: Some("battle-master"),
-            guild_mark_index: Some(8),
+            guild_key: Some(8),
             time: Some(SiegeTime::new(18, 45, true)),
             mini_map_alpha: 1.0,
             skill_ui_visible: true,
@@ -243,7 +246,7 @@ pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
             battle_castle_active: true,
             created: true,
             guild_status: Some("master"),
-            guild_mark_index: Some(12),
+            guild_key: Some(12),
             time: Some(SiegeTime::new(18, 45, true)),
             mini_map_alpha: 0.8,
             skill_ui_visible: true,
@@ -274,7 +277,7 @@ pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
         battle_castle_active: preset.battle_castle_active,
         created: preset.created,
         guild_status: preset.guild_status,
-        guild_mark_index: preset.guild_mark_index,
+        guild_mark_index: project_guild_mark_index(guild_cache, preset.guild_key),
         time: preset.time,
         mini_map_alpha: preset.mini_map_alpha,
         skill_ui_visible: preset.skill_ui_visible,
@@ -289,6 +292,17 @@ pub fn siege_screen(state: SiegeScreenState) -> SiegeScreen {
         current_battle_skill: preset.current_battle_skill,
         actions: preset.actions,
     }
+}
+
+fn project_guild_mark_index(guild_cache: &GuildCache, guild_key: Option<i32>) -> Option<i16> {
+    let guild_key = guild_key?;
+    let guild_mark_index = guild_cache.get_guild_mark_index(guild_key);
+
+    if guild_mark_index == INVALID_GUILD_MARK_INDEX {
+        return None;
+    }
+
+    guild_mark_index.try_into().ok()
 }
 
 impl SiegeScreen {
@@ -328,7 +342,7 @@ struct SiegeScreenPreset {
     battle_castle_active: bool,
     created: bool,
     guild_status: Option<&'static str>,
-    guild_mark_index: Option<i16>,
+    guild_key: Option<i32>,
     time: Option<SiegeTime>,
     mini_map_alpha: f32,
     skill_ui_visible: bool,
@@ -362,23 +376,36 @@ fn sample_member_locations() -> Vec<SiegeMemberLocation> {
 
 #[cfg(test)]
 mod tests {
-    use super::{siege_screen, SiegeAction, SiegeBattleSkill, SiegeScreenState};
+    use super::{siege_screen, GuildCache, SiegeAction, SiegeBattleSkill, SiegeScreenState};
+
+    fn populated_guild_cache() -> GuildCache {
+        let mut cache = GuildCache::new();
+
+        for guild_key in 0_i32..=12 {
+            assert_eq!(cache.make_guild_mark_index(guild_key), guild_key);
+        }
+
+        cache
+    }
 
     #[test]
     fn inactive_and_observer_snapshots_cover_the_base_shell() {
+        let cache = populated_guild_cache();
+
         assert_eq!(
-            siege_screen(SiegeScreenState::Inactive).snapshot(),
+            siege_screen(SiegeScreenState::Inactive, &cache).snapshot(),
             "route=siege|group=gameplay|state=inactive|title=Siege|notice=Some(\"Castle Siege is not active.\")|battle_castle_active=false|created=false|guild_status=None|guild_mark_index=None|time=None|mini_map_alpha=1.0|skill_ui_visible=false|skill_tooltip_visible=false|command_controls_visible=false|mouse_in_minimap=false|selected_group=None|selected_command=None|command_buffer=[]|guild_member_locations=[]|battle_skills=[]|current_battle_skill=None|actions=[Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
         assert_eq!(
-            siege_screen(SiegeScreenState::Observer).snapshot(),
+            siege_screen(SiegeScreenState::Observer, &cache).snapshot(),
             "route=siege|group=gameplay|state=observer|title=Siege|notice=Some(\"Observe the Castle Siege battlefield.\")|battle_castle_active=true|created=false|guild_status=None|guild_mark_index=None|time=Some(SiegeTime { hour: 0, minute: 18, show_colon: true })|mini_map_alpha=0.9|skill_ui_visible=false|skill_tooltip_visible=false|command_controls_visible=false|mouse_in_minimap=false|selected_group=None|selected_command=None|command_buffer=[]|guild_member_locations=[]|battle_skills=[]|current_battle_skill=None|actions=[ToggleAlpha, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
     }
 
     #[test]
     fn soldier_and_commander_snapshots_surface_the_active_controls() {
-        let soldier = siege_screen(SiegeScreenState::Soldier);
+        let cache = populated_guild_cache();
+        let soldier = siege_screen(SiegeScreenState::Soldier, &cache);
         assert_eq!(soldier.state, SiegeScreenState::Soldier);
         assert!(soldier.skill_ui_visible);
         assert_eq!(
@@ -403,7 +430,7 @@ mod tests {
             "route=siege|group=gameplay|state=soldier|title=Siege|notice=Some(\"Follow the siege map and battle skills.\")|battle_castle_active=true|created=true|guild_status=Some(\"battle-master\")|guild_mark_index=Some(8)|time=Some(SiegeTime { hour: 18, minute: 45, show_colon: true })|mini_map_alpha=1.0|skill_ui_visible=true|skill_tooltip_visible=false|command_controls_visible=false|mouse_in_minimap=false|selected_group=None|selected_command=None|command_buffer=[SiegeCommanderEntry { team: 0, command: Attack, x: 126, y: 81, life_time: 100 }, SiegeCommanderEntry { team: 1, command: Defence, x: 64, y: 144, life_time: 100 }, SiegeCommanderEntry { team: 2, command: Wait, x: 34, y: 208, life_time: 100 }]|guild_member_locations=[]|battle_skills=[Stun, RemoveStun, Mana]|current_battle_skill=Some(Stun)|actions=[ToggleAlpha, ScrollSkillUp, ScrollSkillDown, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
 
-        let commander = siege_screen(SiegeScreenState::Commander);
+        let commander = siege_screen(SiegeScreenState::Commander, &cache);
         assert!(commander.command_controls_visible);
         assert!(commander.mouse_in_minimap);
         assert_eq!(
@@ -426,5 +453,15 @@ mod tests {
             commander.snapshot(),
             "route=siege|group=gameplay|state=commander|title=Siege|notice=Some(\"Command guild groups on the siege map.\")|battle_castle_active=true|created=true|guild_status=Some(\"master\")|guild_mark_index=Some(12)|time=Some(SiegeTime { hour: 18, minute: 45, show_colon: true })|mini_map_alpha=0.8|skill_ui_visible=true|skill_tooltip_visible=true|command_controls_visible=true|mouse_in_minimap=true|selected_group=Some(3)|selected_command=Some(Attack)|command_buffer=[SiegeCommanderEntry { team: 0, command: Attack, x: 126, y: 81, life_time: 100 }, SiegeCommanderEntry { team: 1, command: Defence, x: 64, y: 144, life_time: 100 }, SiegeCommanderEntry { team: 2, command: Wait, x: 34, y: 208, life_time: 100 }]|guild_member_locations=[SiegeMemberLocation { marker_type: 0, x: 22, y: 44 }, SiegeMemberLocation { marker_type: 1, x: 98, y: 110 }, SiegeMemberLocation { marker_type: 2, x: 150, y: 76 }]|battle_skills=[Invisible, RemoveInvisible, RemoveBuff]|current_battle_skill=Some(Invisible)|actions=[ToggleAlpha, SelectGroup, SelectCommand, ScrollSkillUp, ScrollSkillDown, ClearLocations, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
+    }
+
+    #[test]
+    fn guild_mark_index_is_projected_from_the_cache() {
+        let mut cache = GuildCache::new();
+        assert_eq!(cache.make_guild_mark_index(12), 0);
+
+        let commander = siege_screen(SiegeScreenState::Commander, &cache);
+
+        assert_eq!(commander.guild_mark_index, Some(0));
     }
 }
