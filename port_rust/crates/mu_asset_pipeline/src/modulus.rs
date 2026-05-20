@@ -38,7 +38,7 @@ enum ModulusCipher {
     Rc6(Rc6<U32>),
     Mars(MarsCipher),
     Idea(Idea),
-    Gost(Gost28147),
+    Gost(Box<Gost28147>),
 }
 
 impl ModulusCipher {
@@ -133,7 +133,10 @@ impl ModulusCipher {
                 let key = key[..GOST_KEY_SIZE]
                     .try_into()
                     .map_err(|_| "failed to build GOST key".to_string())?;
-                Ok(Self::Gost(Gost28147::with_sbox(&key, &SBOX_CRYPTOPRO)))
+                Ok(Self::Gost(Box::new(Gost28147::with_sbox(
+                    &key,
+                    &SBOX_CRYPTOPRO,
+                ))))
             }
             other => Err(format!("unsupported ModulusCryptor algorithm: {other}")),
         }
@@ -205,7 +208,7 @@ impl ModulusCipher {
 
     fn decrypt_in_place(&self, data: &mut [u8]) -> Result<(), String> {
         let block_size = self.block_size();
-        if data.len() % block_size != 0 {
+        if !data.len().is_multiple_of(block_size) {
             return Err(format!(
                 "ciphertext length {} is not a multiple of block size {}",
                 data.len(),

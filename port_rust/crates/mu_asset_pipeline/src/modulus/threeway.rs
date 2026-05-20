@@ -9,9 +9,9 @@ pub(crate) struct ThreeWayCipher {
 impl ThreeWayCipher {
     pub(crate) fn new(key: &[u8]) -> Self {
         let mut key_words = [0u32; THREE_WAY_KEY_WORDS];
-        for index in 0..THREE_WAY_KEY_WORDS {
+        for (index, word) in key_words.iter_mut().enumerate() {
             let offset = index * 4;
-            key_words[index] = u32::from_le_bytes(key[offset..offset + 4].try_into().unwrap());
+            *word = u32::from_le_bytes(key[offset..offset + 4].try_into().unwrap());
         }
 
         let (a0, a1, a2) = theta(key_words[0], key_words[1], key_words[2]);
