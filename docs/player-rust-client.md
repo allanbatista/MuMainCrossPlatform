@@ -31,6 +31,10 @@ in the local config file instead of being typed every time.
   immediately requests the character list using the legacy locale byte
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`) before the
   loaded world handoff starts.
+- When the roster arrives, the bootstrap stays on character select until a
+  `select-character` request names a roster entry; the same request can be
+  sent through the local control HTTP API with the character name in the body
+  or a `character=` query parameter.
 - The world now opens a visible Bevy world shell with a camera, lighting,
   a heightfield terrain derived from the loaded world bundle, a layered
   terrain surface from the bundle's first two converted texture slots plus
@@ -85,6 +89,9 @@ in the local config file instead of being typed every time.
   and `command_count`.
 - `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
+- `POST /command?name=select-character` can continue from character select
+  once the roster is visible. Pass the character name in the body or as
+  `character=` when using the local control HTTP API.
 - `POST /command?name=chat` can step into the visible chat route shell for
   local QA smoke; once open, the shell accepts typed chat and Enter sends the
   draft.

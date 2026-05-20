@@ -15,7 +15,10 @@ sessao de jogo completa.
   login -> server select -> character select -> world quando o fluxo de rede
   entrega o handoff do mapa; depois de `login-success`, ele pede
   automaticamente a character list usando o byte legado do idioma
-  (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). No world route,
+  (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). Quando o roster
+  chega, ele fica em character select ate receber um `select-character`
+  explicito com o nome do personagem; o mesmo comando pode vir pelo
+  `--control-http` usando o nome no body ou em `character=`. No world route,
   mostra uma world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
@@ -135,10 +138,14 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|loading|world|chat|npc|shop|game-shop|trade|mu-helper|
-  login-success|login-failure|party|gate|quests|logout-login|
+  character-select|select-character|loading|world|chat|npc|shop|game-shop|
+  trade|mu-helper|login-success|login-failure|party|gate|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
+
+`select-character` aceita o nome do personagem no body bruto ou em
+`character=` e avanca o bootstrap para o envio do `select_character` pelo
+session worker.
 
 Ao iniciar, o binario imprime o estado inicial e a URL efetiva do servidor.
 

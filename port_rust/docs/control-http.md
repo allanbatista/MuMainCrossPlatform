@@ -52,6 +52,7 @@ Exemplo:
 - `ready-for-login`
 - `server-select`
 - `character-select`
+- `select-character`
 - `loading`
 - `world`
 - `chat`
@@ -72,10 +73,14 @@ Exemplo:
 - `ping`
 
 `server-select`, `character-select`, `loading`, `world`, `chat`, `npc`,
-`shop`, `game-shop`, `trade`, `party`, `gate`, `quests`, `mu-helper`,
-`login-success` e `login-failure` alteram a rota/session state do runtime
-grafico. `chat` abre a shell visivel de chat, que agora aceita texto digitado
-e Enter para enviar mensagem publica quando a sessao esta logada.
+`select-character`, `shop`, `game-shop`, `trade`, `party`, `gate`, `quests`,
+`mu-helper`, `login-success` e `login-failure` alteram a rota/session state
+do runtime grafico. `select-character` envia o nome recebido para o session
+worker e continua o bootstrap apenas quando o personagem for nomeado.
+Se o nome vier vazio, a resposta sera `400` e o cliente continua em
+character select.
+`chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
+para enviar mensagem publica quando a sessao esta logada.
 `mu-helper` abre a shell visivel do MU Helper com o snapshot existente do
 runtime. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
@@ -92,6 +97,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=ready-for-login'
 curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
 curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
+curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
 curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'

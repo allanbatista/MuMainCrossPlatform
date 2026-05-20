@@ -10,7 +10,7 @@ use camino::Utf8Path;
 use mu_gameplay::MovementCommand;
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
-use mu_protocol::login::request_character_list;
+use mu_protocol::login::{request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{UiRoute, UiShellState};
@@ -36,6 +36,7 @@ pub(crate) enum BootstrapSignal {
 enum BootstrapCommand {
     Walk(MovementCommand),
     Chat { sender: String, message: String },
+    SelectCharacter(String),
 }
 
 #[derive(Debug, Resource)]
@@ -110,6 +111,16 @@ impl BootstrapRuntime {
                 sender: sender.into(),
                 message: message.into(),
             })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_character_select_request(&self, character_name: impl Into<String>) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::SelectCharacter(character_name.into()))
             .is_ok()
     }
 }
@@ -458,6 +469,18 @@ async fn send_character_list_request(
         .map_err(|error| error.to_string())
 }
 
+async fn send_character_select_request(
+    session: &mut Session,
+    character_name: impl AsRef<[u8]>,
+) -> Result<(), String> {
+    let packet = select_character(character_name).map_err(|error| error.to_string())?;
+
+    session
+        .send(packet)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal> {
     if let Some(update) = decode_movement_update(frame) {
         return Some(BootstrapSignal::Movement(update));
@@ -501,6 +524,9 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::SelectCharacter(character_name) => {
+            send_character_select_request(session, character_name).await
+        }
     }
 }
 
@@ -517,7 +543,7 @@ mod tests {
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::encode_packet;
-    use mu_protocol::login::request_character_list;
+    use mu_protocol::login::{request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
     use mu_ui::{UiRoute, UiShellState};
@@ -546,6 +572,59 @@ mod tests {
 
     fn join_map_packet(map: u8) -> Vec<u8> {
         encode_packet(0xC1, 0xF3, 0x03, &[0, 0, map, 0]).unwrap()
+    }
+
+    async fn drive_bootstrap_until_world(
+        bootstrap: &mut BootstrapRuntime,
+        config: &GraphicalRuntimeConfig,
+        session_state: &mut SessionState,
+        ui_shell: &mut UiShellState,
+        client_runtime: &mut ClientRuntime,
+        character_name: Option<&str>,
+    ) {
+        let mut selection_requested = false;
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(signal, bootstrap, session_state, ui_shell, client_runtime);
+            }
+
+            if !selection_requested && ui_shell.current() == UiRoute::CharacterSelect {
+                if let Some(character_name) = character_name {
+                    assert!(bootstrap.queue_character_select_request(character_name));
+                }
+                selection_requested = true;
+            }
+
+            finish_world_bootstrap(bootstrap, client_runtime, config, ui_shell);
+
+            if ui_shell.current() == UiRoute::World {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    async fn wait_for_session_disconnect(
+        bootstrap: &mut BootstrapRuntime,
+        session_state: &mut SessionState,
+        ui_shell: &mut UiShellState,
+        client_runtime: &mut ClientRuntime,
+    ) {
+        for _ in 0..50 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(signal, bootstrap, session_state, ui_shell, client_runtime);
+            }
+
+            if session_state.is_disconnected() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     #[test]
@@ -663,6 +742,7 @@ mod tests {
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
+                    .expect_packet(select_character(b"Astra").unwrap())
                     .send_packet(join_map.clone())
                     .close(),
             ),
@@ -680,26 +760,23 @@ mod tests {
         let mut ui_shell = UiShellState::default();
         let mut client_runtime = ClientRuntime::new();
 
-        for _ in 0..100 {
-            let signals = bootstrap.drain_signals();
-            for signal in signals {
-                apply_bootstrap_signal(
-                    signal,
-                    &mut bootstrap,
-                    &mut session_state,
-                    &mut ui_shell,
-                    &mut client_runtime,
-                );
-            }
+        drive_bootstrap_until_world(
+            &mut bootstrap,
+            &config,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            Some("Astra"),
+        )
+        .await;
 
-            finish_world_bootstrap(&mut bootstrap, &mut client_runtime, &config, &mut ui_shell);
-
-            if ui_shell.current() == UiRoute::World {
-                break;
-            }
-
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        wait_for_session_disconnect(
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        )
+        .await;
 
         assert_eq!(ui_shell.current(), UiRoute::World);
         assert!(client_runtime.world_ready());
@@ -745,6 +822,7 @@ mod tests {
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
+                    .expect_packet(select_character(b"Astra").unwrap())
                     .send_packet(join_map.clone())
                     .expect_packet(movement_request.clone())
                     .send_packet(movement_commit.clone())
@@ -765,26 +843,15 @@ mod tests {
         let mut client_runtime = ClientRuntime::new();
         let expected_position = mu_gameplay::world_position_from_tile(3, 4);
 
-        for _ in 0..100 {
-            let signals = bootstrap.drain_signals();
-            for signal in signals {
-                apply_bootstrap_signal(
-                    signal,
-                    &mut bootstrap,
-                    &mut session_state,
-                    &mut ui_shell,
-                    &mut client_runtime,
-                );
-            }
-
-            finish_world_bootstrap(&mut bootstrap, &mut client_runtime, &config, &mut ui_shell);
-
-            if ui_shell.current() == UiRoute::World {
-                break;
-            }
-
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        drive_bootstrap_until_world(
+            &mut bootstrap,
+            &config,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            Some("Astra"),
+        )
+        .await;
 
         assert_eq!(ui_shell.current(), UiRoute::World);
         assert!(bootstrap.queue_movement_request(MovementCommand::new(0, 0, 0, 0, [])));
@@ -869,6 +936,7 @@ mod tests {
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
                     .send_packet(character_list.clone())
+                    .expect_packet(select_character(b"Astra").unwrap())
                     .send_packet(join_map.clone())
                     .expect_packet(chat_packet.clone())
                     .close(),
@@ -887,26 +955,15 @@ mod tests {
         let mut ui_shell = UiShellState::default();
         let mut client_runtime = ClientRuntime::new();
 
-        for _ in 0..100 {
-            let signals = bootstrap.drain_signals();
-            for signal in signals {
-                apply_bootstrap_signal(
-                    signal,
-                    &mut bootstrap,
-                    &mut session_state,
-                    &mut ui_shell,
-                    &mut client_runtime,
-                );
-            }
-
-            finish_world_bootstrap(&mut bootstrap, &mut client_runtime, &config, &mut ui_shell);
-
-            if ui_shell.current() == UiRoute::World {
-                break;
-            }
-
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        drive_bootstrap_until_world(
+            &mut bootstrap,
+            &config,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            Some("Astra"),
+        )
+        .await;
 
         assert_eq!(ui_shell.current(), UiRoute::World);
         assert!(bootstrap.queue_chat_message_request("Hero", "hello"));

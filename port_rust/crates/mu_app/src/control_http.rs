@@ -28,6 +28,7 @@ pub enum ControlCommand {
     MuHelper,
     LoginSuccess,
     LoginFailure,
+    SelectCharacter,
     LogoutLogin,
     LogoutCharacter,
     Disconnect,
@@ -56,6 +57,7 @@ impl ControlCommand {
             Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
             Self::LoginFailure => "login-failure",
+            Self::SelectCharacter => "select-character",
             Self::LogoutLogin => "logout-login",
             Self::LogoutCharacter => "logout-character",
             Self::Disconnect => "disconnect",
@@ -88,6 +90,7 @@ impl ControlCommand {
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
             "login-failure" | "login_failure" => Some(Self::LoginFailure),
+            "select-character" | "select_character" => Some(Self::SelectCharacter),
             "logout-login" | "logout_login" => Some(Self::LogoutLogin),
             "logout-character" | "logout_character" => Some(Self::LogoutCharacter),
             "disconnect" => Some(Self::Disconnect),
@@ -104,6 +107,7 @@ pub struct ControlSnapshot {
     pub ui_route: UiRoute,
     pub session_phase: SessionPhase,
     pub last_command: Option<ControlCommand>,
+    pub selected_character_name: Option<String>,
     pub command_count: u64,
 }
 
@@ -114,6 +118,7 @@ impl ControlSnapshot {
             ui_route: initial_ui_route(state),
             session_phase: initial_session_phase(state),
             last_command: None,
+            selected_character_name: None,
             command_count: 0,
         }
     }
@@ -227,6 +232,12 @@ impl ControlSnapshot {
                 self.session_phase = SessionPhase::ReadyForLogin;
                 false
             }
+            ControlCommand::SelectCharacter => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterSelect;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
             ControlCommand::LogoutLogin => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Login;
@@ -260,13 +271,19 @@ impl ControlSnapshot {
             .last_command
             .map(|command| format!("\"{}\"", command.as_str()))
             .unwrap_or_else(|| "null".to_string());
+        let selected_character_name = self
+            .selected_character_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
+            selected_character_name,
             self.command_count
         )
     }
@@ -494,7 +511,21 @@ fn route_request(
             };
 
             let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
-            let should_shutdown = snapshot.apply_command(command);
+            let should_shutdown = match command {
+                ControlCommand::SelectCharacter => {
+                    let Some(character_name) = selection_character_name(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing character name"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.selected_character_name = Some(character_name);
+                    snapshot.apply_command(command)
+                }
+                _ => snapshot.apply_command(command),
+            };
             let response = HttpResponse::json(200, "OK", snapshot.to_json());
 
             if should_shutdown {
@@ -632,6 +663,20 @@ fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
+fn selection_character_name(request: &HttpRequest) -> Option<String> {
+    query_value(&request.query, "character")
+        .or_else(|| query_value(&request.body, "character"))
+        .map(str::to_string)
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() {
+                None
+            } else {
+                Some(body.to_string())
+            }
+        })
+}
+
 #[derive(Debug, Clone)]
 struct HttpRequest {
     method: String,
@@ -713,7 +758,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"command_count":1}"#
         );
     }
 
@@ -737,6 +782,15 @@ mod tests {
             Some(ControlCommand::MuHelper)
         );
         assert_eq!(ControlCommand::MuHelper.as_str(), "mu-helper");
+        assert_eq!(
+            ControlCommand::parse("select-character"),
+            Some(ControlCommand::SelectCharacter)
+        );
+        assert_eq!(
+            ControlCommand::parse("select_character"),
+            Some(ControlCommand::SelectCharacter)
+        );
+        assert_eq!(ControlCommand::SelectCharacter.as_str(), "select-character");
     }
 
     #[test]
@@ -750,6 +804,13 @@ mod tests {
 
         assert_eq!(snapshot.ui_route, UiRoute::CharacterSelect);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.selected_character_name = Some("Astra".to_string());
+        snapshot.apply_command(ControlCommand::SelectCharacter);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterSelect);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.selected_character_name.as_deref(), Some("Astra"));
 
         snapshot.apply_command(ControlCommand::Chat);
 
@@ -825,6 +886,15 @@ mod tests {
         );
         assert!(body.contains(r#""ui_route":"character-select""#));
         assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""selected_character_name":null"#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=select-character HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nConnection: close\r\n\r\nAstra",
+        );
+        assert!(body.contains(r#""ui_route":"character-select""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""selected_character_name":"Astra""#));
 
         let (_, body) = send_request(
             address,
@@ -897,7 +967,25 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 12);
+        assert_eq!(final_snapshot.command_count, 13);
+    }
+
+    #[test]
+    fn select_character_requires_a_name() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=select-character HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing character name""#));
+
+        handle.request_shutdown();
+        let final_snapshot = handle.join().unwrap();
+        assert_eq!(final_snapshot.command_count, 0);
     }
 
     #[test]

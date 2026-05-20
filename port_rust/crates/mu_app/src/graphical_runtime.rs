@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
-use crate::control_http::{self, ControlHttpState};
+use crate::bootstrap_runtime::BootstrapRuntime;
+use crate::control_http::{self, ControlCommand, ControlHttpState};
 use crate::SessionState;
 use bevy::app::AppExit;
 use bevy::asset::AssetPlugin;
@@ -192,6 +193,7 @@ fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMu
 
 fn sync_control_http_snapshot_to_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
+    bootstrap: Option<Res<BootstrapRuntime>>,
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
 ) {
@@ -211,6 +213,15 @@ fn sync_control_http_snapshot_to_runtime(
 
     if session_state.phase() != snapshot.session_phase {
         session_state.sync_phase(snapshot.session_phase);
+    }
+
+    if matches!(snapshot.last_command, Some(ControlCommand::SelectCharacter)) {
+        if let (Some(bootstrap), Some(character_name)) = (
+            bootstrap.as_deref(),
+            snapshot.selected_character_name.as_deref(),
+        ) {
+            let _ = bootstrap.queue_character_select_request(character_name);
+        }
     }
 
     control_http.mark_applied(snapshot.command_count);
