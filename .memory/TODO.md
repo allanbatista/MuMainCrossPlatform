@@ -1,13 +1,6 @@
-# Pending work
+# [medium] Remaining port parity
 
-Track real follow-up work here. Remove entries only when the debt is no longer
-relevant.
+The Rust port still has remaining gameplay and UI parity work beyond the
+trade shell slice. Continue breaking the overall goal into smaller planned
+phases before implementing the next surface.
 
-# [critical]Complete playable Rust Bevy parity
-
-The Rust client now has graphical boot, world shell, world HUD overlay, local
-avatar movement, and session-backed control-plane slices. Remaining work:
-full login/server-select/character-select/game-server flow, chat/minimap/
-hotkeys, inventory/equipment/vault, NPC/shop, trade, quests/events/duel/gens,
-GameShop, MU Helper, editor/admin tools, OpenMU compatibility, and final C++
-parity evidence.
