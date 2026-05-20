@@ -1,7 +1,8 @@
 use camino::Utf8Path;
 use mu_assets::{load_terrain_world_bundle, TerrainWorldBundle, TerrainWorldError};
 use mu_gameplay::{
-    MovementManager, WorldEntitiesManager, WorldManager, WorldMonsterManager, WorldNpcManager,
+    MovementManager, PartyManager, WorldEntitiesManager, WorldManager, WorldMonsterManager,
+    WorldNpcManager,
 };
 use mu_render::{
     RenderAssets, RenderAssetsError, RenderEntities, RenderEntitiesState, TerrainRenderer,
@@ -44,6 +45,7 @@ pub struct ClientRuntime {
     world: WorldManager,
     terrain: TerrainRenderer,
     movement: MovementManager,
+    party: PartyManager,
     world_entities: WorldEntitiesManager,
     world_npcs: WorldNpcManager,
     world_monsters: WorldMonsterManager,
@@ -70,6 +72,14 @@ impl ClientRuntime {
 
     pub fn movement(&self) -> &MovementManager {
         &self.movement
+    }
+
+    pub fn party(&self) -> &PartyManager {
+        &self.party
+    }
+
+    pub fn party_mut(&mut self) -> &mut PartyManager {
+        &mut self.party
     }
 
     pub fn world_entities(&self) -> &WorldEntitiesManager {
@@ -164,18 +174,20 @@ impl ClientRuntime {
         self.world_monsters.reset();
         self.terrain.clear();
         self.movement.reset();
+        self.party.reset();
         self.render_entities.reset();
     }
 
     pub fn snapshot(&self) -> String {
         format!(
-            "state={}|render_assets={}|world={}|world_entities={}|terrain={}|movement={}|render_entities={}|world_error={:?}",
+            "state={}|render_assets={}|world={}|world_entities={}|terrain={}|movement={}|party_number={}|render_entities={}|world_error={:?}",
             self.state().as_str(),
             self.render_assets.state().as_str(),
             self.world.state().as_str(),
             self.world_entities.state().as_str(),
             self.terrain.state().as_str(),
             self.movement.state().as_str(),
+            self.party.party_number(),
             self.render_entities.state().as_str(),
             self.world_error,
         )
@@ -218,6 +230,7 @@ mod tests {
         load_terrain_world_bundle, sha256_hex, AssetManifest, AssetManifestEntry,
         MANIFEST_FILE_NAME, SUPPORTED_SCHEMA_VERSION,
     };
+    use mu_gameplay::PartyMemberInfo;
 
     fn repo_world_root() -> Utf8PathBuf {
         Utf8PathBuf::from_path_buf(
@@ -296,6 +309,7 @@ mod tests {
 
         assert_eq!(runtime.state(), ClientRuntimeState::Inactive);
         assert!(runtime.last_error().is_none());
+        assert_eq!(runtime.party().party_number(), 0);
         assert!(!runtime.render_assets_ready());
         assert!(!runtime.world_ready());
         assert!(!runtime.terrain_ready());
@@ -340,8 +354,10 @@ mod tests {
         assert!(runtime.terrain_ready());
         assert!(runtime.movement_ready());
         assert!(runtime.render_entities_ready());
+        assert_eq!(runtime.party().party_number(), 0);
         assert!(runtime.snapshot().contains("render_assets=inactive"));
         assert!(runtime.snapshot().contains("world=ready"));
+        assert!(runtime.snapshot().contains("party_number=0"));
 
         runtime.load_render_assets(&render_root).unwrap();
 
@@ -351,8 +367,10 @@ mod tests {
         assert!(runtime.terrain_ready());
         assert!(runtime.movement_ready());
         assert!(runtime.render_entities_ready());
+        assert_eq!(runtime.party().party_number(), 0);
         assert!(runtime.snapshot().contains("render_assets=ready"));
         assert!(runtime.snapshot().contains("world=ready"));
+        assert!(runtime.snapshot().contains("party_number=0"));
         assert!(runtime.snapshot().contains("render_entities=ready"));
     }
 
@@ -365,5 +383,31 @@ mod tests {
         assert_eq!(runtime.state(), ClientRuntimeState::AssetError);
         assert!(runtime.last_error().is_some());
         assert!(runtime.snapshot().contains("render_assets=asset-error"));
+    }
+
+    #[test]
+    fn runtime_clears_party_state_with_projection_reset() {
+        let mut runtime = ClientRuntime::new();
+        runtime.party_mut().set_member(
+            0,
+            PartyMemberInfo {
+                name: "Astra".into(),
+                ..PartyMemberInfo::default()
+            },
+        );
+        runtime.party_mut().set_party_number(1);
+
+        runtime.clear_world_projection();
+
+        assert_eq!(runtime.party().party_number(), 0);
+        assert!(runtime
+            .party()
+            .members()
+            .iter()
+            .all(|member| member.name.is_empty()));
+        assert_eq!(
+            runtime.party().members()[0].index,
+            mu_gameplay::PARTY_INDEX_UNSEARCHED
+        );
     }
 }
