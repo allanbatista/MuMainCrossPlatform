@@ -40,6 +40,11 @@ struct WorldSceneMarker {
     key: String,
 }
 
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+struct WorldSceneCamera {
+    follow_offset: Vec3,
+}
+
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 struct WorldSceneTerrain;
 
@@ -54,6 +59,7 @@ impl Plugin for WorldScenePlugin {
                 sync_world_scene_system,
                 sync_world_scene_transforms_system
                     .after(crate::world_motion::apply_world_motion_system),
+                sync_world_scene_camera_system.after(sync_world_scene_transforms_system),
             )
                 .chain(),
         );
@@ -125,6 +131,32 @@ fn sync_world_scene_transforms_system(
     }
 }
 
+fn sync_world_scene_camera_system(
+    ui_shell: Res<UiShellState>,
+    client_runtime: Res<ClientRuntime>,
+    state: Res<WorldSceneState>,
+    mut cameras: Query<(&WorldSceneCamera, &mut Transform)>,
+) {
+    if ui_shell.current() != UiRoute::World
+        || !client_runtime.world_ready()
+        || !client_runtime.render_entities_ready()
+        || state.entities.is_empty()
+    {
+        return;
+    }
+
+    let Some(local_player) = client_runtime.world_entities().local_player() else {
+        return;
+    };
+
+    let local_player_translation = world_transform(&local_player.pose).translation;
+
+    for (camera, mut transform) in cameras.iter_mut() {
+        *transform = Transform::from_translation(local_player_translation + camera.follow_offset)
+            .looking_at(local_player_translation, Vec3::Y);
+    }
+}
+
 fn clear_world_scene(commands: &mut Commands, state: &mut WorldSceneState) {
     for entity in state.entities.drain(..) {
         commands.entity(entity).despawn();
@@ -157,20 +189,25 @@ fn spawn_world_scene(
 }
 
 fn spawn_world_camera(commands: &mut Commands, summary: &TerrainWorldSummary) -> Entity {
-    let extent = summary.terrain_size as f32 * WORLD_POSITION_SCALE;
-    let camera_position = Vec3::new(
-        extent * WORLD_CAMERA_DISTANCE_FACTOR,
-        extent * WORLD_CAMERA_HEIGHT_FACTOR,
-        extent * WORLD_CAMERA_DISTANCE_FACTOR,
-    );
+    let follow_offset = world_camera_follow_offset(summary);
 
     commands
         .spawn((
             Camera3d::default(),
-            Transform::from_translation(camera_position).looking_at(Vec3::ZERO, Vec3::Y),
+            Transform::from_translation(follow_offset).looking_at(Vec3::ZERO, Vec3::Y),
+            WorldSceneCamera { follow_offset },
             Name::new(format!("world-camera-{}", summary.world)),
         ))
         .id()
+}
+
+fn world_camera_follow_offset(summary: &TerrainWorldSummary) -> Vec3 {
+    let extent = summary.terrain_size as f32 * WORLD_POSITION_SCALE;
+    Vec3::new(
+        extent * WORLD_CAMERA_DISTANCE_FACTOR,
+        extent * WORLD_CAMERA_HEIGHT_FACTOR,
+        extent * WORLD_CAMERA_DISTANCE_FACTOR,
+    )
 }
 
 fn spawn_world_light(commands: &mut Commands) -> Entity {
@@ -700,8 +737,8 @@ fn render_entity_for_marker<'a>(
 mod tests {
     use super::{
         build_world_terrain_blend_mesh, build_world_terrain_mesh, world_terrain_lightmap_path,
-        world_terrain_texture_paths, WorldSceneMarker, WorldScenePlugin, WorldSceneState,
-        WorldSceneTerrain, WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
+        world_terrain_texture_paths, WorldSceneCamera, WorldSceneMarker, WorldScenePlugin,
+        WorldSceneState, WorldSceneTerrain, WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
     use crate::ClientRuntime;
     use crate::GraphicalRuntimeConfig;
@@ -831,6 +868,10 @@ mod tests {
             .entities
             .iter()
             .any(|entity| world.entity(*entity).contains::<Camera3d>()));
+        assert!(state
+            .entities
+            .iter()
+            .any(|entity| world.entity(*entity).contains::<WorldSceneCamera>()));
         assert!(state
             .entities
             .iter()
@@ -1045,6 +1086,74 @@ mod tests {
             .x;
 
         assert!(updated_x > initial_x);
+    }
+
+    #[test]
+    fn world_scene_camera_follows_the_local_player_marker() {
+        let mut app = spawn_ready_app();
+        load_world(&mut app);
+
+        let (camera_entity, local_marker_entity, initial_offset) = {
+            let state = app.world().resource::<WorldSceneState>();
+            let world = app.world();
+
+            let camera_entity = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| world.entity(*entity).contains::<Camera3d>())
+                .expect("world camera should exist");
+            let local_marker_entity = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| {
+                    world
+                        .entity(*entity)
+                        .get::<WorldSceneMarker>()
+                        .map(|marker| {
+                            marker.family == RenderEntityFamily::LocalPlayer && marker.key == "0"
+                        })
+                        .unwrap_or(false)
+                })
+                .expect("local player marker should exist");
+            let camera_translation = world
+                .entity(camera_entity)
+                .get::<bevy::prelude::Transform>()
+                .unwrap()
+                .translation;
+            let local_translation = world
+                .entity(local_marker_entity)
+                .get::<bevy::prelude::Transform>()
+                .unwrap()
+                .translation;
+
+            (
+                camera_entity,
+                local_marker_entity,
+                camera_translation - local_translation,
+            )
+        };
+
+        app.world_mut()
+            .resource_mut::<ClientRuntime>()
+            .translate_local_player([20.0, 0.0, 0.0]);
+        app.update();
+
+        let world = app.world();
+        let camera_translation = world
+            .entity(camera_entity)
+            .get::<bevy::prelude::Transform>()
+            .unwrap()
+            .translation;
+        let local_translation = world
+            .entity(local_marker_entity)
+            .get::<bevy::prelude::Transform>()
+            .unwrap()
+            .translation;
+        let updated_offset = camera_translation - local_translation;
+
+        assert!((updated_offset - initial_offset).length_squared() < f32::EPSILON);
     }
 
     #[test]

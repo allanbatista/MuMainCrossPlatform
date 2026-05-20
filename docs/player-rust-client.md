@@ -43,6 +43,8 @@ in the local config file instead of being typed every time.
   terrain surface from the bundle's first two converted texture slots plus
   the alpha map, the bundled terrain lightmap, sampled player markers, and
   real converted models for objects, NPCs, and monsters.
+- The world camera now follows the local avatar so movement stays framed
+  while the 3D scene is active.
 - The world now also shows a visible HUD overlay with the legacy main-frame
   gauges and buttons while the 3D scene is active.
 - The world HUD stack now also shows the visible chat log, minimap, and
