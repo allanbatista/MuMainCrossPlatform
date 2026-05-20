@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+bevy.workspace = true
 camino.workspace = true
 clap.workspace = true
 mu_assets = { path = "../mu_assets" }
@@ -13,6 +14,7 @@ mu_gameplay = { path = "../mu_gameplay" }
 mu_input = { path = "../mu_input" }
 mu_network = { path = "../mu_network" }
 mu_render = { path = "../mu_render" }
+mu_ui = { path = "../mu_ui" }
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true

@@ -146,8 +146,7 @@ pub use vault::{
     VaultSyncOutcome, VAULT_PAGE_COLUMNS, VAULT_PAGE_COUNT, VAULT_PAGE_ROWS, VAULT_PAGE_SLOTS,
 };
 pub use world::{
-    map_name,
-    load_terrain_world_bundle, terrain_world_directory, terrain_world_relative_directory,
+    load_terrain_world_bundle, map_name, terrain_world_directory, terrain_world_relative_directory,
     TerrainWorldBundle, TerrainWorldError, TerrainWorldSummary, WorldManager, WorldPlugin,
     WorldState,
 };

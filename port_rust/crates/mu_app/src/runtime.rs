@@ -2,6 +2,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use crate::client_runtime::ClientRuntime;
+use crate::graphical_runtime::run_graphical;
 use crate::state::boot;
 use crate::{control_http, logging, AppState, Cli};
 
@@ -96,7 +97,8 @@ pub fn run(cli: Cli) -> ExitCode {
 
         match state {
             AppState::AssetCheckFailed => ExitCode::from(3),
-            AppState::Boot | AppState::ReadyForLogin | AppState::Exit => ExitCode::SUCCESS,
+            AppState::Boot => run_graphical(&cli),
+            AppState::ReadyForLogin | AppState::Exit => ExitCode::SUCCESS,
         }
     }
 }

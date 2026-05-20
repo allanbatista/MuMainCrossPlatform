@@ -1,15 +1,16 @@
 # Port Rust
 
-`port_rust` e a area paralela para iniciar o port incremental em Rust do projeto.
-Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
+`port_rust` e a area paralela para o port incremental em Rust do projeto.
+O cliente ja possui um boot grafico inicial em Bevy, mas ainda nao e uma
+sessao de jogo completa.
 
 ## Status
 
 - Inicializado como workspace Cargo isolado.
 - Incremental: o cliente legado continua sendo a referencia funcional.
-- Sem runtime jogavel, UI, assets, audio ou editor completos em Rust nesta fase;
-  o crate `mu_gameplay` ja porta estados isolados de duelo, quests, events e
-  gens, mas ainda nao ha loop de jogo jogavel.
+- O runtime grafico inicial abre via Bevy no modo sem `--headless`; as camadas
+  de UI, assets, audio, gameplay, editor/admin e rede ainda seguem em paridade
+  incremental antes de uma sessao jogavel completa.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; detalhes em `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes
@@ -66,8 +67,9 @@ Esta etapa cria apenas o scaffold inicial: ainda e nao jogavel / not playable.
 
 ```bash
 rtk cargo metadata --manifest-path port_rust/Cargo.toml --no-deps --format-version 1
-rtk cargo fmt --manifest-path port_rust/Cargo.toml --check
+rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check
 rtk cargo test --manifest-path port_rust/Cargo.toml --workspace
+rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings
 rtk cargo run --manifest-path port_rust/Cargo.toml -p port_rust -- --status
 rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --control-http 127.0.0.1:0
 rtk cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
@@ -75,7 +77,14 @@ rtk cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --h
 ```
 
 O comando `--status` deve imprimir uma mensagem contendo `initialized`,
-`incremental` e `not playable`.
+`incremental` e `not playable`; isso ainda se refere a paridade jogavel
+completa, nao ao boot grafico inicial.
+
+O cliente Rust grafico inicial pode ser iniciado com:
+
+```bash
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client
+```
 
 O cliente Rust pode iniciar um servidor de controle local com:
 

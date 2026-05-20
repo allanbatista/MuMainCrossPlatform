@@ -32,7 +32,7 @@ pub(crate) fn boot(cli: &Cli) -> (AppState, Option<String>) {
         return (AppState::ReadyForLogin, None);
     }
 
-    (AppState::Exit, None)
+    (AppState::Boot, None)
 }
 
 pub fn boot_state(cli: &Cli) -> AppState {
@@ -140,10 +140,10 @@ mod tests {
     }
 
     #[test]
-    fn non_headless_boot_exits_until_bevy_runtime_exists() {
+    fn non_headless_boot_enters_graphical_boot_state() {
         let mut cli = cli();
         cli.headless = false;
 
-        assert_eq!(boot_state(&cli), AppState::Exit);
+        assert_eq!(boot_state(&cli), AppState::Boot);
     }
 }

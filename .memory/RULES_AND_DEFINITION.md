@@ -13,3 +13,11 @@ Always prefix shell commands with `rtk`.
 
 Before implementation, read the project AGENTS instructions and follow the
 spec -> plan -> progress workflow.
+
+# No Rust cross-platform GitHub Actions
+
+Do not add or rely on GitHub Actions for Rust cross-platform client builds. Use local scripts, documented commands, and manual validation evidence instead.
+
+# Playable Rust port gates
+
+For the Rust Bevy client port, every generated code change needs automated tests; all tests must pass; the app must start; fake server validation is required when relevant; review findings must be fixed while apparent; needed docs must be updated; final work should be committed and pushed.

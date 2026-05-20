@@ -370,22 +370,23 @@ The guard `CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"` ensures `wslpath` is never c
 ## Rust Client Workspace
 
 The Rust port lives in `port_rust/` and is built with Cargo instead of CMake.
-Use the commands below for local validation and smoke tests:
+Rust cross-platform client builds are validated locally, not through GitHub
+Actions. Use the commands below for local validation and smoke tests:
 
 ```bash
-cargo fmt --manifest-path port_rust/Cargo.toml --all --check
-cargo test --manifest-path port_rust/Cargo.toml --workspace
-cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings
-cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless
-cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
-cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --headless
-cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__
+rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check
+rtk cargo test --manifest-path port_rust/Cargo.toml --workspace
+rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless
+rtk cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
+rtk cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --headless
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__
 ```
 
 To stage a distributable release bundle from converted assets:
 
 ```bash
-python3 scripts/package_rust_client.py \
+rtk python3 scripts/package_rust_client.py \
   --client-exe port_rust/target/release/mu_client.exe \
   --asset-root port_rust/assets \
   --output-dir dist/mu-client
