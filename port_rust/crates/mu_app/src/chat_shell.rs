@@ -1,3 +1,4 @@
+use crate::chat_composer::ChatComposerState;
 use bevy::prelude::{
     AlignItems, App, BackgroundColor, Color, Commands, Component, Entity, FlexDirection,
     JustifyContent, Node, Plugin, PostUpdate, Res, ResMut, Resource, Text, TextColor, TextFont,
@@ -31,6 +32,7 @@ struct ChatShellKey {
     route: UiRoute,
     phase: SessionPhase,
     screen: ChatScreen,
+    composer: ChatComposerState,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -52,7 +54,8 @@ struct ChatShellRoot;
 
 impl Plugin for ChatShellPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ChatShellState>()
+        app.init_resource::<ChatComposerState>()
+            .init_resource::<ChatShellState>()
             .add_systems(PostUpdate, sync_chat_shell_system);
     }
 }
@@ -61,9 +64,10 @@ fn sync_chat_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
+    composer: Res<ChatComposerState>,
     mut state: ResMut<ChatShellState>,
 ) {
-    let current = chat_shell_key(ui_shell.current(), session_state.phase());
+    let current = chat_shell_key(ui_shell.current(), session_state.phase(), &composer);
 
     let Some(key) = current else {
         clear_chat_shell(&mut commands, &mut state);
@@ -76,7 +80,7 @@ fn sync_chat_shell_system(
 
     clear_chat_shell(&mut commands, &mut state);
 
-    let Some(view) = chat_shell_view(key.route, key.phase, &key.screen) else {
+    let Some(view) = chat_shell_view(key.route, key.phase, &key.screen, &key.composer) else {
         return;
     };
 
@@ -85,7 +89,11 @@ fn sync_chat_shell_system(
     state.key = Some(key);
 }
 
-fn chat_shell_key(route: UiRoute, phase: SessionPhase) -> Option<ChatShellKey> {
+fn chat_shell_key(
+    route: UiRoute,
+    phase: SessionPhase,
+    composer: &ChatComposerState,
+) -> Option<ChatShellKey> {
     if !chat_shell_visible(route, phase) {
         return None;
     }
@@ -94,6 +102,7 @@ fn chat_shell_key(route: UiRoute, phase: SessionPhase) -> Option<ChatShellKey> {
         route,
         phase,
         screen: chat_screen(),
+        composer: composer.clone(),
     })
 }
 
@@ -105,6 +114,7 @@ fn chat_shell_view(
     route: UiRoute,
     phase: SessionPhase,
     screen: &ChatScreen,
+    composer: &ChatComposerState,
 ) -> Option<ChatShellView> {
     if !chat_shell_visible(route, phase) {
         return None;
@@ -113,12 +123,16 @@ fn chat_shell_view(
     Some(ChatShellView {
         title: screen.title,
         status: status_line(screen.route, phase),
-        body: chat_shell_body(screen, phase),
+        body: chat_shell_body(screen, phase, composer),
         accent: CHAT_ACCENT,
     })
 }
 
-fn chat_shell_body(screen: &ChatScreen, phase: SessionPhase) -> String {
+fn chat_shell_body(
+    screen: &ChatScreen,
+    phase: SessionPhase,
+    composer: &ChatComposerState,
+) -> String {
     let mut body = String::new();
 
     push_paragraph(&mut body, "Status", "Chat shell is active.");
@@ -142,6 +156,26 @@ fn chat_shell_body(screen: &ChatScreen, phase: SessionPhase) -> String {
         "Pointer",
         &format!("pointed_message_index={:?}", screen.pointed_message_index),
     );
+    push_paragraph(
+        &mut body,
+        "Composer",
+        &format!(
+            "draft={} | length={}/{}",
+            chat_draft_label(composer),
+            composer.draft_char_count(),
+            crate::chat_composer::CHAT_DRAFT_CHAR_LIMIT
+        ),
+    );
+    push_paragraph(
+        &mut body,
+        "Feedback",
+        composer
+            .last_status()
+            .unwrap_or("Type a message and press Enter."),
+    );
+    if let Some(last_sent) = composer.last_sent() {
+        push_paragraph(&mut body, "Last sent", last_sent);
+    }
     push_paragraph(&mut body, "Layout", &format!("{:?}", screen.layout));
     push_paragraph(
         &mut body,
@@ -162,6 +196,14 @@ fn chat_shell_body(screen: &ChatScreen, phase: SessionPhase) -> String {
     );
 
     body
+}
+
+fn chat_draft_label(composer: &ChatComposerState) -> String {
+    if composer.draft().is_empty() {
+        "<empty>".to_string()
+    } else {
+        composer.draft().to_string()
+    }
 }
 
 fn chat_message_count_label(count: &ChatMessageCount) -> String {
@@ -328,6 +370,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{chat_shell_view, ChatShellPlugin, ChatShellRoot};
+    use crate::chat_composer::ChatComposerState;
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{UiRoute, UiShellState};
@@ -345,8 +388,13 @@ mod tests {
 
     #[test]
     fn chat_shell_view_renders_expected_bodies() {
-        let view = chat_shell_view(UiRoute::Chat, SessionPhase::LoggedIn, &mu_ui::chat_screen())
-            .expect("chat view missing");
+        let view = chat_shell_view(
+            UiRoute::Chat,
+            SessionPhase::LoggedIn,
+            &mu_ui::chat_screen(),
+            &ChatComposerState::default(),
+        )
+        .expect("chat view missing");
 
         assert_eq!(view.title, "Chat");
         assert!(view.status.contains("route=chat | group=world"));
@@ -360,17 +408,47 @@ mod tests {
         assert!(view.body.contains("Message counts"));
         assert!(view.body.contains("all | 12"));
         assert!(view.body.contains("whisper | 2"));
+        assert!(view.body.contains("Composer"));
+        assert!(view.body.contains("<empty>"));
+        assert!(view.body.contains("Type a message and press Enter."));
+
+        let mut composer = ChatComposerState::default();
+        composer.push_text("hello");
+        composer.record_status("Typing...");
+        let view = chat_shell_view(
+            UiRoute::Chat,
+            SessionPhase::LoggedIn,
+            &mu_ui::chat_screen(),
+            &composer,
+        )
+        .expect("chat view missing");
+        assert!(view.body.contains("draft=hello"));
+        assert!(view.body.contains("Typing..."));
+
+        let mut composer = ChatComposerState::default();
+        composer.mark_sent("Player", "hello");
+        let view = chat_shell_view(
+            UiRoute::Chat,
+            SessionPhase::LoggedIn,
+            &mu_ui::chat_screen(),
+            &composer,
+        )
+        .expect("chat view missing");
+        assert!(view.body.contains("Last sent"));
+        assert!(view.body.contains("Sent as Player."));
 
         assert!(chat_shell_view(
             UiRoute::Chat,
             SessionPhase::Disconnected,
-            &mu_ui::chat_screen()
+            &mu_ui::chat_screen(),
+            &ChatComposerState::default(),
         )
         .is_none());
         assert!(chat_shell_view(
             UiRoute::World,
             SessionPhase::LoggedIn,
-            &mu_ui::chat_screen()
+            &mu_ui::chat_screen(),
+            &ChatComposerState::default(),
         )
         .is_none());
     }
@@ -392,6 +470,15 @@ mod tests {
 
         assert_eq!(chat_shell_root_count(app.world_mut()), 1);
         let first_root = chat_shell_root_entity(app.world_mut()).unwrap();
+
+        app.world_mut()
+            .resource_mut::<ChatComposerState>()
+            .push_text("hello");
+        app.update();
+
+        assert_eq!(chat_shell_root_count(app.world_mut()), 1);
+        let composer_root = chat_shell_root_entity(app.world_mut()).unwrap();
+        assert_ne!(first_root, composer_root);
 
         app.world_mut()
             .resource_mut::<UiShellState>()

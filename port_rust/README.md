@@ -34,8 +34,10 @@ sessao de jogo completa.
   `--control-http` para smoke local.
 - A rota `Quests` agora mostra uma shell visual propria e pode ser aberta
   pelo `--control-http` para smoke local.
-- A rota `Chat` agora mostra uma shell visual propria e pode ser aberta pelo
-  `--control-http` para smoke local.
+- A rota `Chat` agora mostra uma shell visual propria com rascunho de texto;
+  quando a sessao esta logada, digitar texto e apertar Enter envia uma
+  mensagem publica. Ela pode ser aberta pelo `--control-http` para smoke
+  local.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; no runtime grafico, ele tambem espelha o fluxo de
   login/server select/character select/world. Detalhes em

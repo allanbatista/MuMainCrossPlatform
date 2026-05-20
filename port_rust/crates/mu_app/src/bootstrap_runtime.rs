@@ -8,6 +8,7 @@ use bevy::app::{App, Plugin};
 use bevy::prelude::{Commands, IntoScheduleConfigs, Res, ResMut, Resource, Startup, Update};
 use mu_gameplay::MovementCommand;
 use mu_network::{Session, SessionEvent};
+use mu_protocol::chat::public_chat_message;
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{UiRoute, UiShellState};
@@ -32,6 +33,7 @@ pub(crate) enum BootstrapSignal {
 #[derive(Debug)]
 enum BootstrapCommand {
     Walk(MovementCommand),
+    Chat { sender: String, message: String },
 }
 
 #[derive(Debug, Resource)]
@@ -89,6 +91,23 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::Walk(movement))
+            .is_ok()
+    }
+
+    pub(crate) fn queue_chat_message_request(
+        &self,
+        sender: impl Into<String>,
+        message: impl Into<String>,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::Chat {
+                sender: sender.into(),
+                message: message.into(),
+            })
             .is_ok()
     }
 }
@@ -433,6 +452,14 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::Chat { sender, message } => {
+            let packet = public_chat_message(sender, message).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -446,6 +473,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use mu_gameplay::MovementCommand;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
+    use mu_protocol::chat::public_chat_message;
     use mu_protocol::encode_packet;
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
@@ -750,6 +778,101 @@ mod tests {
                 .position,
             expected_position
         );
+
+        server.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fake_server_sends_public_chat_messages() {
+        let server_list = mu_protocol::connect::encode_server_list_response(&[
+            mu_protocol::connect::ServerEntry::new(7, 42),
+        ])
+        .unwrap();
+        let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
+        let character_list = character_list_extended(
+            1,
+            2,
+            true,
+            &[CharacterListEntry {
+                slot_index: 0,
+                name: b"Astra",
+                level: 255,
+                status: 32,
+                is_item_block_active: false,
+                appearance: b"appearance-data",
+                guild_position: 0,
+            }],
+        )
+        .unwrap();
+        let join_map = join_map_packet(1);
+        let chat_packet = public_chat_message(b"Hero", b"hello").unwrap();
+        let server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .send_packet(server_list.clone())
+                    .send_packet(login_success.clone())
+                    .send_packet(character_list.clone())
+                    .send_packet(join_map.clone())
+                    .expect_packet(chat_packet.clone())
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let mut bootstrap = {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let command_sender = spawn_bootstrap_worker(server.address(), sender);
+            BootstrapRuntime::new(receiver, Some(command_sender))
+        };
+        let config = config(Some(server.address().to_string()));
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            finish_world_bootstrap(&mut bootstrap, &mut client_runtime, &config, &mut ui_shell);
+
+            if ui_shell.current() == UiRoute::World {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        assert_eq!(ui_shell.current(), UiRoute::World);
+        assert!(bootstrap.queue_chat_message_request("Hero", "hello"));
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            if session_state.is_disconnected() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
 
         server.finish().await.unwrap();
     }

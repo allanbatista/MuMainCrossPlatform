@@ -251,6 +251,12 @@ impl ClientRuntime {
     pub fn render_entities_ready(&self) -> bool {
         matches!(self.render_entities.state(), RenderEntitiesState::Ready)
     }
+
+    pub fn local_player_label(&self) -> Option<&str> {
+        self.world_entities
+            .local_player()
+            .map(|local_player| local_player.label.as_str())
+    }
 }
 
 fn default_local_player_spawn() -> WorldPlayerSpawn {

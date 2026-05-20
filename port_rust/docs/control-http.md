@@ -71,7 +71,9 @@ Exemplo:
 
 `server-select`, `character-select`, `loading`, `world`, `chat`, `npc`,
 `shop`, `trade`, `party`, `gate`, `quests`, `login-success` e
-`login-failure` alteram a rota/session state do runtime grafico. `exit`
+`login-failure` alteram a rota/session state do runtime grafico. `chat` abre
+a shell visivel de chat, que agora aceita texto digitado e Enter para enviar
+mensagem publica quando a sessao esta logada. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
 grafico. Os demais apenas atualizam o snapshot.
 

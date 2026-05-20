@@ -1,5 +1,6 @@
 pub(crate) mod auth_shell;
 pub mod bootstrap_runtime;
+pub(crate) mod chat_composer;
 pub(crate) mod chat_shell;
 pub mod cli;
 pub mod client_runtime;
