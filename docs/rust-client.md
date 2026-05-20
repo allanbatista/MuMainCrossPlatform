@@ -64,6 +64,11 @@ Example:
 
 ## Legacy Source Classification
 
+The root-level migration inventory lives in `port_rust/docs/inventory.md`. It
+tracks every repository root that must be ported, kept as reference/validation
+support, rejected from the Rust runtime, or marked outside the runtime before a
+phase is considered complete.
+
 The canonical audit lives in `port_rust/crates/mu_test_support/src/source_inventory.rs`
 and is exercised by `port_rust/tests/rust/source_inventory.rs`.
 

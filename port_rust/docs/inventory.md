@@ -1,19 +1,29 @@
 # Inventario inicial do port Rust
 
-Status permitidos: `a portar`, `referencia`, `suporte de validacao`,
-`fora do runtime`, `pendente de decisao`.
+Status permitidos: `area alvo`, `a portar`, `referencia`,
+`suporte de validacao`, `fora do runtime`, `pendente de decisao`.
 
 Nenhuma entrada desta fase pode ser marcada como concluida sem evidencia de
 validacao associada.
+
+Este inventario cobre as raizes rastreadas no repositorio. O inventario
+granular dos caminhos legados sob `ClientLibrary/`, `src/`, `src/MuEditor/`,
+`src/bin/`, `src/ThirdParty/`, `src/dependencies/` e `tests/` vive em
+`port_rust/crates/mu_test_support/src/source_inventory.rs`.
 
 | Entrada | Status inicial | Evidencia exigida | Observacao |
 |---|---|---|---|
 | `.github/` | `suporte de validacao` | CI Rust especifico ou decisao documentada | Workflows atuais ficam como suporte e referencia de validacao. |
 | `.gemini/` | `fora do runtime` | Evidencia de uso ou decisao de descarte | Configuracao assistiva, sem impacto direto no runtime. |
+| `.features/` | `fora do runtime` | Decisao de manter apenas como workflow | Specs/planos operacionais nao entram no cliente Rust. |
+| `.idea/` | `fora do runtime` | Decisao de nao aplicabilidade | Metadados de IDE nao entram no runtime nem no pacote Rust. |
+| `.memory/` | `fora do runtime` | Decisao de manter apenas como memoria operacional | Regras/tarefas de agentes nao entram no runtime nem no pacote Rust. |
 | `ClientLibrary/` | `referencia` | Testes/provas de equivalencia de rede | Base C# para contratos cliente-servidor existentes. |
 | `ConstantsReplacer/` | `referencia` | Decisao sobre substituicao ou descarte | Ferramenta auxiliar atual, sem migracao nesta fase. |
 | `cmake/` | `suporte de validacao` | Decisao de coexistencia/remocao futura | Continua servindo ao build legado. |
 | `docs/` | `referencia` | Docs Rust atualizados quando houver superficie | Documentacao atual orienta comportamento esperado. |
+| `port_rust/` | `area alvo` | Cargo workspace, testes e docs alinhados ao plano | Workspace que recebe as camadas portadas e as ferramentas Rust. |
+| `scripts/` | `referencia` | Decisao por script: reutilizar, portar, fixture ou descartar | Conversores, geradores e empacotamento alimentam `mu_asset_pipeline` e o pacote Rust. |
 | `src/` | `referencia` | Inventario granular e validacao por area | Cliente C++ legado permanece como referencia funcional. |
 | `tests/` | `suporte de validacao` | Equivalente Rust ou fixture comparativa | Testes existentes orientam equivalencia futura. |
 | `.editorconfig` | `suporte de validacao` | Politica Rust equivalente ou reutilizacao | Pode orientar formatacao do port. |
@@ -29,4 +39,3 @@ validacao associada.
 | `stylecop.json` | `fora do runtime` | Decisao de nao aplicabilidade ou equivalente | Regra .NET, sem uso direto no runtime Rust. |
 | `toolchain-x64.cmake` | `referencia` | Decisao de toolchain Rust Windows x64 futura | Referencia para ambiente Windows x64. |
 | `toolchain-x86.cmake` | `referencia` | Decisao sobre suporte x86 futuro | Referencia para suporte x86 futuro. |
-

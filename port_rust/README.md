@@ -151,6 +151,12 @@ evidencias esperadas. Nenhuma fase de execucao deve comecar sem esse registro.
 
 ## Inventario
 
-O inventario inicial esta em `docs/inventory.md`. Ele lista as areas atuais do
-projeto, o status inicial e a evidencia exigida antes de qualquer area ser
-considerada equivalente no port Rust.
+O inventario inicial esta em `port_rust/docs/inventory.md`. Ele lista as raizes
+rastreadas do projeto, o status inicial e a evidencia exigida antes de qualquer
+area ser considerada equivalente, descartada ou fora do runtime Rust.
+
+O inventario granular dos caminhos legados vive em
+`port_rust/crates/mu_test_support/src/source_inventory.rs` e e validado por
+`port_rust/tests/rust/source_inventory.rs`. Ele cobre `ClientLibrary/`,
+`src/source/`, `src/MuEditor/`, `src/bin/`, `src/ThirdParty/`,
+`src/dependencies/` e `tests/`.
