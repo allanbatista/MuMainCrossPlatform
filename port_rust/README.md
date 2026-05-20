@@ -128,7 +128,9 @@ sessao de jogo completa.
   `events` no smoke local.
 - A camada de Gens esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
-  `gens` no smoke local.
+  `gens` no smoke local; quando a sessao esta logada, a abertura tambem
+  pede uma vez o ranking live e reaplica o snapshot decodificado quando a
+  resposta chega.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
   snapshots de party info/list e o consumo do `PartyManager`.
 - A camada de siege warfare esta documentada em `docs/siege-warfare.md` e

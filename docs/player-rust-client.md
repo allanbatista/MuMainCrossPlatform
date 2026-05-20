@@ -106,8 +106,8 @@ in the local config file instead of being typed every time.
   manager snapshot and can be driven from the local control HTTP smoke path
   with `events`.
 - The Gens HUD route now opens a visible Bevy shell that mirrors the Gens
-  manager snapshot and can be driven from the local control HTTP smoke path
-  with `gens`.
+  manager snapshot, sends one live ranking request per logged-in activation,
+  and can be driven from the local control HTTP smoke path with `gens`.
 - The party route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The gate route now opens a visible Bevy shell that can be driven from the

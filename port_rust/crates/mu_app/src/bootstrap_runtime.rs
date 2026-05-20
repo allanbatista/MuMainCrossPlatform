@@ -14,6 +14,8 @@ use camino::Utf8Path;
 use mu_gameplay::{CharacterClass, MovementCommand};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
+use mu_protocol::events::gens_ranking_request;
+use mu_protocol::events::{decode_gens_ranking_info, GensRankingInfo};
 use mu_protocol::guild::{
     guild_join_request, guild_list_request, guild_role_assign_request, request_alliance_list,
 };
@@ -65,6 +67,7 @@ pub(crate) enum BootstrapSignal {
     Movement(MovementUpdate),
     FriendRoster(FriendRosterSnapshot),
     GuildRoster(GuildRosterSnapshot),
+    GensRanking(GensRankingInfo),
     Logout(u8),
     JoinMap(u8),
     Error(String),
@@ -80,6 +83,7 @@ pub(crate) enum BootstrapCommand {
     SelectCharacter(String),
     CreateCharacter(String),
     FriendListRequest,
+    GensRankingRequest,
     FriendAdd(String),
     FriendDelete(String),
     GuildListRequest,
@@ -103,8 +107,11 @@ pub struct BootstrapRuntime {
     last_error: Option<String>,
     friend_roster: Option<FriendRosterSnapshot>,
     guild_roster: Option<GuildRosterSnapshot>,
+    gens_ranking_snapshot: Option<GensRankingInfo>,
     #[cfg(test)]
     friend_list_request_count: AtomicUsize,
+    #[cfg(test)]
+    gens_ranking_request_count: AtomicUsize,
     #[cfg(test)]
     guild_list_request_count: AtomicUsize,
     #[cfg(test)]
@@ -128,8 +135,11 @@ impl BootstrapRuntime {
             last_error: None,
             friend_roster: None,
             guild_roster: None,
+            gens_ranking_snapshot: None,
             #[cfg(test)]
             friend_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            gens_ranking_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             guild_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
@@ -173,6 +183,18 @@ impl BootstrapRuntime {
     pub(crate) fn clear_social_rosters(&mut self) {
         self.friend_roster = None;
         self.guild_roster = None;
+    }
+
+    pub(crate) fn gens_ranking_snapshot(&self) -> Option<GensRankingInfo> {
+        self.gens_ranking_snapshot
+    }
+
+    pub(crate) fn set_gens_ranking_snapshot(&mut self, snapshot: Option<GensRankingInfo>) {
+        self.gens_ranking_snapshot = snapshot;
+    }
+
+    pub(crate) fn clear_gens_ranking_snapshot(&mut self) {
+        self.gens_ranking_snapshot = None;
     }
 
     pub(crate) fn set_friend_roster_snapshot(&mut self, roster: Option<FriendRosterSnapshot>) {
@@ -267,6 +289,23 @@ impl BootstrapRuntime {
             .is_ok()
     }
 
+    pub(crate) fn queue_gens_ranking_request(&self) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.gens_ranking_request_count
+                .fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GensRankingRequest)
+            .is_ok()
+    }
+
     pub(crate) fn queue_friend_add_request(&self, friend_name: impl Into<String>) -> bool {
         let Some(command_sender) = self.command_sender.as_ref() else {
             return false;
@@ -352,6 +391,11 @@ impl BootstrapRuntime {
     #[cfg(test)]
     pub(crate) fn friend_list_request_count(&self) -> usize {
         self.friend_list_request_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn gens_ranking_request_count(&self) -> usize {
+        self.gens_ranking_request_count.load(Ordering::SeqCst)
     }
 
     #[cfg(test)]
@@ -548,6 +592,10 @@ fn apply_bootstrap_signal(
             bootstrap.set_guild_roster_snapshot(Some(roster));
             bootstrap.last_error = None;
         }
+        BootstrapSignal::GensRanking(snapshot) => {
+            bootstrap.set_gens_ranking_snapshot(Some(snapshot));
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::Logout(kind) => apply_logout(kind, bootstrap, ui_shell),
         BootstrapSignal::JoinMap(map) => {
             bootstrap.pending_world_map = Some(map);
@@ -563,6 +611,7 @@ fn apply_bootstrap_signal(
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some(message);
             bootstrap.clear_social_rosters();
+            bootstrap.clear_gens_ranking_snapshot();
 
             if bootstrap.character_create_state() == CharacterCreateScreenState::Submitting {
                 bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
@@ -590,6 +639,7 @@ fn apply_session_event(
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             bootstrap.clear_social_rosters();
+            bootstrap.clear_gens_ranking_snapshot();
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
         SessionEvent::LoginFailure => {
@@ -600,6 +650,7 @@ fn apply_session_event(
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = Some("login failed".to_string());
             bootstrap.clear_social_rosters();
+            bootstrap.clear_gens_ranking_snapshot();
             ui_shell.set_route(UiRoute::Login);
         }
         SessionEvent::Logout => {
@@ -608,6 +659,7 @@ fn apply_session_event(
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.clear_social_rosters();
+            bootstrap.clear_gens_ranking_snapshot();
         }
         SessionEvent::Disconnect => {
             let pending_world_map = bootstrap.pending_world_map.is_some();
@@ -616,6 +668,7 @@ fn apply_session_event(
                 bootstrap.character_create_state() == CharacterCreateScreenState::Submitting;
             session_state.apply_event(event);
             bootstrap.clear_social_rosters();
+            bootstrap.clear_gens_ranking_snapshot();
 
             if pending_world_map {
                 return;
@@ -662,6 +715,7 @@ fn apply_logout(kind: u8, bootstrap: &mut BootstrapRuntime, ui_shell: &mut UiShe
     bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
     bootstrap.last_error = None;
     bootstrap.clear_social_rosters();
+    bootstrap.clear_gens_ranking_snapshot();
 
     match kind {
         1 => {
@@ -839,6 +893,10 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
         },
         (0xF3, 0x03) => frame.payload.get(2).copied().map(BootstrapSignal::JoinMap),
         (0xF1, 0x02) => frame.payload.first().copied().map(BootstrapSignal::Logout),
+        (0xF8, 0x07) => Some(match decode_gens_ranking_info(frame) {
+            Ok(snapshot) => BootstrapSignal::GensRanking(snapshot),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
         (0xD1, 0x52) => Some(match decode_guild_roster(frame) {
             Ok(roster) => BootstrapSignal::GuildRoster(roster),
             Err(error) => BootstrapSignal::Error(error),
@@ -1030,6 +1088,14 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::GensRankingRequest => {
+            let packet = gens_ranking_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::GuildListRequest => {
             let packet = guild_list_request().map_err(|error| error.to_string())?;
 
@@ -1175,6 +1241,7 @@ mod tests {
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
+    use mu_protocol::events::{gens_ranking_request, GensRankingInfo};
     use mu_protocol::guild::guild_join_request;
     use mu_protocol::guild::guild_list_request;
     use mu_protocol::guild::guild_role_assign_request;
@@ -1254,6 +1321,18 @@ mod tests {
         payload.push(64);
 
         encode_packet(0xC2, 0xD1, 0x52, &payload).unwrap()
+    }
+
+    fn gens_ranking_packet() -> Vec<u8> {
+        let payload = [
+            1, // Duprian
+            0x09, 0x00, 0x00, 0x00, // ranking
+            0x02, 0x00, 0x00, 0x00, // gens class
+            0x64, 0x00, 0x00, 0x00, // contribution
+            0xC8, 0x00, 0x00, 0x00, // next contribution
+        ];
+
+        encode_packet(0xC1, 0xF8, 0x07, &payload).unwrap()
     }
 
     async fn drive_bootstrap_until_world(
@@ -1426,6 +1505,7 @@ mod tests {
         let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
 
         assert!(bootstrap.queue_friend_list_request());
+        assert!(bootstrap.queue_gens_ranking_request());
         assert!(bootstrap.queue_guild_list_request());
         assert!(bootstrap.queue_guild_alliance_list_request());
 
@@ -1434,6 +1514,14 @@ mod tests {
             .expect("friend list command missing")
         {
             BootstrapCommand::FriendListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("gens ranking command missing")
+        {
+            BootstrapCommand::GensRankingRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
 
@@ -1452,6 +1540,48 @@ mod tests {
             BootstrapCommand::GuildAllianceListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn gens_ranking_requests_are_counted_in_test_mode() {
+        let bootstrap = BootstrapRuntime::test_stub();
+
+        assert_eq!(bootstrap.gens_ranking_request_count(), 0);
+        assert!(bootstrap.queue_gens_ranking_request());
+        assert_eq!(bootstrap.gens_ranking_request_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn gens_ranking_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::GensRankingRequest)
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, gens_ranking_request().unwrap());
     }
 
     #[test]
@@ -1605,6 +1735,90 @@ mod tests {
             received,
             guild_role_assign_request(64, b"Astra", 2).unwrap()
         );
+    }
+
+    #[test]
+    fn gens_ranking_packets_classify_and_store_runtime_state() {
+        let packet = gens_ranking_packet();
+        let frame = decode_packet(&packet).expect("gens ranking frame");
+        let snapshot = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::GensRanking(snapshot)) => snapshot,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(
+            snapshot,
+            GensRankingInfo {
+                influence: 1,
+                ranking: 9,
+                gens_class: 2,
+                contribution_point: 100,
+                next_contribution_point: 200,
+            }
+        );
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::GensRanking(snapshot),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(bootstrap.gens_ranking_snapshot(), Some(snapshot));
+    }
+
+    #[test]
+    fn gens_ranking_snapshot_clears_on_session_reset() {
+        let snapshot = GensRankingInfo {
+            influence: 2,
+            ranking: 4,
+            gens_class: 1,
+            contribution_point: 300,
+            next_contribution_point: 400,
+        };
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        bootstrap.set_gens_ranking_snapshot(Some(snapshot));
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::LoginSuccess),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        assert!(bootstrap.gens_ranking_snapshot().is_none());
+
+        bootstrap.set_gens_ranking_snapshot(Some(snapshot));
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Logout),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        assert!(bootstrap.gens_ranking_snapshot().is_none());
+
+        bootstrap.set_gens_ranking_snapshot(Some(snapshot));
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Disconnect),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        assert!(bootstrap.gens_ranking_snapshot().is_none());
     }
 
     #[test]

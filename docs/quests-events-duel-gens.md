@@ -35,7 +35,9 @@ separate gameplay resources plus UI snapshot modules.
 - `mu_ui::gens::gens_ranking_screen()` exposes the HUD overlay used for the
   ranking and join/reward states.
 - The Rust client also exposes the Gens HUD route as a visible Bevy shell and
-  the local control HTTP smoke path can open it with `gens`.
+  the local control HTTP smoke path can open it with `gens`; when logged in,
+  that shell sends one live ranking request per activation and keeps the
+  decoded ranking snapshot in sync until logout or disconnect clears it.
 
 The packet helpers for these flows live in `mu_protocol::quests`,
 `mu_protocol::events`, and `mu_protocol::social`.

@@ -4,10 +4,12 @@ use bevy::prelude::{
     UiRect, Val,
 };
 use mu_gameplay::{GensManager, GensMode, GensType};
+use mu_protocol::events::GensRankingInfo;
 use mu_ui::{
     gens_ranking_screen, GensRankingScreen, GensRankingScreenState, UiRoute, UiShellState,
 };
 
+use crate::bootstrap_runtime::BootstrapRuntime;
 use crate::SessionPhase;
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -43,6 +45,9 @@ struct GensShellKey {
 struct GensShellState {
     root: Option<Entity>,
     key: Option<GensShellKey>,
+    last_session_phase: Option<SessionPhase>,
+    last_applied_snapshot: Option<GensRankingInfo>,
+    gens_ranking_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -67,21 +72,45 @@ fn sync_gens_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
-    gens_manager: Res<GensManager>,
+    bootstrap: Option<Res<BootstrapRuntime>>,
+    mut gens_manager: ResMut<GensManager>,
     mut state: ResMut<GensShellState>,
 ) {
-    let current = gens_shell_key(
-        ui_shell.current(),
-        session_state.phase(),
-        gens_manager.clone(),
-    );
+    let phase = session_state.phase();
+    if state.last_session_phase != Some(phase) {
+        gens_manager.reset();
+        state.last_applied_snapshot = None;
+        state.last_session_phase = Some(phase);
+    }
+
+    if phase == SessionPhase::LoggedIn {
+        if let Some(bootstrap) = bootstrap.as_deref() {
+            if let Some(snapshot) = bootstrap.gens_ranking_snapshot() {
+                if state.last_applied_snapshot.as_ref() != Some(&snapshot) {
+                    apply_gens_ranking_snapshot(snapshot, &mut gens_manager);
+                    state.last_applied_snapshot = Some(snapshot);
+                }
+            } else if state.last_applied_snapshot.is_some() {
+                gens_manager.reset();
+                state.last_applied_snapshot = None;
+            }
+        }
+    }
+
+    let current = gens_shell_key(ui_shell.current(), phase, gens_manager.clone());
 
     let Some(key) = current else {
         clear_gens_shell(&mut commands, &mut state);
+        state.gens_ranking_requested = false;
         return;
     };
 
     if state.key.as_ref() == Some(&key) && state.root.is_some() {
+        maybe_queue_gens_ranking_request(
+            bootstrap.as_deref(),
+            phase,
+            &mut state.gens_ranking_requested,
+        );
         return;
     }
 
@@ -94,6 +123,11 @@ fn sync_gens_shell_system(
     let root = spawn_gens_shell(&mut commands, &view);
     state.root = Some(root);
     state.key = Some(key);
+    maybe_queue_gens_ranking_request(
+        bootstrap.as_deref(),
+        phase,
+        &mut state.gens_ranking_requested,
+    );
 }
 
 fn gens_shell_key(
@@ -114,6 +148,71 @@ fn gens_shell_key(
 
 fn gens_shell_visible(route: UiRoute, phase: SessionPhase) -> bool {
     route == UiRoute::Hud && phase != SessionPhase::Disconnected
+}
+
+fn maybe_queue_gens_ranking_request(
+    bootstrap: Option<&BootstrapRuntime>,
+    phase: SessionPhase,
+    gens_ranking_requested: &mut bool,
+) {
+    if phase != SessionPhase::LoggedIn {
+        *gens_ranking_requested = false;
+        return;
+    }
+
+    if *gens_ranking_requested {
+        return;
+    }
+
+    let Some(bootstrap) = bootstrap else {
+        return;
+    };
+
+    if bootstrap.queue_gens_ranking_request() {
+        *gens_ranking_requested = true;
+    }
+}
+
+fn apply_gens_ranking_snapshot(snapshot: GensRankingInfo, gens_manager: &mut GensManager) {
+    let gens_type = gens_type_from_influence(snapshot.influence);
+    gens_manager.set_gens_type(gens_type);
+    gens_manager.set_team_name(gens_team_name_from_influence(snapshot.influence));
+    gens_manager.set_ranking(positive_i32_to_option_u16(snapshot.ranking));
+    gens_manager.set_contribution(positive_i32_to_u32(snapshot.contribution_point));
+    gens_manager.set_next_contribution(positive_i32_to_u32(snapshot.next_contribution_point));
+    gens_manager.mark_ranking();
+}
+
+fn gens_type_from_influence(influence: u8) -> GensType {
+    match influence {
+        1 => GensType::Duprian,
+        2 => GensType::Vanert,
+        _ => GensType::None,
+    }
+}
+
+fn gens_team_name_from_influence(influence: u8) -> &'static str {
+    match influence {
+        1 => "Duprian",
+        2 => "Vanert",
+        _ => "",
+    }
+}
+
+fn positive_i32_to_option_u16(value: i32) -> Option<u16> {
+    if value <= 0 {
+        return None;
+    }
+
+    u16::try_from(value).ok()
+}
+
+fn positive_i32_to_u32(value: i32) -> u32 {
+    if value <= 0 {
+        0
+    } else {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
 }
 
 fn gens_shell_view(

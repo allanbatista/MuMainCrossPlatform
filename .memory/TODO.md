@@ -54,8 +54,8 @@ remain for later if full guild parity is still required.
 `guild_create_request` or the remaining guild union management flows if full
 guild parity is still required.
 
-# [medium] Gens live ranking bridge
+# [medium] Gens title text parity
 
-The new Gens shell is visible and smokeable, but it still only reflects the
-local `GensManager` snapshot. The next slice should bridge the legacy Gens
-ranking refresh and response decoding if live parity is still required.
+The live Gens ranking packet does not carry the title text that the legacy
+HUD renders locally. If visible parity still matters, the next slice should
+add the local title mapping and hydrate `GensManager::title_name` from it.

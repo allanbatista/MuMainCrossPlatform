@@ -31,7 +31,7 @@ pub use admin::{LahapItemType, LahapMixType, LahapStackSize};
 pub use codec::{decode_packet, encode_packet};
 pub use connect::ServerEntry;
 pub use error::PacketCodecError;
-pub use events::GensType;
+pub use events::{GensRankingInfo, GensType};
 pub use frame::PacketFrame;
 pub use guild::{GuildRelationshipType, GuildRequestType};
 pub use items::{ChaosMachineMixType, FruitUsage, ItemStorageKind};
