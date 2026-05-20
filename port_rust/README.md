@@ -26,6 +26,8 @@ sessao de jogo completa.
   enquanto a sessao de mundo estiver ativa.
 - As rotas `Npc` e `Shop` agora mostram shells visuais proprias e podem ser
   abertas pelo `--control-http` para smoke local.
+- A rota `Trade` agora mostra uma shell visual propria e pode ser aberta pelo
+  `--control-http` para smoke local.
 - A rota `Party` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local.
 - A rota `Gate` agora mostra uma shell visual propria e pode ser aberta pelo
@@ -119,7 +121,7 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|loading|world|npc|shop|login-success|login-failure|
+  character-select|loading|world|npc|shop|trade|login-success|login-failure|
   party|gate|quests|logout-login|logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 

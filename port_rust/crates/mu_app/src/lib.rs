@@ -15,6 +15,7 @@ pub(crate) mod quests_shell;
 mod runtime;
 pub mod session_state;
 pub mod state;
+pub(crate) mod trade_shell;
 pub(crate) mod world_hud;
 pub mod world_motion;
 pub mod world_scene;

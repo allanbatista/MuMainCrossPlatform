@@ -13,7 +13,7 @@ use camino::Utf8PathBuf;
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
     EquipmentPlugin, InventoryPlugin, MovementPlugin, NpcPlugin, PartyPlugin, QuestPlugin,
-    VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    TradePlugin, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
@@ -26,6 +26,7 @@ use crate::inventory_shell::InventoryShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
 use crate::party_shell::PartyShellPlugin;
 use crate::quests_shell::QuestsShellPlugin;
+use crate::trade_shell::TradeShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
 use crate::world_scene::WorldScenePlugin;
@@ -125,6 +126,7 @@ fn configure_project_plugins(
             InventoryPlugin,
             EquipmentPlugin,
             VaultPlugin,
+            TradePlugin,
         ))
         .add_plugins((
             InventoryRoutePlugin,
@@ -134,6 +136,7 @@ fn configure_project_plugins(
             QuestsShellPlugin,
             PartyShellPlugin,
             GateShellPlugin,
+            TradeShellPlugin,
             BootstrapRuntimePlugin,
             WorldScenePlugin,
             InventoryShellPlugin,

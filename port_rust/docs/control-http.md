@@ -56,6 +56,7 @@ Exemplo:
 - `world`
 - `npc`
 - `shop`
+- `trade`
 - `party`
 - `gate`
 - `quests`
@@ -68,9 +69,10 @@ Exemplo:
 - `ping`
 
 `server-select`, `character-select`, `loading`, `world`, `npc`, `shop`,
-`party`, `gate`, `quests`, `login-success` e `login-failure` alteram a rota/session state do
-runtime grafico. `exit` atualiza o estado para `exit`, encerra o servidor e
-solicita saida do runtime grafico. Os demais apenas atualizam o snapshot.
+`trade`, `party`, `gate`, `quests`, `login-success` e `login-failure`
+alteram a rota/session state do runtime grafico. `exit` atualiza o estado para
+`exit`, encerra o servidor e solicita saida do runtime grafico. Os demais
+apenas atualizam o snapshot.
 
 O comando tambem pode vir no corpo da requisicao como `name=...` ou como texto
 puro.
@@ -84,6 +86,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
 curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=npc'
 curl -X POST 'http://127.0.0.1:12345/command?name=shop'
+curl -X POST 'http://127.0.0.1:12345/command?name=trade'
 curl -X POST 'http://127.0.0.1:12345/command?name=party'
 curl -X POST 'http://127.0.0.1:12345/command?name=gate'
 curl -X POST 'http://127.0.0.1:12345/command?name=quests'
