@@ -18,9 +18,12 @@ sessao de jogo completa.
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). Quando o roster
   chega, ele fica em character select ate receber um `select-character`
   explicito com o nome do personagem; o mesmo comando pode vir pelo
-  `--control-http` usando o nome no body ou em `character=`. Na tela de
-  character select, use `Up`/`Down` ou `Left`/`Right` e `Enter` para escolher
-  um personagem sem depender do control-http. No world route, mostra uma
+  `--control-http` usando o nome no body ou em `character=`. A rota visivel
+  `character-create` tambem pode ser aberta pelo comando `character-create`
+  no `--control-http`, mostrando a lista base de classes, o prompt de nome e
+  os botoes create/cancel. Na tela de character select, use `Up`/`Down` ou
+  `Left`/`Right` e `Enter` para escolher um personagem sem depender do
+  control-http. No world route, mostra uma
   world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
@@ -161,7 +164,7 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|select-character|loading|world|chat|npc|shop|game-shop|
+  character-select|character-create|select-character|loading|world|chat|npc|shop|game-shop|
   trade|mu-helper|login-success|login-failure|party|gate|friend|guild|duel|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.

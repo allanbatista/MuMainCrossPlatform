@@ -4,8 +4,10 @@ use bevy::prelude::{
     UiRect, Val,
 };
 use mu_ui::{
-    character_select_screen, login_screen, options_screen, server_select_screen,
-    CharacterSelectAction, CharacterSelectButton, CharacterSelectCharacter, CharacterSelectScreen,
+    character_create_screen, character_select_screen, login_screen, options_screen,
+    server_select_screen, CharacterCreateAction, CharacterCreateButton, CharacterCreateClassEntry,
+    CharacterCreateScreen, CharacterCreateScreenState, CharacterSelectAction,
+    CharacterSelectButton, CharacterSelectCharacter, CharacterSelectScreen,
     CharacterSelectScreenState, LoginAction, LoginField, LoginScreen, LoginScreenState,
     OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle, ServerEntry,
     ServerSelectAction, ServerSelectScreen, ServerSelectScreenState, UiRoute, UiRouteGroup,
@@ -113,6 +115,7 @@ fn auth_shell_visible(route: UiRoute) -> bool {
             | UiRoute::ServerSelect
             | UiRoute::Options
             | UiRoute::CharacterSelect
+            | UiRoute::CharacterCreate
             | UiRoute::Error
     )
 }
@@ -129,6 +132,7 @@ fn auth_shell_view(
         UiRoute::ServerSelect => Some(server_select_view(phase)),
         UiRoute::Options => Some(options_view(phase)),
         UiRoute::CharacterSelect => Some(character_select_view(phase, bootstrap)),
+        UiRoute::CharacterCreate => Some(character_create_view(phase)),
         UiRoute::Error => Some(error_view(phase)),
         _ => None,
     }
@@ -225,6 +229,21 @@ fn character_select_view(
         title: screen.title,
         status: status_line(screen.route, phase),
         body: character_select_body(&screen, selected_index),
+        accent: accent_for_route(screen.route),
+    }
+}
+
+fn character_create_view(phase: SessionPhase) -> AuthShellView {
+    let screen = if phase == SessionPhase::Disconnected {
+        character_create_screen(CharacterCreateScreenState::Error)
+    } else {
+        character_create_screen(CharacterCreateScreenState::Ready)
+    };
+
+    AuthShellView {
+        title: screen.title,
+        status: status_line(screen.route, phase),
+        body: character_create_body(&screen),
         accent: accent_for_route(screen.route),
     }
 }
@@ -378,6 +397,63 @@ fn character_select_body(screen: &CharacterSelectScreen, selected_index: Option<
     body
 }
 
+fn character_create_body(screen: &CharacterCreateScreen) -> String {
+    let mut body = String::new();
+
+    push_paragraph(&mut body, "Prompt", screen.prompt);
+
+    if let Some(notice) = screen.notice {
+        push_paragraph(&mut body, "Notice", notice);
+    }
+
+    push_paragraph(
+        &mut body,
+        "Name",
+        &format!(
+            "{} | length {}-{}",
+            if screen.name.is_empty() {
+                "<empty>"
+            } else {
+                screen.name
+            },
+            screen.name_min_length,
+            screen.name_max_length
+        ),
+    );
+
+    if let Some(selected_class) = character_create_selected_entry(screen) {
+        push_paragraph(
+            &mut body,
+            "Selection",
+            &format!(
+                "Selected class: {} | {}",
+                selected_class.class_.display_name(),
+                selected_class.summary
+            ),
+        );
+        push_paragraph(
+            &mut body,
+            "Stats",
+            &character_create_stats_label(selected_class),
+        );
+    }
+
+    push_lines(
+        &mut body,
+        "Classes",
+        screen.classes.iter().map(character_create_class_label),
+        None,
+    );
+    push_lines(
+        &mut body,
+        "Actions",
+        screen.buttons.iter().map(character_create_button_label),
+        None,
+    );
+
+    body
+}
+
 fn options_body(screen: &OptionsScreen) -> String {
     let mut body = String::new();
 
@@ -424,6 +500,12 @@ fn character_select_selected_entry<'a>(
     selected_index: Option<usize>,
 ) -> Option<&'a CharacterSelectCharacter> {
     selected_index.and_then(|index| screen.characters.get(index))
+}
+
+fn character_create_selected_entry(
+    screen: &CharacterCreateScreen,
+) -> Option<&CharacterCreateClassEntry> {
+    screen.classes.iter().find(|entry| entry.selected)
 }
 
 fn push_paragraph(output: &mut String, heading: &str, text: &str) {
@@ -556,6 +638,59 @@ fn button_label(button: &CharacterSelectButton) -> String {
         "disabled"
     };
     format!("{} ({state})", character_action_label(button.action))
+}
+
+fn character_create_stats_label(entry: &CharacterCreateClassEntry) -> String {
+    format!(
+        "STR {} | AGI {} | VIT {} | ENG {} | HP {} | MP {} | SH {} | LvHP {} | LvMP {} | V->HP {} | E->MP {}",
+        entry.stats.strength,
+        entry.stats.dexterity,
+        entry.stats.vitality,
+        entry.stats.energy,
+        entry.stats.life,
+        entry.stats.mana,
+        entry.stats.shield,
+        entry.stats.level_life,
+        entry.stats.level_mana,
+        entry.stats.vitality_to_life,
+        entry.stats.energy_to_mana,
+    )
+}
+
+fn character_create_class_label(entry: &CharacterCreateClassEntry) -> String {
+    let mut label = format!(
+        "{} | {} | {}",
+        entry.class_.display_name(),
+        entry.summary,
+        character_create_stats_label(entry)
+    );
+
+    if entry.selected {
+        label.push_str(" | selected");
+    }
+
+    if !entry.enabled {
+        label.push_str(" | disabled");
+    }
+
+    label
+}
+
+fn character_create_action_label(action: CharacterCreateAction) -> &'static str {
+    match action {
+        CharacterCreateAction::Create => "Create",
+        CharacterCreateAction::Cancel => "Cancel",
+    }
+}
+
+fn character_create_button_label(button: &CharacterCreateButton) -> String {
+    let state = if button.enabled {
+        "enabled"
+    } else {
+        "disabled"
+    };
+
+    format!("{} ({state})", character_create_action_label(button.action))
 }
 
 fn status_line(route: UiRoute, phase: SessionPhase) -> String {
@@ -777,6 +912,33 @@ mod tests {
 
         assert!(view.body.contains("Selected slot: 1 | Selene"));
         assert!(view.body.contains("The selected character cannot be used."));
+    }
+
+    #[test]
+    fn character_create_shell_renders_class_list_and_actions() {
+        let view = auth_shell_view(UiRoute::CharacterCreate, SessionPhase::LoggedIn, None)
+            .expect("character create shell missing");
+
+        assert_eq!(view.title, "Character Create");
+        assert!(view.status.contains("route=character-create"));
+        assert!(view.body.contains("Enter the new character name."));
+        assert!(view.body.contains("Choose a class and enter a name."));
+        assert!(view.body.contains("Selected class: Dark Knight"));
+        assert!(view.body.contains("Front-line fighter."));
+        assert!(view.body.contains("Wizard"));
+        assert!(view.body.contains("Rage Fighter"));
+        assert!(view.body.contains("STR"));
+        assert!(view.body.contains("Create"));
+        assert!(view.body.contains("Cancel"));
+    }
+
+    #[test]
+    fn character_create_shell_uses_error_state_when_disconnected() {
+        let view = auth_shell_view(UiRoute::CharacterCreate, SessionPhase::Disconnected, None)
+            .expect("character create shell missing");
+
+        assert!(view.status.contains("session=disconnected"));
+        assert!(view.body.contains("Character creation is unavailable."));
     }
 
     #[test]

@@ -16,6 +16,7 @@ pub enum ControlCommand {
     ServerSelect,
     Options,
     CharacterSelect,
+    CharacterCreate,
     Loading,
     World,
     Chat,
@@ -58,6 +59,7 @@ impl ControlCommand {
             Self::ServerSelect => "server-select",
             Self::Options => "options",
             Self::CharacterSelect => "character-select",
+            Self::CharacterCreate => "character-create",
             Self::Loading => "loading",
             Self::World => "world",
             Self::Chat => "chat",
@@ -104,6 +106,7 @@ impl ControlCommand {
             "character-select" | "character_select" | "character-list" | "character_list" => {
                 Some(Self::CharacterSelect)
             }
+            "character-create" | "character_create" => Some(Self::CharacterCreate),
             "loading" => Some(Self::Loading),
             "world" => Some(Self::World),
             "chat" => Some(Self::Chat),
@@ -204,6 +207,13 @@ impl ControlSnapshot {
             ControlCommand::CharacterSelect => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::CharacterSelect;
+                false
+            }
+            ControlCommand::CharacterCreate => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterCreate;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.selected_character_name = None;
                 false
             }
             ControlCommand::Loading => {
@@ -935,6 +945,15 @@ mod tests {
         );
         assert_eq!(ControlCommand::SelectCharacter.as_str(), "select-character");
         assert_eq!(
+            ControlCommand::parse("character-create"),
+            Some(ControlCommand::CharacterCreate)
+        );
+        assert_eq!(
+            ControlCommand::parse("character_create"),
+            Some(ControlCommand::CharacterCreate)
+        );
+        assert_eq!(ControlCommand::CharacterCreate.as_str(), "character-create");
+        assert_eq!(
             ControlCommand::parse("options"),
             Some(ControlCommand::Options)
         );
@@ -1041,6 +1060,12 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.selected_character_name.as_deref(), Some("Astra"));
 
+        snapshot.apply_command(ControlCommand::CharacterCreate);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterCreate);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.selected_character_name, None);
+
         snapshot.apply_command(ControlCommand::Chat);
 
         assert_eq!(snapshot.ui_route, UiRoute::Chat);
@@ -1134,6 +1159,14 @@ mod tests {
             "POST /command?name=login-success HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"character-select""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""selected_character_name":null"#));
+
+        let (_, body) = send_request(
+            address,
+            "POST /command?name=character-create HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"character-create""#));
         assert!(body.contains(r#""session_phase":"logged-in""#));
         assert!(body.contains(r#""selected_character_name":null"#));
 
@@ -1244,7 +1277,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 17);
+        assert_eq!(final_snapshot.command_count, 18);
     }
 
     #[test]

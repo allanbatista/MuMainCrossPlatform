@@ -28,7 +28,7 @@ in the local config file instead of being typed every time.
   selection while the client boots.
 - The shared Options window is also available as a visible Bevy route and
   through the local control HTTP API with `options`.
-- Character selection and character creation.
+- Character selection and the visible character-create route.
 - The Bevy bootstrap now carries the client from login to character select and
   immediately requests the character list using the legacy locale byte
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`) before the
@@ -37,6 +37,8 @@ in the local config file instead of being typed every time.
   `select-character` request names a roster entry; the same request can be
   sent through the local control HTTP API with the character name in the body
   or a `character=` query parameter.
+- The character-create route opens the class picker and name prompt; use
+  `character-create` through the local control HTTP API to smoke it locally.
 - On the visible character-select surface, use `Up`/`Down` or `Left`/`Right`
   to move the selection and `Enter` to confirm without the control HTTP API.
   The shell shows the loading state until the roster is ready.
@@ -114,11 +116,13 @@ in the local config file instead of being typed every time.
   local HTTP automation surface while the Bevy window is running.
 - `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
   and `command_count`.
-- `POST /command?name=ready-for-login|server-select|character-select|loading|world|login-success|login-failure|mu-helper|exit|ping`
+- `POST /command?name=ready-for-login|server-select|character-select|character-create|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
 - `POST /command?name=select-character` can continue from character select
   once the roster is visible. Pass the character name in the body or as
   `character=` when using the local control HTTP API.
+- `POST /command?name=character-create` can open the visible character-create
+  shell for local QA smoke.
 - `POST /command?name=chat` can step into the visible chat route shell for
   local QA smoke; once open, the shell accepts typed chat and Enter sends the
   draft.
