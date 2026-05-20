@@ -11,7 +11,7 @@ use bevy::prelude::{
     Plugin, Query, Res, ResMut, Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
 };
 use camino::Utf8Path;
-use mu_assets::TerrainWorldSummary;
+use mu_assets::{TerrainWorldBundle, TerrainWorldSummary};
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
 use mu_ui::{UiRoute, UiShellState};
 
@@ -129,10 +129,11 @@ fn sync_world_scene_transforms_system(
     }
 
     let catalog = client_runtime.render_entities().catalog();
+    let world_bundle = client_runtime.world().bundle();
 
     for (marker, mut transform) in markers.iter_mut() {
         if let Some(entry) = render_entity_for_marker(catalog, marker) {
-            *transform = world_transform(&entry.pose);
+            *transform = grounded_world_transform(&entry.pose, marker.family, world_bundle);
         }
     }
 }
@@ -156,7 +157,12 @@ fn sync_world_scene_camera_system(
         return;
     };
 
-    let local_player_translation = world_transform(&local_player.pose).translation;
+    let local_player_translation = grounded_world_transform(
+        &local_player.pose,
+        RenderEntityFamily::LocalPlayer,
+        client_runtime.world().bundle(),
+    )
+    .translation;
     let zoom_scale = config.camera.zoom_scale();
 
     for (camera, mut transform) in cameras.iter_mut() {
@@ -233,7 +239,15 @@ fn spawn_world_scene(
         world_bundle,
         asset_root,
     ));
-    spawn_world_entities(commands, asset_server, meshes, materials, catalog, state);
+    spawn_world_entities(
+        commands,
+        asset_server,
+        meshes,
+        materials,
+        world_bundle,
+        catalog,
+        state,
+    );
 }
 
 fn spawn_world_camera(
@@ -585,6 +599,7 @@ fn spawn_world_entities(
     asset_server: &AssetServer,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    world_bundle: &TerrainWorldBundle,
     catalog: &RenderEntityCatalog,
     state: &mut WorldSceneState,
 ) {
@@ -593,6 +608,7 @@ fn spawn_world_entities(
             commands,
             meshes,
             materials,
+            world_bundle,
             entry,
             marker_style(RenderEntityFamily::LocalPlayer),
             "local-player",
@@ -603,6 +619,7 @@ fn spawn_world_entities(
         commands,
         meshes,
         materials,
+        world_bundle,
         &catalog.remote_players,
         RenderEntityFamily::RemotePlayer,
         state,
@@ -638,6 +655,7 @@ fn spawn_world_marker_family(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    world_bundle: &TerrainWorldBundle,
     entries: &[RenderEntityEntry],
     family: RenderEntityFamily,
     state: &mut WorldSceneState,
@@ -648,6 +666,7 @@ fn spawn_world_marker_family(
             commands,
             meshes,
             materials,
+            world_bundle,
             entry,
             marker_style(family),
             label_prefix,
@@ -698,6 +717,7 @@ fn spawn_world_marker(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    world_bundle: &TerrainWorldBundle,
     entry: &RenderEntityEntry,
     (color, marker_size): (Color, f32),
     label_prefix: &str,
@@ -717,7 +737,7 @@ fn spawn_world_marker(
         .spawn((
             Mesh3d(mesh),
             MeshMaterial3d(material),
-            world_transform(&entry.pose),
+            grounded_world_transform(&entry.pose, entry.family, Some(world_bundle)),
             WorldSceneMarker {
                 family: entry.family,
                 key: entry.key.clone(),
@@ -750,6 +770,70 @@ fn world_transform(pose: &mu_gameplay::WorldEntityPose) -> Transform {
         rotation,
         scale,
     }
+}
+
+fn grounded_world_transform(
+    pose: &mu_gameplay::WorldEntityPose,
+    family: RenderEntityFamily,
+    world_bundle: Option<&TerrainWorldBundle>,
+) -> Transform {
+    let mut transform = world_transform(pose);
+
+    if let Some(world_bundle) = world_bundle {
+        if matches!(
+            family,
+            RenderEntityFamily::LocalPlayer | RenderEntityFamily::RemotePlayer
+        ) {
+            transform.translation =
+                grounded_marker_translation(transform.translation, family, world_bundle);
+        }
+    }
+
+    transform
+}
+
+fn grounded_marker_translation(
+    translation: Vec3,
+    family: RenderEntityFamily,
+    world_bundle: &TerrainWorldBundle,
+) -> Vec3 {
+    let Some(surface_height) = terrain_surface_height_at_position(translation, world_bundle) else {
+        return translation;
+    };
+
+    let marker_half_height = marker_style(family).1 * 0.5;
+
+    Vec3::new(
+        translation.x,
+        surface_height + marker_half_height,
+        translation.z,
+    )
+}
+
+fn terrain_surface_height_at_position(
+    translation: Vec3,
+    world_bundle: &TerrainWorldBundle,
+) -> Option<f32> {
+    let terrain_rows = world_bundle.map.layer1.as_slice();
+    let terrain_size = terrain_rows.len();
+    if terrain_size < 2 || terrain_rows.iter().any(|row| row.len() != terrain_size) {
+        return None;
+    }
+
+    let summary = world_bundle.summary();
+    let max_sample = summary.layer_stats.layer1.max.max(1) as f32;
+    let height_scale = WORLD_TERRAIN_AMPLITUDE / max_sample;
+    let half_extent = (terrain_size as f32 - 1.0) * WORLD_POSITION_SCALE * 0.5;
+    let max_index = (terrain_size - 1) as f32;
+    let x_index = ((translation.x + half_extent) / WORLD_POSITION_SCALE)
+        .round()
+        .clamp(0.0, max_index) as usize;
+    let z_index = ((translation.z + half_extent) / WORLD_POSITION_SCALE)
+        .round()
+        .clamp(0.0, max_index) as usize;
+    let sample = *terrain_rows.get(z_index)?.get(x_index)?;
+
+    Some(f32::from(sample) * height_scale)
 }
 
 fn marker_style(family: RenderEntityFamily) -> (Color, f32) {
@@ -790,6 +874,8 @@ fn render_entity_for_marker<'a>(
 mod tests {
     use super::{
         apply_world_camera_zoom_delta, build_world_terrain_blend_mesh, build_world_terrain_mesh,
+        grounded_marker_translation, grounded_world_transform,
+        terrain_surface_height_at_position, world_transform, WORLD_TERRAIN_AMPLITUDE,
         world_terrain_lightmap_path, world_terrain_texture_paths, WorldSceneCamera,
         WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
         WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
@@ -798,7 +884,7 @@ mod tests {
     use crate::{ClientRuntime, Config};
     use bevy::asset::AssetPlugin;
     use bevy::mesh::VertexAttributeValues;
-    use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, Name, SceneRoot};
+    use bevy::prelude::{App, AssetApp, Camera3d, Mesh3d, Name, SceneRoot, Vec3};
     use bevy::{gltf::GltfPlugin, scene::ScenePlugin};
     use camino::Utf8PathBuf;
     use mu_assets::load_terrain_world_bundle;
@@ -1094,6 +1180,60 @@ mod tests {
     }
 
     #[test]
+    fn terrain_surface_height_at_position_matches_the_visible_bundle_sample() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let translation = Vec3::new(0.0, 0.0, 0.0);
+        let terrain_rows = bundle.map.layer1.as_slice();
+        let terrain_size = terrain_rows.len();
+        let half_extent = (terrain_size as f32 - 1.0) * WORLD_POSITION_SCALE * 0.5;
+        let max_index = (terrain_size - 1) as f32;
+        let x_index = ((translation.x + half_extent) / WORLD_POSITION_SCALE)
+            .round()
+            .clamp(0.0, max_index) as usize;
+        let z_index = ((translation.z + half_extent) / WORLD_POSITION_SCALE)
+            .round()
+            .clamp(0.0, max_index) as usize;
+        let expected_height_scale =
+            WORLD_TERRAIN_AMPLITUDE / bundle.summary().layer_stats.layer1.max.max(1) as f32;
+        let expected_height =
+            f32::from(bundle.map.layer1[z_index][x_index]) * expected_height_scale;
+
+        assert_eq!(
+            terrain_surface_height_at_position(translation, &bundle),
+            Some(expected_height)
+        );
+    }
+
+    #[test]
+    fn grounded_marker_translation_lifts_local_and_remote_players_above_the_surface() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let base_translation = world_transform(&mu_gameplay::WorldEntityPose::new(
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+        ))
+        .translation;
+
+        let local_grounded =
+            grounded_marker_translation(base_translation, RenderEntityFamily::LocalPlayer, &bundle);
+        let remote_grounded = grounded_marker_translation(
+            base_translation,
+            RenderEntityFamily::RemotePlayer,
+            &bundle,
+        );
+
+        assert_eq!(local_grounded.x, base_translation.x);
+        assert_eq!(local_grounded.z, base_translation.z);
+        assert_eq!(remote_grounded.x, base_translation.x);
+        assert_eq!(remote_grounded.z, base_translation.z);
+        assert!(local_grounded.y > base_translation.y);
+        assert!(remote_grounded.y > base_translation.y);
+        assert!(local_grounded.y > remote_grounded.y);
+    }
+
+    #[test]
     fn world_scene_reconciles_the_local_player_marker_after_runtime_motion() {
         let mut app = spawn_ready_app();
         load_world(&mut app);
@@ -1132,15 +1272,26 @@ mod tests {
             .translate_local_player([20.0, 0.0, 0.0]);
         app.update();
 
-        let updated_x = app
+        let updated_transform = app
             .world()
             .entity(local_marker)
             .get::<bevy::prelude::Transform>()
             .unwrap()
-            .translation
-            .x;
+            .translation;
+        let expected_transform = {
+            let client_runtime = app.world().resource::<ClientRuntime>();
+            let world_bundle = client_runtime.world().bundle().unwrap();
+            let local_player = client_runtime.world_entities().local_player().unwrap();
+            grounded_world_transform(
+                &local_player.pose,
+                RenderEntityFamily::LocalPlayer,
+                Some(world_bundle),
+            )
+        }
+        .translation;
 
-        assert!(updated_x > initial_x);
+        assert!(updated_transform.x > initial_x);
+        assert_eq!(updated_transform.y, expected_transform.y);
     }
 
     #[test]

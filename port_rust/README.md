@@ -24,8 +24,9 @@ sessao de jogo completa.
   world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
-  map, o lightmap do terreno do bundle, marcadores de player amostrados e
-  modelos convertidos reais para objects, NPCs e monstros.
+  map, o lightmap do terreno do bundle, marcadores de local/remote player
+  ancorados na superficie visivel do terreno e modelos convertidos reais para
+  objects, NPCs e monstros.
 - A camera do world route agora segue o avatar local para manter o movimento
   enquadrado enquanto a cena 3D esta ativa; a roda do mouse ajusta o zoom e
   o valor fica salvo em `[Camera] zoom` ao sair do cliente grafico.
