@@ -115,6 +115,8 @@ sessao de jogo completa.
   pacote de join da guild pela sessao viva.
 - O control-http tambem aceita `guild-role-assign` com `player=`, `role=` e
   `type=` para enviar o pacote de role assignment da guild pela sessao viva.
+- Abrir `guild-union` com a sessao logada tambem envia uma vez a requisicao
+  de alliance list antes de manter a shell visivel.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
   vez a requisicao de listagem correspondente antes de manter a shell
   visivel, e limpa o snapshot decodificado no logout ou disconnect.

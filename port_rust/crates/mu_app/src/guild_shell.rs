@@ -45,6 +45,7 @@ struct GuildShellState {
     root: Option<Entity>,
     key: Option<GuildShellKey>,
     guild_list_requested: bool,
+    guild_alliance_list_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +76,7 @@ fn sync_guild_shell_system(
 ) {
     if session_state.phase() != SessionPhase::LoggedIn {
         state.guild_list_requested = false;
+        state.guild_alliance_list_requested = false;
     }
 
     let control_http_state = control_http
@@ -91,6 +93,7 @@ fn sync_guild_shell_system(
     let Some(key) = current else {
         clear_guild_shell(&mut commands, &mut state);
         state.guild_list_requested = false;
+        state.guild_alliance_list_requested = false;
         return;
     };
 
@@ -100,15 +103,22 @@ fn sync_guild_shell_system(
             session_state.phase(),
             &mut state.guild_list_requested,
         );
+        maybe_queue_guild_alliance_list_request(
+            &bootstrap,
+            session_state.phase(),
+            key.control_http_state,
+            &mut state.guild_alliance_list_requested,
+        );
         return;
     }
 
     clear_guild_shell(&mut commands, &mut state);
 
+    let control_http_state = key.control_http_state;
     let Some(view) = guild_shell_view(
         key.route,
         key.phase,
-        key.control_http_state,
+        control_http_state,
         key.live_roster.clone(),
     ) else {
         return;
@@ -121,6 +131,12 @@ fn sync_guild_shell_system(
         &bootstrap,
         session_state.phase(),
         &mut state.guild_list_requested,
+    );
+    maybe_queue_guild_alliance_list_request(
+        &bootstrap,
+        session_state.phase(),
+        control_http_state,
+        &mut state.guild_alliance_list_requested,
     );
 }
 
@@ -157,6 +173,26 @@ fn maybe_queue_guild_list_request(
 
     if bootstrap.queue_guild_list_request() {
         *guild_list_requested = true;
+    }
+}
+
+fn maybe_queue_guild_alliance_list_request(
+    bootstrap: &BootstrapRuntime,
+    phase: SessionPhase,
+    control_http_state: Option<GuildScreenState>,
+    guild_alliance_list_requested: &mut bool,
+) {
+    if control_http_state != Some(GuildScreenState::Union) {
+        *guild_alliance_list_requested = false;
+        return;
+    }
+
+    if !guild_shell_should_queue_live_request(phase, *guild_alliance_list_requested) {
+        return;
+    }
+
+    if bootstrap.queue_guild_alliance_list_request() {
+        *guild_alliance_list_requested = true;
     }
 }
 
@@ -534,6 +570,12 @@ mod tests {
             .guild_list_request_count()
     }
 
+    fn guild_alliance_list_request_count(world: &bevy::prelude::World) -> usize {
+        world
+            .resource::<BootstrapRuntime>()
+            .guild_alliance_list_request_count()
+    }
+
     fn live_guild_roster() -> GuildRosterSnapshot {
         GuildRosterSnapshot {
             result: 0x52,
@@ -672,6 +714,7 @@ mod tests {
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 1);
         assert_eq!(guild_list_request_count(app.world()), 1);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 0);
 
         {
             let shared_snapshot = app.world().resource::<ControlHttpState>().shared_snapshot();
@@ -684,6 +727,13 @@ mod tests {
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 1);
         assert_eq!(guild_list_request_count(app.world()), 1);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 1);
+
+        app.update();
+
+        assert_eq!(guild_shell_root_count(app.world_mut()), 1);
+        assert_eq!(guild_list_request_count(app.world()), 1);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 1);
 
         app.world_mut()
             .resource_mut::<UiShellState>()
@@ -692,6 +742,7 @@ mod tests {
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 0);
         assert_eq!(guild_list_request_count(app.world()), 1);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 1);
 
         app.world_mut()
             .resource_mut::<UiShellState>()
@@ -700,12 +751,14 @@ mod tests {
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 1);
         assert_eq!(guild_list_request_count(app.world()), 2);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 2);
 
         app.world_mut().resource_mut::<SessionState>().logout();
         app.update();
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 1);
         assert_eq!(guild_list_request_count(app.world()), 2);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 2);
 
         app.world_mut()
             .resource_mut::<SessionState>()
@@ -714,5 +767,6 @@ mod tests {
 
         assert_eq!(guild_shell_root_count(app.world_mut()), 1);
         assert_eq!(guild_list_request_count(app.world()), 3);
+        assert_eq!(guild_alliance_list_request_count(app.world()), 3);
     }
 }

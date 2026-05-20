@@ -27,6 +27,8 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   latch again when the route exits or the session logs out. The decoded
   friend/guild roster data stays in the shell snapshot until logout or
   disconnect clears it.
+- Opening `guild-union` while logged in also queues the alliance list request
+  once per activation before the union shell stays visible.
 
 ## Friend
 

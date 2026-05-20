@@ -139,7 +139,8 @@ ID no body ou em `master_id=`; se o payload vier incompleto, a resposta sera
 `400`. `guild-role-assign` envia o pacote de role assignment da guild
 atraves da sessao viva e aceita o player no body ou em `player=`, o role em
 `role=` e o tipo em `type=`; se o payload vier incompleto, a resposta sera
-`400`. `exit`
+`400`. Ao abrir `guild-union` com a sessao logada, o runtime tambem envia
+uma vez a requisicao de alliance list antes de manter a shell visivel. `exit`
 atualiza o estado para `exit`, encerra o servidor e solicita saida do runtime
 grafico. Os demais apenas atualizam o snapshot.
 

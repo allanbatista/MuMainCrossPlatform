@@ -14,7 +14,9 @@ use camino::Utf8Path;
 use mu_gameplay::{CharacterClass, MovementCommand};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
-use mu_protocol::guild::{guild_join_request, guild_list_request, guild_role_assign_request};
+use mu_protocol::guild::{
+    guild_join_request, guild_list_request, guild_role_assign_request, request_alliance_list,
+};
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
@@ -81,6 +83,7 @@ pub(crate) enum BootstrapCommand {
     FriendAdd(String),
     FriendDelete(String),
     GuildListRequest,
+    GuildAllianceListRequest,
     GuildJoin(u16),
     GuildRoleAssign {
         player_name: String,
@@ -105,6 +108,8 @@ pub struct BootstrapRuntime {
     #[cfg(test)]
     guild_list_request_count: AtomicUsize,
     #[cfg(test)]
+    guild_alliance_list_request_count: AtomicUsize,
+    #[cfg(test)]
     test_request_queues: bool,
 }
 
@@ -127,6 +132,8 @@ impl BootstrapRuntime {
             friend_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             guild_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            guild_alliance_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             test_request_queues: false,
         }
@@ -296,6 +303,23 @@ impl BootstrapRuntime {
             .is_ok()
     }
 
+    pub(crate) fn queue_guild_alliance_list_request(&self) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.guild_alliance_list_request_count
+                .fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildAllianceListRequest)
+            .is_ok()
+    }
+
     pub(crate) fn queue_guild_join_request(&self, guild_master_player_id: u16) -> bool {
         let Some(command_sender) = self.command_sender.as_ref() else {
             return false;
@@ -333,6 +357,12 @@ impl BootstrapRuntime {
     #[cfg(test)]
     pub(crate) fn guild_list_request_count(&self) -> usize {
         self.guild_list_request_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn guild_alliance_list_request_count(&self) -> usize {
+        self.guild_alliance_list_request_count
+            .load(Ordering::SeqCst)
     }
 
     pub(crate) fn character_list_ready(&self) -> bool {
@@ -1008,6 +1038,14 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::GuildAllianceListRequest => {
+            let packet = request_alliance_list().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::GuildJoin(guild_master_player_id) => {
             let packet =
                 guild_join_request(guild_master_player_id).map_err(|error| error.to_string())?;
@@ -1140,6 +1178,7 @@ mod tests {
     use mu_protocol::guild::guild_join_request;
     use mu_protocol::guild::guild_list_request;
     use mu_protocol::guild::guild_role_assign_request;
+    use mu_protocol::guild::request_alliance_list;
     use mu_protocol::login::{create_character, request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{
@@ -1388,6 +1427,7 @@ mod tests {
 
         assert!(bootstrap.queue_friend_list_request());
         assert!(bootstrap.queue_guild_list_request());
+        assert!(bootstrap.queue_guild_alliance_list_request());
 
         match command_receiver
             .try_recv()
@@ -1402,6 +1442,14 @@ mod tests {
             .expect("guild list command missing")
         {
             BootstrapCommand::GuildListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("guild alliance list command missing")
+        {
+            BootstrapCommand::GuildAllianceListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
     }
@@ -1448,6 +1496,39 @@ mod tests {
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn guild_alliance_list_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::GuildAllianceListRequest)
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, request_alliance_list().unwrap());
     }
 
     #[tokio::test]

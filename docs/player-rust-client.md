@@ -93,6 +93,8 @@ in the local config file instead of being typed every time.
 - The guild control plane also accepts `guild-join` commands with a guild
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
+- Opening `guild-union` in a logged-in session also sends the alliance list
+  request once per activation before keeping the shell visible.
 - When the friend or guild route opens while logged in, the client now sends
   the matching live list request once per activation before keeping the shell
   on screen, and the decoded roster state stays visible until logout or
