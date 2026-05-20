@@ -1,8 +1,11 @@
+use bevy::asset::RenderAssetUsages;
+use bevy::gltf::GltfAssetLabel;
 use bevy::math::primitives::Cuboid;
+use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::{
-    App, Assets, Camera3d, Color, Commands, Component, DirectionalLight, Entity, EulerRot,
-    IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res, ResMut, Resource,
-    StandardMaterial, Transform, Update, Vec3,
+    App, AssetServer, Assets, Camera3d, Color, Commands, Component, DirectionalLight, Entity,
+    EulerRot, IntoScheduleConfigs, Mesh, Mesh3d, MeshMaterial3d, Name, Plugin, Query, Res, ResMut,
+    Resource, SceneRoot, StandardMaterial, Transform, Update, Vec3,
 };
 use mu_assets::TerrainWorldSummary;
 use mu_render::{RenderEntityCatalog, RenderEntityEntry, RenderEntityFamily};
@@ -11,10 +14,11 @@ use mu_ui::{UiRoute, UiShellState};
 use crate::ClientRuntime;
 
 const WORLD_POSITION_SCALE: f32 = 0.05;
-const WORLD_TERRAIN_HEIGHT: f32 = 0.2;
+const WORLD_TERRAIN_AMPLITUDE: f32 = 1.0;
+const WORLD_TERRAIN_FALLBACK_THICKNESS: f32 = 0.2;
 const WORLD_CAMERA_HEIGHT_FACTOR: f32 = 1.8;
 const WORLD_CAMERA_DISTANCE_FACTOR: f32 = 2.2;
-const WORLD_MARKER_LIMIT: usize = 8;
+const WORLD_RENDER_ENTITY_LIMIT: usize = 8;
 const WORLD_LIGHT_LEVEL: f32 = 30_000.0;
 
 #[derive(Debug, Default, Resource)]
@@ -54,6 +58,7 @@ fn sync_world_scene_system(
     mut state: ResMut<WorldSceneState>,
     ui_shell: Res<UiShellState>,
     client_runtime: Res<ClientRuntime>,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -65,11 +70,12 @@ fn sync_world_scene_system(
         return;
     }
 
-    let Some(summary) = client_runtime.terrain().summary() else {
+    let Some(world_bundle) = client_runtime.world().bundle() else {
         clear_world_scene(&mut commands, &mut state);
         return;
     };
 
+    let summary = world_bundle.summary();
     if state.world_id == Some(summary.world) && !state.entities.is_empty() {
         return;
     }
@@ -77,9 +83,10 @@ fn sync_world_scene_system(
     clear_world_scene(&mut commands, &mut state);
     spawn_world_scene(
         &mut commands,
+        &asset_server,
         &mut meshes,
         &mut materials,
-        summary,
+        world_bundle,
         client_runtime.render_entities().catalog(),
         &mut state,
     );
@@ -118,18 +125,23 @@ fn clear_world_scene(commands: &mut Commands, state: &mut WorldSceneState) {
 
 fn spawn_world_scene(
     commands: &mut Commands,
+    asset_server: &AssetServer,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    summary: &TerrainWorldSummary,
+    world_bundle: &mu_gameplay::TerrainWorldBundle,
     catalog: &RenderEntityCatalog,
     state: &mut WorldSceneState,
 ) {
-    state.entities.push(spawn_world_camera(commands, summary));
+    let summary = world_bundle.summary();
+    state.entities.push(spawn_world_camera(commands, &summary));
     state.entities.push(spawn_world_light(commands));
-    state
-        .entities
-        .push(spawn_world_terrain(commands, meshes, materials, summary));
-    spawn_world_entities(commands, meshes, materials, catalog, state);
+    state.entities.push(spawn_world_terrain(
+        commands,
+        meshes,
+        materials,
+        world_bundle,
+    ));
+    spawn_world_entities(commands, asset_server, meshes, materials, catalog, state);
 }
 
 fn spawn_world_camera(commands: &mut Commands, summary: &TerrainWorldSummary) -> Entity {
@@ -172,17 +184,23 @@ fn spawn_world_terrain(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    summary: &TerrainWorldSummary,
+    world_bundle: &mu_gameplay::TerrainWorldBundle,
 ) -> Entity {
+    let summary = world_bundle.summary();
     let extent = summary.terrain_size as f32 * WORLD_POSITION_SCALE;
-    let mesh = meshes.add(Mesh::from(Cuboid::new(
-        extent,
-        WORLD_TERRAIN_HEIGHT,
-        extent,
-    )));
+    let mesh = meshes.add(
+        build_world_terrain_mesh(&summary, &world_bundle.map).unwrap_or_else(|| {
+            Mesh::from(Cuboid::new(
+                extent,
+                WORLD_TERRAIN_FALLBACK_THICKNESS,
+                extent,
+            ))
+        }),
+    );
     let material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.12, 0.28, 0.12),
         perceptual_roughness: 1.0,
+        cull_mode: None,
         ..Default::default()
     });
 
@@ -190,15 +208,77 @@ fn spawn_world_terrain(
         .spawn((
             Mesh3d(mesh),
             MeshMaterial3d(material),
-            Transform::from_translation(Vec3::new(0.0, -WORLD_TERRAIN_HEIGHT * 0.5, 0.0)),
+            Transform::from_translation(Vec3::new(
+                0.0,
+                -WORLD_TERRAIN_FALLBACK_THICKNESS * 0.5,
+                0.0,
+            )),
             WorldSceneTerrain,
             Name::new(format!("world-terrain-{}", summary.world)),
         ))
         .id()
 }
 
+fn build_world_terrain_mesh(
+    summary: &TerrainWorldSummary,
+    map: &mu_assets::TerrainMapJson,
+) -> Option<Mesh> {
+    let terrain_size = summary.terrain_size as usize;
+    if terrain_size < 2 {
+        return None;
+    }
+
+    let height_rows = map.layer1.as_slice();
+    if height_rows.len() != terrain_size || height_rows.iter().any(|row| row.len() != terrain_size)
+    {
+        return None;
+    }
+
+    let half_extent = (terrain_size as f32 - 1.0) * WORLD_POSITION_SCALE * 0.5;
+    let height_scale = WORLD_TERRAIN_AMPLITUDE / f32::from(summary.layer_stats.layer1.max.max(1));
+
+    let mut positions = Vec::with_capacity(terrain_size * terrain_size);
+    for (z, row) in height_rows.iter().enumerate() {
+        for (x, sample) in row.iter().enumerate() {
+            positions.push([
+                x as f32 * WORLD_POSITION_SCALE - half_extent,
+                f32::from(*sample) * height_scale,
+                z as f32 * WORLD_POSITION_SCALE - half_extent,
+            ]);
+        }
+    }
+
+    let mut indices = Vec::with_capacity((terrain_size - 1) * (terrain_size - 1) * 6);
+    for z in 0..(terrain_size - 1) {
+        for x in 0..(terrain_size - 1) {
+            let top_left = (z * terrain_size + x) as u32;
+            let top_right = top_left + 1;
+            let bottom_left = top_left + terrain_size as u32;
+            let bottom_right = bottom_left + 1;
+            indices.extend_from_slice(&[
+                top_left,
+                bottom_left,
+                top_right,
+                top_right,
+                bottom_left,
+                bottom_right,
+            ]);
+        }
+    }
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh.compute_smooth_normals();
+    Some(mesh)
+}
+
 fn spawn_world_entities(
     commands: &mut Commands,
+    asset_server: &AssetServer,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     catalog: &RenderEntityCatalog,
@@ -224,28 +304,25 @@ fn spawn_world_entities(
         state,
         "remote-player",
     );
-    spawn_world_marker_family(
+    spawn_world_scene_family(
         commands,
-        meshes,
-        materials,
+        asset_server,
         &catalog.objects,
         RenderEntityFamily::Object,
         state,
         "object",
     );
-    spawn_world_marker_family(
+    spawn_world_scene_family(
         commands,
-        meshes,
-        materials,
+        asset_server,
         &catalog.npcs,
         RenderEntityFamily::Npc,
         state,
         "npc",
     );
-    spawn_world_marker_family(
+    spawn_world_scene_family(
         commands,
-        meshes,
-        materials,
+        asset_server,
         &catalog.monsters,
         RenderEntityFamily::Monster,
         state,
@@ -262,7 +339,7 @@ fn spawn_world_marker_family(
     state: &mut WorldSceneState,
     label_prefix: &str,
 ) {
-    for entry in entries.iter().take(WORLD_MARKER_LIMIT) {
+    for entry in entries.iter().take(WORLD_RENDER_ENTITY_LIMIT) {
         state.entities.push(spawn_world_marker(
             commands,
             meshes,
@@ -272,6 +349,45 @@ fn spawn_world_marker_family(
             label_prefix,
         ));
     }
+}
+
+fn spawn_world_scene_family(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    entries: &[RenderEntityEntry],
+    family: RenderEntityFamily,
+    state: &mut WorldSceneState,
+    label_prefix: &str,
+) {
+    for entry in entries.iter().take(WORLD_RENDER_ENTITY_LIMIT) {
+        state.entities.push(spawn_world_scene_entity(
+            commands,
+            asset_server,
+            entry,
+            family,
+            label_prefix,
+        ));
+    }
+}
+
+fn spawn_world_scene_entity(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    entry: &RenderEntityEntry,
+    family: RenderEntityFamily,
+    label_prefix: &str,
+) -> Entity {
+    commands
+        .spawn((
+            SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(entry.model.clone()))),
+            world_transform(&entry.pose),
+            WorldSceneMarker {
+                family,
+                key: entry.key.clone(),
+            },
+            Name::new(format!("{label_prefix}-{}-{}", entry.key, entry.label)),
+        ))
+        .id()
 }
 
 fn spawn_world_marker(
@@ -368,11 +484,20 @@ fn render_entity_for_marker<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain};
+    use super::{
+        build_world_terrain_mesh, WorldSceneMarker, WorldScenePlugin, WorldSceneState,
+        WorldSceneTerrain, WORLD_POSITION_SCALE,
+    };
     use crate::ClientRuntime;
-    use bevy::prelude::{App, Camera3d};
+    use bevy::asset::AssetPlugin;
+    use bevy::mesh::VertexAttributeValues;
+    use bevy::prelude::{App, Camera3d, Mesh3d, SceneRoot};
+    use bevy::{gltf::GltfPlugin, scene::ScenePlugin};
     use camino::Utf8PathBuf;
     use mu_assets::load_terrain_world_bundle;
+    use mu_gameplay::{
+        WorldEntityPose, WorldMonsterKind, WorldMonsterSpawn, WorldNpcKind, WorldNpcSpawn,
+    };
     use mu_render::RenderEntityFamily;
     use mu_ui::{UiRoute, UiShellState};
 
@@ -387,8 +512,20 @@ mod tests {
     }
 
     fn spawn_ready_app() -> App {
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+
         let mut app = App::new();
-        app.add_plugins((mu_ui::UiShellPlugin, WorldScenePlugin));
+        let asset_root = repo_assets_root();
+        app.add_plugins((
+            mu_ui::UiShellPlugin,
+            AssetPlugin {
+                file_path: asset_root.to_string(),
+                ..Default::default()
+            },
+            GltfPlugin::default(),
+            ScenePlugin::default(),
+            WorldScenePlugin,
+        ));
         app.insert_resource(ClientRuntime::new());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::Mesh>::default());
         app.insert_resource(bevy::prelude::Assets::<bevy::prelude::StandardMaterial>::default());
@@ -398,9 +535,47 @@ mod tests {
     fn load_world(app: &mut App) {
         let world_root = repo_assets_root();
         let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
-        app.world_mut()
-            .resource_mut::<ClientRuntime>()
-            .load_world_bundle(bundle);
+        {
+            let mut runtime = app.world_mut().resource_mut::<ClientRuntime>();
+            runtime.load_world_bundle(bundle);
+            runtime.world_npcs_mut().load_fixture([
+                WorldNpcSpawn::new(
+                    WorldNpcKind::QuestGiver,
+                    "Marlon",
+                    236,
+                    18,
+                    "data/object_1/npc_quest.glb",
+                    WorldEntityPose::new([12.0, 0.0, 24.0], [0.0, 180.0, 0.0], [1.0, 1.0, 1.0]),
+                ),
+                WorldNpcSpawn::new(
+                    WorldNpcKind::Merchant,
+                    "Potion Merchant",
+                    237,
+                    0,
+                    "data/object_1/npc_merchant.glb",
+                    WorldEntityPose::new([18.0, 0.0, 30.0], [0.0, 90.0, 0.0], [1.0, 1.0, 1.0]),
+                ),
+            ]);
+            runtime.world_monsters_mut().load_fixture([
+                WorldMonsterSpawn::new(
+                    WorldMonsterKind::Common,
+                    "Bull Fighter",
+                    401,
+                    32,
+                    "data/object_1/bull_fighter.glb",
+                    WorldEntityPose::new([42.0, 0.0, 88.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]),
+                ),
+                WorldMonsterSpawn::new(
+                    WorldMonsterKind::Boss,
+                    "Death King",
+                    777,
+                    120,
+                    "data/object_1/death_king.glb",
+                    WorldEntityPose::new([64.0, 0.0, 96.0], [0.0, 45.0, 0.0], [1.2, 1.2, 1.2]),
+                ),
+            ]);
+            runtime.sync_world_projection();
+        }
         app.world_mut()
             .resource_mut::<UiShellState>()
             .set_route(UiRoute::World);
@@ -439,6 +614,10 @@ mod tests {
             .entities
             .iter()
             .any(|entity| world.entity(*entity).contains::<WorldSceneMarker>()));
+        assert!(state
+            .entities
+            .iter()
+            .any(|entity| world.entity(*entity).contains::<SceneRoot>()));
         assert!(state.entities.iter().any(|entity| {
             world
                 .entity(*entity)
@@ -446,6 +625,59 @@ mod tests {
                 .map(|marker| marker.family == RenderEntityFamily::Object)
                 .unwrap_or(false)
         }));
+        assert!(state.entities.iter().any(|entity| {
+            world
+                .entity(*entity)
+                .get::<WorldSceneMarker>()
+                .map(|marker| {
+                    marker.family == RenderEntityFamily::Object
+                        && world.entity(*entity).contains::<SceneRoot>()
+                        && !world.entity(*entity).contains::<Mesh3d>()
+                })
+                .unwrap_or(false)
+        }));
+    }
+
+    #[test]
+    fn world_scene_builds_a_heightfield_mesh_from_the_bundle_samples() {
+        let world_root = repo_assets_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let summary = bundle.summary();
+        let mesh = build_world_terrain_mesh(&summary, &bundle.map).unwrap();
+
+        let positions = match mesh
+            .attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION)
+            .expect("mesh should have positions")
+        {
+            VertexAttributeValues::Float32x3(values) => values,
+            other => panic!("unexpected position attribute: {other:?}"),
+        };
+
+        let terrain_size = summary.terrain_size as usize;
+        assert_eq!(positions.len(), terrain_size * terrain_size);
+
+        let max_height = f32::from(summary.layer_stats.layer1.max.max(1));
+        let expected_first = f32::from(bundle.map.layer1[0][0]) / max_height;
+        let expected_last = f32::from(
+            *bundle
+                .map
+                .layer1
+                .last()
+                .and_then(|row| row.last())
+                .expect("bundle should include the last terrain sample"),
+        ) / max_height;
+        let half_extent = (terrain_size as f32 - 1.0) * WORLD_POSITION_SCALE * 0.5;
+
+        assert!((positions[0][0] + half_extent).abs() < f32::EPSILON);
+        assert!((positions[0][1] - expected_first).abs() < f32::EPSILON);
+        assert!((positions[0][2] + half_extent).abs() < f32::EPSILON);
+
+        let last = positions
+            .last()
+            .expect("mesh should include the last vertex");
+        assert!((last[0] - half_extent).abs() < f32::EPSILON);
+        assert!((last[1] - expected_last).abs() < f32::EPSILON);
+        assert!((last[2] - half_extent).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -479,6 +711,9 @@ mod tests {
             (local_marker, initial_x)
         };
 
+        assert!(app.world().entity(local_marker).contains::<Mesh3d>());
+        assert!(!app.world().entity(local_marker).contains::<SceneRoot>());
+
         app.world_mut()
             .resource_mut::<ClientRuntime>()
             .translate_local_player([20.0, 0.0, 0.0]);
@@ -493,6 +728,37 @@ mod tests {
             .x;
 
         assert!(updated_x > initial_x);
+    }
+
+    #[test]
+    fn world_scene_spawns_scene_roots_for_objects_npcs_and_monsters() {
+        let mut app = spawn_ready_app();
+        load_world(&mut app);
+
+        let state = app.world().resource::<WorldSceneState>();
+        let world = app.world();
+
+        for family in [
+            RenderEntityFamily::Object,
+            RenderEntityFamily::Npc,
+            RenderEntityFamily::Monster,
+        ] {
+            let entity = state
+                .entities
+                .iter()
+                .copied()
+                .find(|entity| {
+                    world
+                        .entity(*entity)
+                        .get::<WorldSceneMarker>()
+                        .map(|marker| marker.family == family)
+                        .unwrap_or(false)
+                })
+                .unwrap_or_else(|| panic!("missing spawned entity for family {family:?}"));
+
+            assert!(world.entity(entity).contains::<SceneRoot>());
+            assert!(!world.entity(entity).contains::<Mesh3d>());
+        }
     }
 
     #[test]

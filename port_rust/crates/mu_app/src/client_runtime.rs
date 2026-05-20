@@ -98,8 +98,16 @@ impl ClientRuntime {
         &self.world_npcs
     }
 
+    pub fn world_npcs_mut(&mut self) -> &mut WorldNpcManager {
+        &mut self.world_npcs
+    }
+
     pub fn world_monsters(&self) -> &WorldMonsterManager {
         &self.world_monsters
+    }
+
+    pub fn world_monsters_mut(&mut self) -> &mut WorldMonsterManager {
+        &mut self.world_monsters
     }
 
     pub fn render_entities(&self) -> &RenderEntities {

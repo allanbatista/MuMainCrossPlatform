@@ -3,6 +3,7 @@ use std::process::ExitCode;
 use crate::control_http::{self, ControlHttpState};
 use crate::SessionState;
 use bevy::app::AppExit;
+use bevy::asset::AssetPlugin;
 use bevy::log::LogPlugin;
 use bevy::prelude::{
     App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, MessageWriter, PluginGroup,
@@ -91,13 +92,10 @@ pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
 }
 
 pub fn build_graphical_app(cli: &Cli, client_runtime: ClientRuntime) -> App {
+    let config = GraphicalRuntimeConfig::from_cli(cli);
     let mut app = App::new();
-    app.add_plugins(default_plugins());
-    configure_project_plugins(
-        &mut app,
-        GraphicalRuntimeConfig::from_cli(cli),
-        client_runtime,
-    );
+    app.add_plugins(default_plugins(&config));
+    configure_project_plugins(&mut app, config, client_runtime);
     app
 }
 
@@ -157,8 +155,18 @@ fn configure_project_plugins(
         .add_systems(Startup, setup_boot_camera_and_login_route);
 }
 
-fn default_plugins() -> impl PluginGroup {
+fn default_plugins(config: &GraphicalRuntimeConfig) -> impl PluginGroup {
+    let file_path = config
+        .asset_root
+        .as_ref()
+        .map(|path| path.to_string())
+        .unwrap_or_else(|| "assets".to_string());
+
     DefaultPlugins
+        .set(AssetPlugin {
+            file_path,
+            ..Default::default()
+        })
         .set(WindowPlugin {
             primary_window: Some(Window {
                 title: WINDOW_TITLE.to_string(),

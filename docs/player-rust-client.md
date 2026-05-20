@@ -30,7 +30,8 @@ in the local config file instead of being typed every time.
 - The Bevy bootstrap now carries the client from login to character select and
   into the loaded world once the map handoff packet arrives.
 - The world now opens a visible Bevy world shell with a camera, lighting,
-  terrain, and sampled scene markers from the loaded world bundle.
+  a heightfield terrain derived from the loaded world bundle, sampled player
+  markers, and real converted models for objects, NPCs, and monsters.
 - The world now also shows a visible HUD overlay with the legacy main-frame
   gauges and buttons while the 3D scene is active.
 - The world HUD stack now also shows the visible chat log, minimap, and

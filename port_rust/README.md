@@ -14,7 +14,8 @@ sessao de jogo completa.
   shell visual de login/server select/character select, faz a transicao
   login -> server select -> character select -> world quando o fluxo de rede
   entrega o handoff do mapa e, no world route, mostra uma world shell 3D
-  visivel com terreno e marcadores amostrados do bundle carregado.
+  visivel com terreno heightfield derivado dos dados do bundle, marcadores de
+  player amostrados e modelos convertidos reais para objects, NPCs e monstros.
 - O world route tambem mostra uma HUD visivel com as gauges e botoes do frame
   principal legado enquanto a cena 3D esta ativa.
 - O world route tambem mostra o stack visual de HUD com chat, minimap e
