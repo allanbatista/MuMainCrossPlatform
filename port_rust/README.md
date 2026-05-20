@@ -27,6 +27,8 @@ sessao de jogo completa.
   map, o lightmap do terreno do bundle, marcadores de local/remote player
   ancorados na superficie visivel do terreno e modelos convertidos reais para
   objects, NPCs e monstros.
+- A janela compartilhada de Options tambem abre como a rota visivel
+  `options` e pode ser acionada pelo smoke local de `--control-http`.
 - A camera do world route agora segue o avatar local para manter o movimento
   enquadrado enquanto a cena 3D esta ativa; a roda do mouse ajusta o zoom e
   o valor fica salvo em `[Camera] zoom` ao sair do cliente grafico.

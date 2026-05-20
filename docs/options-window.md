@@ -4,6 +4,9 @@ Behaviour changes that landed in PR
 [#335](https://github.com/sven-n/MuMain/pull/335) for the options window
 and the `config.ini` it writes to.
 
+The Rust port exposes the same shared window through the `options` route in
+the auth shell and the local control HTTP `options` command.
+
 For the camera architecture see [`camera-system.md`](camera-system.md).
 
 ---

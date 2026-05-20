@@ -51,6 +51,7 @@ Exemplo:
 - `asset-check-failed`
 - `ready-for-login`
 - `server-select`
+- `options`
 - `character-select`
 - `select-character`
 - `loading`
@@ -72,11 +73,13 @@ Exemplo:
 - `exit`
 - `ping`
 
-`server-select`, `character-select`, `loading`, `world`, `chat`, `npc`,
-`select-character`, `shop`, `game-shop`, `trade`, `party`, `gate`, `quests`,
-`mu-helper`, `login-success` e `login-failure` alteram a rota/session state
-do runtime grafico. `select-character` envia o nome recebido para o session
-worker e continua o bootstrap apenas quando o personagem for nomeado.
+`server-select`, `options`, `character-select`, `loading`, `world`, `chat`,
+`npc`, `select-character`, `shop`, `game-shop`, `trade`, `party`, `gate`,
+`quests`, `mu-helper`, `login-success` e `login-failure` alteram a
+rota/session state do runtime grafico. `options` abre a janela compartilhada
+de options no auth shell. `select-character` envia o nome recebido para o
+session worker e continua o bootstrap apenas quando o personagem for
+nomeado.
 Se o nome vier vazio, a resposta sera `400` e o cliente continua em
 character select.
 `chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
@@ -95,6 +98,7 @@ Exemplos:
 curl http://127.0.0.1:12345/state
 curl -X POST 'http://127.0.0.1:12345/command?name=ready-for-login'
 curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
+curl -X POST 'http://127.0.0.1:12345/command?name=options'
 curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'

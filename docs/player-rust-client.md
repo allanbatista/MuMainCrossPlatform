@@ -26,6 +26,8 @@ in the local config file instead of being typed every time.
 
 - A visible Bevy auth shell for login, server selection, and character
   selection while the client boots.
+- The shared Options window is also available as a visible Bevy route and
+  through the local control HTTP API with `options`.
 - Character selection and character creation.
 - The Bevy bootstrap now carries the client from login to character select and
   immediately requests the character list using the legacy locale byte

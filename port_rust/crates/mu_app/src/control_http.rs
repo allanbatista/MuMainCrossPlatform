@@ -14,6 +14,7 @@ pub enum ControlCommand {
     AssetCheckFailed,
     ReadyForLogin,
     ServerSelect,
+    Options,
     CharacterSelect,
     Loading,
     World,
@@ -43,6 +44,7 @@ impl ControlCommand {
             Self::AssetCheckFailed => "asset-check-failed",
             Self::ReadyForLogin => "ready-for-login",
             Self::ServerSelect => "server-select",
+            Self::Options => "options",
             Self::CharacterSelect => "character-select",
             Self::Loading => "loading",
             Self::World => "world",
@@ -74,6 +76,7 @@ impl ControlCommand {
             "server-select" | "server_select" | "server-list" | "server_list" => {
                 Some(Self::ServerSelect)
             }
+            "options" => Some(Self::Options),
             "character-select" | "character_select" | "character-list" | "character_list" => {
                 Some(Self::CharacterSelect)
             }
@@ -149,6 +152,11 @@ impl ControlSnapshot {
             ControlCommand::ServerSelect => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::ServerSelect;
+                false
+            }
+            ControlCommand::Options => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Options;
                 false
             }
             ControlCommand::CharacterSelect => {
@@ -791,6 +799,11 @@ mod tests {
             Some(ControlCommand::SelectCharacter)
         );
         assert_eq!(ControlCommand::SelectCharacter.as_str(), "select-character");
+        assert_eq!(
+            ControlCommand::parse("options"),
+            Some(ControlCommand::Options)
+        );
+        assert_eq!(ControlCommand::Options.as_str(), "options");
     }
 
     #[test]
@@ -815,6 +828,11 @@ mod tests {
         snapshot.apply_command(ControlCommand::Chat);
 
         assert_eq!(snapshot.ui_route, UiRoute::Chat);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Options);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Options);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
         snapshot.apply_command(ControlCommand::Npc);
@@ -905,6 +923,13 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=options HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"options""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=npc HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"npc""#));
@@ -967,7 +992,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 13);
+        assert_eq!(final_snapshot.command_count, 14);
     }
 
     #[test]

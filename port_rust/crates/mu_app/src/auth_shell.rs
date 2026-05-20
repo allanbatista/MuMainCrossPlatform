@@ -4,11 +4,12 @@ use bevy::prelude::{
     UiRect, Val,
 };
 use mu_ui::{
-    character_select_screen, login_screen, server_select_screen, CharacterSelectAction,
-    CharacterSelectButton, CharacterSelectCharacter, CharacterSelectScreen,
+    character_select_screen, login_screen, options_screen, server_select_screen,
+    CharacterSelectAction, CharacterSelectButton, CharacterSelectCharacter, CharacterSelectScreen,
     CharacterSelectScreenState, LoginAction, LoginField, LoginScreen, LoginScreenState,
-    ServerEntry, ServerSelectAction, ServerSelectScreen, ServerSelectScreenState, UiRoute,
-    UiRouteGroup, UiShellState,
+    OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle, ServerEntry,
+    ServerSelectAction, ServerSelectScreen, ServerSelectScreenState, UiRoute, UiRouteGroup,
+    UiShellState,
 };
 
 use crate::bootstrap_runtime::BootstrapRuntime;
@@ -110,6 +111,7 @@ fn auth_shell_visible(route: UiRoute) -> bool {
             | UiRoute::Loading
             | UiRoute::Login
             | UiRoute::ServerSelect
+            | UiRoute::Options
             | UiRoute::CharacterSelect
             | UiRoute::Error
     )
@@ -125,6 +127,7 @@ fn auth_shell_view(
         UiRoute::Loading => Some(loading_view(phase)),
         UiRoute::Login => Some(login_view(phase)),
         UiRoute::ServerSelect => Some(server_select_view(phase)),
+        UiRoute::Options => Some(options_view(phase)),
         UiRoute::CharacterSelect => Some(character_select_view(phase, bootstrap)),
         UiRoute::Error => Some(error_view(phase)),
         _ => None,
@@ -175,6 +178,17 @@ fn server_select_view(phase: SessionPhase) -> AuthShellView {
         title: screen.title,
         status: status_line(screen.route, phase),
         body: server_select_body(&screen),
+        accent: accent_for_route(screen.route),
+    }
+}
+
+fn options_view(phase: SessionPhase) -> AuthShellView {
+    let screen = options_screen(OptionsScreenState::Ready);
+
+    AuthShellView {
+        title: screen.title,
+        status: status_line(screen.route, phase),
+        body: options_body(&screen),
         accent: accent_for_route(screen.route),
     }
 }
@@ -364,6 +378,31 @@ fn character_select_body(screen: &CharacterSelectScreen, selected_index: Option<
     body
 }
 
+fn options_body(screen: &OptionsScreen) -> String {
+    let mut body = String::new();
+
+    push_paragraph(&mut body, "Overview", "Review the shared client settings.");
+
+    if let Some(notice) = screen.notice {
+        push_paragraph(&mut body, "Notice", notice);
+    }
+
+    push_lines(
+        &mut body,
+        "Sections",
+        screen.sections.iter().copied().map(options_section_label),
+        None,
+    );
+    push_lines(
+        &mut body,
+        "Toggles",
+        screen.toggles.iter().copied().map(options_toggle_label),
+        None,
+    );
+
+    body
+}
+
 fn character_select_selected_index(
     bootstrap: Option<&BootstrapRuntime>,
     screen: &CharacterSelectScreen,
@@ -448,6 +487,28 @@ fn server_action_label(action: ServerSelectAction) -> &'static str {
         ServerSelectAction::Refresh => "Refresh",
         ServerSelectAction::Connect => "Connect",
         ServerSelectAction::Back => "Back",
+    }
+}
+
+fn options_section_label(section: OptionsSection) -> &'static str {
+    match section {
+        OptionsSection::Video => "Video",
+        OptionsSection::Audio => "Audio",
+        OptionsSection::Controls => "Controls",
+        OptionsSection::Performance => "Performance",
+        OptionsSection::Network => "Network",
+        OptionsSection::Locale => "Locale",
+    }
+}
+
+fn options_toggle_label(toggle: OptionsToggle) -> &'static str {
+    match toggle {
+        OptionsToggle::Fullscreen => "Fullscreen",
+        OptionsToggle::VSync => "VSync",
+        OptionsToggle::ReduceEffects => "Reduce effects",
+        OptionsToggle::MuteAudio => "Mute audio",
+        OptionsToggle::RememberServer => "Remember server",
+        OptionsToggle::RememberUsername => "Remember username",
     }
 }
 
@@ -660,6 +721,17 @@ mod tests {
         assert!(view.body.contains("Alpha"));
         assert!(view.body.contains("Bravo"));
         assert!(view.body.contains("Refresh"));
+    }
+
+    #[test]
+    fn options_shell_renders_sections_and_toggles() {
+        let view = auth_shell_view(UiRoute::Options, SessionPhase::ReadyForLogin, None)
+            .expect("options shell missing");
+
+        assert_eq!(view.title, "Options");
+        assert!(view.body.contains("Changes will be applied on save."));
+        assert!(view.body.contains("Video"));
+        assert!(view.body.contains("Remember server"));
     }
 
     #[test]

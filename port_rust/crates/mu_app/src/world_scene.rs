@@ -874,11 +874,10 @@ fn render_entity_for_marker<'a>(
 mod tests {
     use super::{
         apply_world_camera_zoom_delta, build_world_terrain_blend_mesh, build_world_terrain_mesh,
-        grounded_marker_translation, grounded_world_transform,
-        terrain_surface_height_at_position, world_transform, WORLD_TERRAIN_AMPLITUDE,
-        world_terrain_lightmap_path, world_terrain_texture_paths, WorldSceneCamera,
-        WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
-        WORLD_POSITION_SCALE, WORLD_TERRAIN_TEXTURE_REPEAT,
+        grounded_marker_translation, grounded_world_transform, terrain_surface_height_at_position,
+        world_terrain_lightmap_path, world_terrain_texture_paths, world_transform,
+        WorldSceneCamera, WorldSceneMarker, WorldScenePlugin, WorldSceneState, WorldSceneTerrain,
+        WORLD_POSITION_SCALE, WORLD_TERRAIN_AMPLITUDE, WORLD_TERRAIN_TEXTURE_REPEAT,
     };
     use crate::GraphicalRuntimeConfig;
     use crate::{ClientRuntime, Config};
