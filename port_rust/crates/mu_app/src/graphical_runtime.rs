@@ -16,6 +16,7 @@ use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::world_scene::WorldScenePlugin;
 use crate::{Cli, ClientRuntime};
 
 const WINDOW_TITLE: &str = "MU Rust Client";
@@ -84,6 +85,7 @@ fn configure_project_plugins(
             WorldNpcPlugin,
             WorldMonsterPlugin,
             BootstrapRuntimePlugin,
+            WorldScenePlugin,
         ))
         .add_systems(Startup, setup_boot_camera_and_login_route);
 }
@@ -108,7 +110,9 @@ fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMu
 
 #[cfg(test)]
 mod tests {
-    use super::{configure_project_plugins, GraphicalRuntimeConfig};
+    use super::{
+        configure_project_plugins, setup_boot_camera_and_login_route, GraphicalRuntimeConfig,
+    };
     use crate::{Cli, ClientRuntime};
     use bevy::prelude::App;
     use mu_ui::{UiRoute, UiShellState};
@@ -144,14 +148,9 @@ mod tests {
 
     #[test]
     fn graphical_app_starts_on_the_login_route() {
-        let cli = cli();
         let mut app = App::new();
-        configure_project_plugins(
-            &mut app,
-            GraphicalRuntimeConfig::from_cli(&cli),
-            ClientRuntime::new(),
-        );
-
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.add_systems(bevy::prelude::Startup, setup_boot_camera_and_login_route);
         app.update();
 
         let ui_shell = app.world().resource::<UiShellState>();

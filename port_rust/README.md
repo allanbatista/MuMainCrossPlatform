@@ -12,7 +12,8 @@ sessao de jogo completa.
   de UI, assets, audio, gameplay, editor/admin e rede ainda seguem em paridade
   incremental antes de uma sessao jogavel completa. Esse boot ja faz a
   transicao login -> server select -> character select -> world quando o
-  fluxo de rede entrega o handoff do mapa.
+  fluxo de rede entrega o handoff do mapa e, no world route, mostra uma world
+  shell 3D visivel com terreno e marcadores amostrados do bundle carregado.
 - O modo `--control-http` e um servidor HTTP local de teste para consultar
   estado e enviar comandos; detalhes em `docs/control-http.md`.
 - O binario `mu_fake_server` e um servidor fake de connect-server para testes

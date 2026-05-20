@@ -28,8 +28,11 @@ in the local config file instead of being typed every time.
 - Character selection and character creation.
 - The Bevy bootstrap now carries the client from login to character select and
   into the loaded world once the map handoff packet arrives.
+- The world now opens a visible Bevy world shell with a camera, lighting,
+  terrain, and sampled scene markers from the loaded world bundle.
 - The world, HUD, inventory, NPC/shop, trade, quests, MU Helper, and GameShop
-  surfaces documented elsewhere in this repo.
+  surfaces documented elsewhere in this repo still remain a staged port, not a
+  finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
 
 ## If Something Fails
