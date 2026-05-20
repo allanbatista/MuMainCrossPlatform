@@ -23,7 +23,7 @@ granular dos caminhos legados sob `ClientLibrary/`, `src/`, `src/MuEditor/`,
 | `cmake/` | `suporte de validacao` | Decisao de coexistencia/remocao futura | Continua servindo ao build legado. |
 | `docs/` | `referencia` | Docs Rust atualizados quando houver superficie | Documentacao atual orienta comportamento esperado. |
 | `port_rust/` | `area alvo` | Cargo workspace, testes e docs alinhados ao plano | Workspace que recebe as camadas portadas e as ferramentas Rust. |
-| `scripts/` | `referencia` | Decisao por script: reutilizar, portar, fixture ou descartar | Conversores, geradores e empacotamento alimentam `mu_asset_pipeline` e o pacote Rust. |
+| `scripts/` | `referencia` | Decisao por script na matriz abaixo | Conversores, geradores e empacotamento alimentam `mu_asset_pipeline` e o pacote Rust. |
 | `src/` | `referencia` | Inventario granular e validacao por area | Cliente C++ legado permanece como referencia funcional. |
 | `tests/` | `suporte de validacao` | Equivalente Rust ou fixture comparativa | Testes existentes orientam equivalencia futura. |
 | `.editorconfig` | `suporte de validacao` | Politica Rust equivalente ou reutilizacao | Pode orientar formatacao do port. |
@@ -39,3 +39,19 @@ granular dos caminhos legados sob `ClientLibrary/`, `src/`, `src/MuEditor/`,
 | `stylecop.json` | `fora do runtime` | Decisao de nao aplicabilidade ou equivalente | Regra .NET, sem uso direto no runtime Rust. |
 | `toolchain-x64.cmake` | `referencia` | Decisao de toolchain Rust Windows x64 futura | Referencia para ambiente Windows x64. |
 | `toolchain-x86.cmake` | `referencia` | Decisao sobre suporte x86 futuro | Referencia para suporte x86 futuro. |
+
+## Decisoes por script
+
+| Entrada | Decisao | Evidencia exigida | Observacao |
+|---|---|---|---|
+| `scripts/client_converter/` | Reutilizar como referencia ate paridade Rust | Relatorios do `mu_asset_pipeline` ou fixtures equivalentes | Converte texturas, modelos, terreno, mapas, objetos e valida assets. |
+| `scripts/generate_items/` | Portar ou absorver no `mu_asset_pipeline` | Catalogo gerado comparado com fontes legadas | Gera catalogo compartilhado de itens. |
+| `scripts/generate_monster_spots/` | Portar ou absorver no `mu_asset_pipeline` | Fixtures de monstros/spawns comparadas com fontes legadas | Gera dados de monstros e spots por mundo. |
+| `scripts/generate_skill_visual_matrix.sh` | Usar como fixture ou descartar por decisao documentada | Matriz visual Rust equivalente ou descarte registrado | Ajuda a auditar representacao visual de skills. |
+| `scripts/normalize_filenames/` | Usar como referencia ou descartar por decisao documentada | Pipeline Rust demonstrando normalizacao de caminhos | Apoia higiene de nomes de assets. |
+| `scripts/package_rust_client.py` | Manter ate empacotamento Rust definitivo | Smoke test de pacote ou substituto Rust documentado | Monta o bundle release com executavel e assets convertidos. |
+| `scripts/remaster/` | Fora do runtime; experimento opt-in | Decisao explicita antes de qualquer uso em release | Prototipos de remasterizacao de texturas. |
+| `scripts/remaster_glb.py` | Fora do runtime; experimento opt-in | Decisao explicita antes de qualquer uso em release | Remasteriza texturas embutidas/externas em GLB via API. |
+| `scripts/remaster_glb_v2.py` | Fora do runtime; experimento opt-in | Decisao explicita antes de qualquer uso em release | Remasteriza GLB completo e valida candidato. |
+| `scripts/remaster_image_test.py` | Fora do runtime; experimento opt-in | Decisao explicita antes de qualquer uso em release | PoC de remasterizacao de imagens via APIs externas. |
+| `scripts/test_remaster_glb_v2.py` | Suporte de validacao do experimento | Teste Python quando o fluxo V2 for mantido | Testa preservacao de metadados do remaster V2. |
