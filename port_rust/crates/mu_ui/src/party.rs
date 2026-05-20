@@ -1,7 +1,7 @@
 use bevy::app::{App, Plugin};
 
 use crate::{UiRoute, UiShellLayout, UiShellWidgetSet};
-use mu_gameplay::{PartyManager, PartyMemberInfo};
+use mu_gameplay::{map_name as resolve_map_name, PartyManager, PartyMemberInfo};
 
 const PARTY_TITLE: &str = "Party";
 const INFO_NOTICE: &str = "View party member status.";
@@ -121,7 +121,7 @@ impl PartyRowColor {
 pub struct PartyMemberView {
     pub name: String,
     pub number: u8,
-    pub map_id: u8,
+    pub map_name: &'static str,
     pub position: (u8, u8),
     pub curr_hp: i32,
     pub max_hp: i32,
@@ -153,7 +153,7 @@ impl PartyMemberView {
         Self {
             name: member.name.clone(),
             number: member.number,
-            map_id: member.map,
+            map_name: resolve_map_name(i32::from(member.map)),
             position: (member.x, member.y),
             curr_hp: member.curr_hp,
             max_hp: member.max_hp,
@@ -366,11 +366,11 @@ mod tests {
             party_screen(
                 PartyScreenState::Info,
                 &manager(),
-                Some("Astra"),
-                None,
-            )
-            .snapshot(),
-            "route=party|group=gameplay|state=info|title=Party|notice=Some(\"View party member status.\")|party_present=true|party_number=3|hero_id=Some(\"Astra\")|leader_name=Some(\"Astra\")|selected_member_index=None|selected_character_index=None|members=[PartyMemberView { name: \"Astra\", number: 11, map_id: 3, position: (12, 21), curr_hp: 480, max_hp: 600, hp_bar_width: 117, hp_step: 10, index: 4, presence: Found, row_color: Green, is_leader: true, can_leave: true, selected: false }, PartyMemberView { name: \"Blade\", number: 22, map_id: 6, position: (44, 15), curr_hp: 220, max_hp: 450, hp_bar_width: 71, hp_step: 7, index: -1, presence: NotFound, row_color: Red, is_leader: false, can_leave: true, selected: false }, PartyMemberView { name: \"Selene\", number: 33, map_id: 9, position: (8, 3), curr_hp: 100, max_hp: 380, hp_bar_width: 38, hp_step: 3, index: -3, presence: Hero, row_color: Default, is_leader: false, can_leave: true, selected: false }]|actions=[LeaveParty, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
+            Some("Astra"),
+            None,
+        )
+        .snapshot(),
+            "route=party|group=gameplay|state=info|title=Party|notice=Some(\"View party member status.\")|party_present=true|party_number=3|hero_id=Some(\"Astra\")|leader_name=Some(\"Astra\")|selected_member_index=None|selected_character_index=None|members=[PartyMemberView { name: \"Astra\", number: 11, map_name: \"Noria\", position: (12, 21), curr_hp: 480, max_hp: 600, hp_bar_width: 117, hp_step: 10, index: 4, presence: Found, row_color: Green, is_leader: true, can_leave: true, selected: false }, PartyMemberView { name: \"Blade\", number: 22, map_name: \"Stadium\", position: (44, 15), curr_hp: 220, max_hp: 450, hp_bar_width: 71, hp_step: 7, index: -1, presence: NotFound, row_color: Red, is_leader: false, can_leave: true, selected: false }, PartyMemberView { name: \"Selene\", number: 33, map_name: \"Devil Square\", position: (8, 3), curr_hp: 100, max_hp: 380, hp_bar_width: 38, hp_step: 3, index: -3, presence: Hero, row_color: Default, is_leader: false, can_leave: true, selected: false }]|actions=[LeaveParty, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
     }
 
@@ -380,11 +380,11 @@ mod tests {
             party_screen(
                 PartyScreenState::List,
                 &manager(),
-                Some("Selene"),
-                Some(2),
-            )
-            .snapshot(),
-            "route=party|group=gameplay|state=list|title=Party|notice=Some(\"Select a party member.\")|party_present=true|party_number=3|hero_id=Some(\"Selene\")|leader_name=Some(\"Astra\")|selected_member_index=Some(2)|selected_character_index=Some(-3)|members=[PartyMemberView { name: \"Astra\", number: 11, map_id: 3, position: (12, 21), curr_hp: 480, max_hp: 600, hp_bar_width: 117, hp_step: 10, index: 4, presence: Found, row_color: Green, is_leader: true, can_leave: false, selected: false }, PartyMemberView { name: \"Blade\", number: 22, map_id: 6, position: (44, 15), curr_hp: 220, max_hp: 450, hp_bar_width: 71, hp_step: 7, index: -1, presence: NotFound, row_color: Red, is_leader: false, can_leave: false, selected: false }, PartyMemberView { name: \"Selene\", number: 33, map_id: 9, position: (8, 3), curr_hp: 100, max_hp: 380, hp_bar_width: 38, hp_step: 3, index: -3, presence: Hero, row_color: Default, is_leader: false, can_leave: true, selected: true }]|actions=[SelectMember, LeaveParty, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
+            Some("Selene"),
+            Some(2),
+        )
+        .snapshot(),
+            "route=party|group=gameplay|state=list|title=Party|notice=Some(\"Select a party member.\")|party_present=true|party_number=3|hero_id=Some(\"Selene\")|leader_name=Some(\"Astra\")|selected_member_index=Some(2)|selected_character_index=Some(-3)|members=[PartyMemberView { name: \"Astra\", number: 11, map_name: \"Noria\", position: (12, 21), curr_hp: 480, max_hp: 600, hp_bar_width: 117, hp_step: 10, index: 4, presence: Found, row_color: Green, is_leader: true, can_leave: false, selected: false }, PartyMemberView { name: \"Blade\", number: 22, map_name: \"Stadium\", position: (44, 15), curr_hp: 220, max_hp: 450, hp_bar_width: 71, hp_step: 7, index: -1, presence: NotFound, row_color: Red, is_leader: false, can_leave: false, selected: false }, PartyMemberView { name: \"Selene\", number: 33, map_name: \"Devil Square\", position: (8, 3), curr_hp: 100, max_hp: 380, hp_bar_width: 38, hp_step: 3, index: -3, presence: Hero, row_color: Default, is_leader: false, can_leave: true, selected: true }]|actions=[SelectMember, LeaveParty, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
     }
 
