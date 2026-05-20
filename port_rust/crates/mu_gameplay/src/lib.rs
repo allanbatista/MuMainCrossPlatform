@@ -10,6 +10,7 @@ pub mod experience;
 pub mod game_shop;
 pub mod game_shop_transaction;
 pub mod gens;
+pub mod guild;
 pub mod inventory;
 pub mod items;
 pub mod mail;
@@ -74,6 +75,11 @@ pub use game_shop_transaction::{
     INITIAL_GAME_SHOP_TRANSACTION_ID,
 };
 pub use gens::{GensManager, GensMode, GensPlugin, GensType};
+pub use guild::{
+    GuildCache, GuildCachePlugin, GuildMarkEntry, GUILD_MARK_BYTES, GUILD_MARK_NIBBLE_MASK,
+    GUILD_MARK_NIBBLE_SHIFT, GUILD_MARK_SIZE, INVALID_GUILD_MARK_INDEX, MAX_GUILD_MARKS,
+    MAX_GUILD_NAME_LENGTH,
+};
 pub use inventory::{
     InventoryError, InventoryManager, InventoryPlugin, InventorySlot,
     INVENTORY_EXTENSION_PAGE_COUNT, INVENTORY_EXTENSION_PAGE_ROWS, INVENTORY_MAIN_PAGE_COLUMNS,
