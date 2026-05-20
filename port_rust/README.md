@@ -18,8 +18,10 @@ sessao de jogo completa.
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). Quando o roster
   chega, ele fica em character select ate receber um `select-character`
   explicito com o nome do personagem; o mesmo comando pode vir pelo
-  `--control-http` usando o nome no body ou em `character=`. No world route,
-  mostra uma world shell 3D
+  `--control-http` usando o nome no body ou em `character=`. Na tela de
+  character select, use `Up`/`Down` ou `Left`/`Right` e `Enter` para escolher
+  um personagem sem depender do control-http. No world route, mostra uma
+  world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
   map, marcadores de player amostrados e modelos convertidos reais para

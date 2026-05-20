@@ -5,6 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use bevy::app::{App, Plugin};
+use bevy::input::keyboard::KeyCode;
+use bevy::input::ButtonInput;
 use bevy::prelude::{Commands, IntoScheduleConfigs, Res, ResMut, Resource, Startup, Update};
 use camino::Utf8Path;
 use mu_gameplay::MovementCommand;
@@ -13,7 +15,10 @@ use mu_protocol::chat::public_chat_message;
 use mu_protocol::login::{request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::{decode_packet, PacketFrame};
-use mu_ui::{UiRoute, UiShellState};
+use mu_ui::{
+    character_select_screen, CharacterSelectCharacter, CharacterSelectScreenState, UiRoute,
+    UiShellState,
+};
 use tokio::sync::mpsc as tokio_mpsc;
 
 use crate::{ClientRuntime, Config, GraphicalRuntimeConfig, SessionState};
@@ -44,6 +49,8 @@ pub struct BootstrapRuntime {
     inbox: Mutex<Receiver<BootstrapSignal>>,
     command_sender: Option<tokio_mpsc::UnboundedSender<BootstrapCommand>>,
     pending_world_map: Option<u8>,
+    character_list_ready: bool,
+    character_select_index: Option<usize>,
     last_error: Option<String>,
 }
 
@@ -56,6 +63,8 @@ impl BootstrapRuntime {
             inbox: Mutex::new(receiver),
             command_sender,
             pending_world_map: None,
+            character_list_ready: false,
+            character_select_index: None,
             last_error: None,
         }
     }
@@ -123,6 +132,26 @@ impl BootstrapRuntime {
             .send(BootstrapCommand::SelectCharacter(character_name.into()))
             .is_ok()
     }
+
+    pub(crate) fn character_list_ready(&self) -> bool {
+        self.character_list_ready
+    }
+
+    pub(crate) fn set_character_list_ready(&mut self, ready: bool) {
+        self.character_list_ready = ready;
+    }
+
+    pub(crate) fn clear_character_select_selection(&mut self) {
+        self.character_select_index = None;
+    }
+
+    pub(crate) fn character_select_index(&self) -> Option<usize> {
+        self.character_select_index
+    }
+
+    pub(crate) fn set_character_select_index(&mut self, index: Option<usize>) {
+        self.character_select_index = index;
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -137,6 +166,10 @@ impl Plugin for BootstrapRuntimePlugin {
                 Update,
                 (poll_bootstrap_signals_system, finish_world_bootstrap_system).chain(),
             );
+        app.add_systems(
+            Update,
+            character_select_input_system.after(finish_world_bootstrap_system),
+        );
     }
 }
 
@@ -241,10 +274,14 @@ fn apply_bootstrap_signal(
             apply_session_event(event, bootstrap, session_state, ui_shell, client_runtime)
         }
         BootstrapSignal::ServerList => {
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::ServerSelect);
         }
         BootstrapSignal::CharacterList => {
+            bootstrap.set_character_list_ready(true);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
@@ -252,11 +289,15 @@ fn apply_bootstrap_signal(
         BootstrapSignal::Logout(kind) => apply_logout(kind, bootstrap, ui_shell),
         BootstrapSignal::JoinMap(map) => {
             bootstrap.pending_world_map = Some(map);
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::Loading);
         }
         BootstrapSignal::Error(message) => {
             bootstrap.pending_world_map = None;
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some(message);
             ui_shell.set_route(UiRoute::Error);
         }
@@ -274,17 +315,23 @@ fn apply_session_event(
         SessionEvent::LoginSuccess => {
             session_state.apply_event(event);
             bootstrap.pending_world_map = None;
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
         SessionEvent::LoginFailure => {
             session_state.apply_event(event);
             bootstrap.pending_world_map = None;
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some("login failed".to_string());
             ui_shell.set_route(UiRoute::Login);
         }
         SessionEvent::Logout => {
             session_state.apply_event(event);
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
         }
         SessionEvent::Disconnect => {
             let pending_world_map = bootstrap.pending_world_map.is_some();
@@ -296,6 +343,8 @@ fn apply_session_event(
             }
 
             bootstrap.pending_world_map = None;
+            bootstrap.set_character_list_ready(false);
+            bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some("connection lost".to_string());
 
             if !world_ready {
@@ -323,6 +372,8 @@ fn apply_movement_update(update: MovementUpdate, client_runtime: &mut ClientRunt
 
 fn apply_logout(kind: u8, bootstrap: &mut BootstrapRuntime, ui_shell: &mut UiShellState) {
     bootstrap.pending_world_map = None;
+    bootstrap.set_character_list_ready(false);
+    bootstrap.clear_character_select_selection();
     bootstrap.last_error = None;
 
     match kind {
@@ -530,14 +581,102 @@ async fn send_bootstrap_command(
     }
 }
 
+pub(crate) fn character_select_input_system(
+    mut bootstrap: ResMut<BootstrapRuntime>,
+    ui_shell: Res<UiShellState>,
+    session_state: Res<SessionState>,
+    keys: Res<ButtonInput<KeyCode>>,
+) {
+    apply_character_select_input(
+        &mut bootstrap,
+        ui_shell.current(),
+        session_state.phase(),
+        &keys,
+    );
+}
+
+pub(crate) fn apply_character_select_input(
+    bootstrap: &mut BootstrapRuntime,
+    route: UiRoute,
+    phase: mu_network::SessionPhase,
+    keys: &ButtonInput<KeyCode>,
+) {
+    if route != UiRoute::CharacterSelect || phase != mu_network::SessionPhase::LoggedIn {
+        bootstrap.clear_character_select_selection();
+        return;
+    }
+
+    if !bootstrap.character_list_ready() {
+        bootstrap.clear_character_select_selection();
+        return;
+    }
+
+    let screen = character_select_screen(CharacterSelectScreenState::Ready);
+    let characters = screen.characters;
+
+    if characters.is_empty() {
+        bootstrap.clear_character_select_selection();
+        return;
+    }
+
+    let default_index = characters
+        .iter()
+        .position(character_is_selected)
+        .unwrap_or(0);
+    let current_index = bootstrap
+        .character_select_index()
+        .filter(|index| *index < characters.len())
+        .unwrap_or(default_index);
+
+    bootstrap.set_character_select_index(Some(current_index));
+
+    let direction = character_select_navigation_delta(keys);
+    if direction != 0 {
+        let next_index = cycle_character_select_index(current_index, characters.len(), direction);
+        bootstrap.set_character_select_index(Some(next_index));
+    }
+
+    if keys.just_pressed(KeyCode::Enter) {
+        let selected_index = bootstrap
+            .character_select_index()
+            .filter(|index| *index < characters.len())
+            .unwrap_or(default_index);
+
+        if let Some(character) = characters.get(selected_index) {
+            let _ = bootstrap.queue_character_select_request(character.name);
+        }
+    }
+}
+
+fn character_select_navigation_delta(keys: &ButtonInput<KeyCode>) -> isize {
+    let previous = keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::ArrowLeft);
+    let next = keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::ArrowRight);
+
+    match (previous, next) {
+        (true, false) => -1,
+        (false, true) => 1,
+        _ => 0,
+    }
+}
+
+fn cycle_character_select_index(current: usize, len: usize, delta: isize) -> usize {
+    ((current as isize + delta).rem_euclid(len as isize)) as usize
+}
+
+fn character_is_selected(character: &CharacterSelectCharacter) -> bool {
+    character.selected
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_bootstrap_signal, finish_world_bootstrap, legacy_language_byte, BootstrapRuntime,
-        BootstrapSignal,
+        apply_bootstrap_signal, apply_character_select_input, finish_world_bootstrap,
+        legacy_language_byte, BootstrapCommand, BootstrapRuntime, BootstrapSignal,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
+    use bevy::input::keyboard::KeyCode;
+    use bevy::input::ButtonInput;
     use camino::Utf8PathBuf;
     use mu_gameplay::MovementCommand;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
@@ -548,6 +687,7 @@ mod tests {
     use mu_protocol::session::{character_list_extended, game_server_entered, CharacterListEntry};
     use mu_ui::{UiRoute, UiShellState};
     use std::time::Duration;
+    use tokio::sync::mpsc as tokio_mpsc;
 
     fn world_root() -> Utf8PathBuf {
         Utf8PathBuf::from_path_buf(
@@ -661,6 +801,7 @@ mod tests {
             &mut client_runtime,
         );
         assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert!(!bootstrap.character_list_ready());
 
         apply_bootstrap_signal(
             BootstrapSignal::CharacterList,
@@ -670,6 +811,7 @@ mod tests {
             &mut client_runtime,
         );
         assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert!(bootstrap.character_list_ready());
 
         apply_bootstrap_signal(
             BootstrapSignal::JoinMap(1),
@@ -709,6 +851,66 @@ mod tests {
             mu_network::SessionPhase::ReadyForLogin
         );
         assert!(bootstrap.last_error().is_some());
+    }
+
+    #[test]
+    fn character_select_input_waits_for_the_character_list() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+
+        apply_character_select_input(
+            &mut bootstrap,
+            UiRoute::CharacterSelect,
+            mu_network::SessionPhase::LoggedIn,
+            &keys,
+        );
+
+        assert!(!bootstrap.character_list_ready());
+        assert!(bootstrap.character_select_index().is_none());
+        assert!(command_receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn character_select_input_wraps_navigation_and_queues_the_selected_character() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+        bootstrap.set_character_list_ready(true);
+
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::ArrowDown);
+
+        apply_character_select_input(
+            &mut bootstrap,
+            UiRoute::CharacterSelect,
+            mu_network::SessionPhase::LoggedIn,
+            &keys,
+        );
+
+        assert_eq!(bootstrap.character_select_index(), Some(1));
+
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+
+        apply_character_select_input(
+            &mut bootstrap,
+            UiRoute::CharacterSelect,
+            mu_network::SessionPhase::LoggedIn,
+            &keys,
+        );
+
+        match command_receiver
+            .try_recv()
+            .expect("select_character command missing")
+        {
+            BootstrapCommand::SelectCharacter(character_name) => {
+                assert_eq!(character_name, "Selene");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
     }
 
     #[tokio::test]

@@ -11,6 +11,7 @@ use mu_ui::{
     UiRouteGroup, UiShellState,
 };
 
+use crate::bootstrap_runtime::BootstrapRuntime;
 use crate::SessionPhase;
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -69,6 +70,7 @@ fn sync_auth_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
+    bootstrap: Option<Res<BootstrapRuntime>>,
     mut state: ResMut<AuthShellState>,
 ) {
     let current = auth_shell_key(ui_shell.current(), session_state.phase());
@@ -84,7 +86,7 @@ fn sync_auth_shell_system(
 
     clear_auth_shell(&mut commands, &mut state);
 
-    let Some(view) = auth_shell_view(key.route, key.phase) else {
+    let Some(view) = auth_shell_view(key.route, key.phase, bootstrap.as_deref()) else {
         return;
     };
 
@@ -113,13 +115,17 @@ fn auth_shell_visible(route: UiRoute) -> bool {
     )
 }
 
-fn auth_shell_view(route: UiRoute, phase: SessionPhase) -> Option<AuthShellView> {
+fn auth_shell_view(
+    route: UiRoute,
+    phase: SessionPhase,
+    bootstrap: Option<&BootstrapRuntime>,
+) -> Option<AuthShellView> {
     match route {
         UiRoute::Boot => Some(boot_view(phase)),
         UiRoute::Loading => Some(loading_view(phase)),
         UiRoute::Login => Some(login_view(phase)),
         UiRoute::ServerSelect => Some(server_select_view(phase)),
-        UiRoute::CharacterSelect => Some(character_select_view(phase)),
+        UiRoute::CharacterSelect => Some(character_select_view(phase, bootstrap)),
         UiRoute::Error => Some(error_view(phase)),
         _ => None,
     }
@@ -173,17 +179,38 @@ fn server_select_view(phase: SessionPhase) -> AuthShellView {
     }
 }
 
-fn character_select_view(phase: SessionPhase) -> AuthShellView {
-    let screen = character_select_screen(if phase == SessionPhase::Disconnected {
-        CharacterSelectScreenState::Error
+fn character_select_view(
+    phase: SessionPhase,
+    bootstrap: Option<&BootstrapRuntime>,
+) -> AuthShellView {
+    let loading_screen = character_select_screen(CharacterSelectScreenState::Loading);
+    let ready_screen = character_select_screen(CharacterSelectScreenState::Ready);
+
+    let selected_index = if phase == SessionPhase::Disconnected {
+        None
+    } else if bootstrap.map_or(true, BootstrapRuntime::character_list_ready) {
+        character_select_selected_index(bootstrap, &ready_screen)
     } else {
-        CharacterSelectScreenState::Ready
-    });
+        None
+    };
+
+    let screen = if phase == SessionPhase::Disconnected {
+        character_select_screen(CharacterSelectScreenState::Error)
+    } else if !bootstrap.map_or(true, BootstrapRuntime::character_list_ready) {
+        loading_screen
+    } else if character_select_selected_entry(&ready_screen, selected_index)
+        .map(|entry| entry.item_blocked)
+        .unwrap_or(false)
+    {
+        character_select_screen(CharacterSelectScreenState::ActionDenied)
+    } else {
+        ready_screen
+    };
 
     AuthShellView {
         title: screen.title,
         status: status_line(screen.route, phase),
-        body: character_select_body(&screen),
+        body: character_select_body(&screen, selected_index),
         accent: accent_for_route(screen.route),
     }
 }
@@ -274,7 +301,7 @@ fn server_select_body(screen: &ServerSelectScreen) -> String {
     body
 }
 
-fn character_select_body(screen: &CharacterSelectScreen) -> String {
+fn character_select_body(screen: &CharacterSelectScreen, selected_index: Option<usize>) -> String {
     let mut body = String::new();
 
     push_paragraph(
@@ -299,18 +326,32 @@ fn character_select_body(screen: &CharacterSelectScreen) -> String {
         );
     }
 
-    if let Some(selected_slot) = screen.selected_slot {
+    if let Some(selected_character) = character_select_selected_entry(screen, selected_index) {
         push_paragraph(
             &mut body,
             "Selection",
-            &format!("Selected slot: {selected_slot}"),
+            &format!(
+                "Selected slot: {} | {}",
+                selected_character.slot_index, selected_character.name
+            ),
         );
+        push_paragraph(
+            &mut body,
+            "Controls",
+            "Use Up/Down or Left/Right to change selection. Press Enter to continue.",
+        );
+    } else if screen.state == CharacterSelectScreenState::Loading {
+        push_paragraph(&mut body, "Selection", "Waiting for the character list.");
     }
 
     push_lines(
         &mut body,
         "Characters",
-        screen.characters.iter().map(character_entry_label),
+        screen
+            .characters
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| character_entry_label(entry, selected_index == Some(index))),
         Some("No characters are available."),
     );
     push_lines(
@@ -321,6 +362,29 @@ fn character_select_body(screen: &CharacterSelectScreen) -> String {
     );
 
     body
+}
+
+fn character_select_selected_index(
+    bootstrap: Option<&BootstrapRuntime>,
+    screen: &CharacterSelectScreen,
+) -> Option<usize> {
+    let from_bootstrap = bootstrap
+        .and_then(BootstrapRuntime::character_select_index)
+        .filter(|index| *index < screen.characters.len());
+
+    from_bootstrap.or_else(|| {
+        screen
+            .characters
+            .iter()
+            .position(character_select_entry_is_selected)
+    })
+}
+
+fn character_select_selected_entry<'a>(
+    screen: &'a CharacterSelectScreen,
+    selected_index: Option<usize>,
+) -> Option<&'a CharacterSelectCharacter> {
+    selected_index.and_then(|index| screen.characters.get(index))
 }
 
 fn push_paragraph(output: &mut String, heading: &str, text: &str) {
@@ -403,13 +467,13 @@ fn server_entry_label(entry: &ServerEntry) -> String {
     }
 }
 
-fn character_entry_label(entry: &CharacterSelectCharacter) -> String {
+fn character_entry_label(entry: &CharacterSelectCharacter, selected: bool) -> String {
     let mut label = format!(
         "Slot {} | {} | Lv {} | {} | {}",
         entry.slot_index, entry.name, entry.level, entry.class_name, entry.guild_label
     );
 
-    if entry.selected {
+    if selected || entry.selected {
         label.push_str(" | selected");
     }
 
@@ -418,6 +482,10 @@ fn character_entry_label(entry: &CharacterSelectCharacter) -> String {
     }
 
     label
+}
+
+fn character_select_entry_is_selected(entry: &CharacterSelectCharacter) -> bool {
+    entry.selected
 }
 
 fn button_label(button: &CharacterSelectButton) -> String {
@@ -555,6 +623,7 @@ mod tests {
         login_field_label, login_view, server_action_label, server_entry_label, server_select_view,
         AuthShellPlugin, AuthShellRoot, AuthShellState,
     };
+    use crate::bootstrap_runtime::BootstrapRuntime;
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{
@@ -595,13 +664,47 @@ mod tests {
 
     #[test]
     fn character_select_shell_lists_characters_and_buttons() {
-        let view = auth_shell_view(UiRoute::CharacterSelect, SessionPhase::LoggedIn)
+        let view = auth_shell_view(UiRoute::CharacterSelect, SessionPhase::LoggedIn, None)
             .expect("character select shell missing");
 
         assert!(view.body.contains("Astra"));
         assert!(view.body.contains("Selene"));
         assert!(view.body.contains("Create"));
         assert!(view.body.contains("selected"));
+        assert!(view.body.contains("Controls"));
+    }
+
+    #[test]
+    fn character_select_shell_waits_for_the_roster_before_showing_selection() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_list_ready(false);
+
+        let view = auth_shell_view(
+            UiRoute::CharacterSelect,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character select shell missing");
+
+        assert!(view.body.contains("Loading character list..."));
+        assert!(view.body.contains("Waiting for the character list."));
+    }
+
+    #[test]
+    fn character_select_shell_tracks_manual_selection() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_list_ready(true);
+        bootstrap.set_character_select_index(Some(1));
+
+        let view = auth_shell_view(
+            UiRoute::CharacterSelect,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character select shell missing");
+
+        assert!(view.body.contains("Selected slot: 1 | Selene"));
+        assert!(view.body.contains("The selected character cannot be used."));
     }
 
     #[test]
@@ -622,7 +725,7 @@ mod tests {
 
         let character =
             CharacterSelectCharacter::new(1, "Selene", 297, "Fairy Elf", "Night Watch", true, true);
-        let label = character_entry_label(&character);
+        let label = character_entry_label(&character, true);
         assert!(label.contains("Slot 1"));
         assert!(label.contains("item blocked"));
         assert!(label.contains("selected"));
@@ -634,8 +737,8 @@ mod tests {
 
     #[test]
     fn non_auth_routes_do_not_render_the_shell() {
-        assert!(auth_shell_view(UiRoute::World, SessionPhase::ReadyForLogin).is_none());
-        assert!(auth_shell_view(UiRoute::Inventory, SessionPhase::ReadyForLogin).is_none());
+        assert!(auth_shell_view(UiRoute::World, SessionPhase::ReadyForLogin, None).is_none());
+        assert!(auth_shell_view(UiRoute::Inventory, SessionPhase::ReadyForLogin, None).is_none());
     }
 
     #[test]

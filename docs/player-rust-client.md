@@ -35,6 +35,9 @@ in the local config file instead of being typed every time.
   `select-character` request names a roster entry; the same request can be
   sent through the local control HTTP API with the character name in the body
   or a `character=` query parameter.
+- On the visible character-select surface, use `Up`/`Down` or `Left`/`Right`
+  to move the selection and `Enter` to confirm without the control HTTP API.
+  The shell shows the loading state until the roster is ready.
 - The world now opens a visible Bevy world shell with a camera, lighting,
   a heightfield terrain derived from the loaded world bundle, a layered
   terrain surface from the bundle's first two converted texture slots plus
