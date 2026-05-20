@@ -90,7 +90,7 @@ pub fn gens_ranking_screen(state: GensRankingScreenState) -> GensRankingScreen {
             Some(12),
             Some(4_300),
             Some(5_000),
-            Some("Sentinel"),
+            Some("Lieutenant"),
             true,
             READY_ACTIONS,
         ),
@@ -110,7 +110,7 @@ pub fn gens_ranking_screen(state: GensRankingScreenState) -> GensRankingScreen {
             Some(5),
             Some(9_500),
             Some(10_000),
-            Some("Guardian"),
+            Some("Viscount"),
             true,
             REWARD_ACTIONS,
         ),
@@ -166,7 +166,7 @@ mod tests {
     fn gens_ready_and_join_snapshots() {
         assert_eq!(
             gens_ranking_screen(GensRankingScreenState::Ready).snapshot(),
-            "route=hud|group=world|panel=gens-ranking|state=ready|title=Gens Ranking|notice=Some(\"Review Gens ranking and contribution.\")|gens_type=Some(\"Duprian\")|team_name=Some(\"Night Watch\")|ranking=Some(12)|contribution=Some(4300)|next_contribution=Some(5000)|title_name=Some(\"Sentinel\")|reward_available=true|actions=[Join, Leave, Reward, Ranking, Close]|layout=UiShellLayout { group: World, outer_margin: 16.0, panel_gap: 12.0, sidebar_width: 360.0, content_max_width: 1280.0, footer_height: 0.0 }|widgets=[Body, Sidebar, StatusStrip, Overlay]"
+            "route=hud|group=world|panel=gens-ranking|state=ready|title=Gens Ranking|notice=Some(\"Review Gens ranking and contribution.\")|gens_type=Some(\"Duprian\")|team_name=Some(\"Night Watch\")|ranking=Some(12)|contribution=Some(4300)|next_contribution=Some(5000)|title_name=Some(\"Lieutenant\")|reward_available=true|actions=[Join, Leave, Reward, Ranking, Close]|layout=UiShellLayout { group: World, outer_margin: 16.0, panel_gap: 12.0, sidebar_width: 360.0, content_max_width: 1280.0, footer_height: 0.0 }|widgets=[Body, Sidebar, StatusStrip, Overlay]"
         );
         assert_eq!(
             gens_ranking_screen(GensRankingScreenState::Join).snapshot(),
@@ -178,7 +178,7 @@ mod tests {
     fn gens_reward_and_error_snapshots() {
         assert_eq!(
             gens_ranking_screen(GensRankingScreenState::Reward).snapshot(),
-            "route=hud|group=world|panel=gens-ranking|state=reward|title=Gens Ranking|notice=Some(\"Claim the Gens reward.\")|gens_type=Some(\"Duprian\")|team_name=Some(\"Night Watch\")|ranking=Some(5)|contribution=Some(9500)|next_contribution=Some(10000)|title_name=Some(\"Guardian\")|reward_available=true|actions=[Reward, Close]|layout=UiShellLayout { group: World, outer_margin: 16.0, panel_gap: 12.0, sidebar_width: 360.0, content_max_width: 1280.0, footer_height: 0.0 }|widgets=[Body, Sidebar, StatusStrip, Overlay]"
+            "route=hud|group=world|panel=gens-ranking|state=reward|title=Gens Ranking|notice=Some(\"Claim the Gens reward.\")|gens_type=Some(\"Duprian\")|team_name=Some(\"Night Watch\")|ranking=Some(5)|contribution=Some(9500)|next_contribution=Some(10000)|title_name=Some(\"Viscount\")|reward_available=true|actions=[Reward, Close]|layout=UiShellLayout { group: World, outer_margin: 16.0, panel_gap: 12.0, sidebar_width: 360.0, content_max_width: 1280.0, footer_height: 0.0 }|widgets=[Body, Sidebar, StatusStrip, Overlay]"
         );
         assert_eq!(
             gens_ranking_screen(GensRankingScreenState::Error).snapshot(),
