@@ -26,6 +26,8 @@ in the local config file instead of being typed every time.
 
 - Login and server selection screens.
 - Character selection and character creation.
+- The Bevy bootstrap now carries the client from login to character select and
+  into the loaded world once the map handoff packet arrives.
 - The world, HUD, inventory, NPC/shop, trade, quests, MU Helper, and GameShop
   surfaces documented elsewhere in this repo.
 - Safe error screens when login, connection, or asset validation fails.
@@ -34,6 +36,8 @@ in the local config file instead of being typed every time.
 
 - `asset-check-failed` means the converted asset root or manifest is wrong.
 - Login failures return to the login state instead of corrupting the session.
+- A disconnect during the map handoff is treated as part of the normal
+  login-to-world transfer, not as a fatal error.
 - Connection drops return the client to a safe state and log a diagnostic.
 
 ## QA / Dev Smoke

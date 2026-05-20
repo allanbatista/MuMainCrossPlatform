@@ -1,3 +1,4 @@
+pub mod bootstrap_runtime;
 pub mod cli;
 pub mod client_runtime;
 pub mod config;

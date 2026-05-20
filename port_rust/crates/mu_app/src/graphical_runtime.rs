@@ -2,7 +2,8 @@ use std::process::ExitCode;
 
 use bevy::log::LogPlugin;
 use bevy::prelude::{
-    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, PluginGroup, Resource, Startup,
+    App, Camera2d, ClearColor, Color, Commands, DefaultPlugins, PluginGroup, ResMut, Resource,
+    Startup,
 };
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::Utf8PathBuf;
@@ -12,9 +13,10 @@ use mu_gameplay::{
     WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
-use mu_ui::UiShellPlugin;
+use mu_ui::{UiRoute, UiShellPlugin, UiShellState};
 
-use crate::Cli;
+use crate::bootstrap_runtime::BootstrapRuntimePlugin;
+use crate::{Cli, ClientRuntime};
 
 const WINDOW_TITLE: &str = "MU Rust Client";
 const WINDOW_WIDTH: u32 = 1280;
@@ -44,21 +46,30 @@ impl GraphicalRuntimeConfig {
     }
 }
 
-pub fn run_graphical(cli: &Cli) -> ExitCode {
-    let mut app = build_graphical_app(cli);
+pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
+    let mut app = build_graphical_app(cli, client_runtime);
     app.run();
     ExitCode::SUCCESS
 }
 
-pub fn build_graphical_app(cli: &Cli) -> App {
+pub fn build_graphical_app(cli: &Cli, client_runtime: ClientRuntime) -> App {
     let mut app = App::new();
     app.add_plugins(default_plugins());
-    configure_project_plugins(&mut app, GraphicalRuntimeConfig::from_cli(cli));
+    configure_project_plugins(
+        &mut app,
+        GraphicalRuntimeConfig::from_cli(cli),
+        client_runtime,
+    );
     app
 }
 
-fn configure_project_plugins(app: &mut App, config: GraphicalRuntimeConfig) {
+fn configure_project_plugins(
+    app: &mut App,
+    config: GraphicalRuntimeConfig,
+    client_runtime: ClientRuntime,
+) {
     app.insert_resource(config)
+        .insert_resource(client_runtime)
         .insert_resource(ClearColor(CLEAR_COLOR))
         .add_plugins((
             RenderAssetsPlugin,
@@ -72,8 +83,9 @@ fn configure_project_plugins(app: &mut App, config: GraphicalRuntimeConfig) {
             WorldEntitiesPlugin,
             WorldNpcPlugin,
             WorldMonsterPlugin,
+            BootstrapRuntimePlugin,
         ))
-        .add_systems(Startup, setup_boot_camera);
+        .add_systems(Startup, setup_boot_camera_and_login_route);
 }
 
 fn default_plugins() -> impl PluginGroup {
@@ -89,20 +101,22 @@ fn default_plugins() -> impl PluginGroup {
         .disable::<LogPlugin>()
 }
 
-fn setup_boot_camera(mut commands: Commands) {
+fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMut<UiShellState>) {
     commands.spawn(Camera2d);
+    ui_shell.set_route(UiRoute::Login);
 }
 
 #[cfg(test)]
 mod tests {
     use super::{configure_project_plugins, GraphicalRuntimeConfig};
-    use crate::Cli;
+    use crate::{Cli, ClientRuntime};
     use bevy::prelude::App;
+    use mu_ui::{UiRoute, UiShellState};
 
     fn cli() -> Cli {
         Cli {
             asset_root: Some("port_rust/assets".into()),
-            server: Some("127.0.0.1:44405".to_string()),
+            server: None,
             config: None,
             editor_admin: false,
             offline_fixture: None,
@@ -116,11 +130,31 @@ mod tests {
     fn graphical_app_registers_runtime_config() {
         let cli = cli();
         let mut app = App::new();
-        configure_project_plugins(&mut app, GraphicalRuntimeConfig::from_cli(&cli));
+        configure_project_plugins(
+            &mut app,
+            GraphicalRuntimeConfig::from_cli(&cli),
+            ClientRuntime::new(),
+        );
         let config = app.world().resource::<GraphicalRuntimeConfig>();
 
         assert_eq!(config.asset_root, cli.asset_root);
         assert_eq!(config.server, cli.server);
         assert_eq!(config.config_path, cli.config_path());
+    }
+
+    #[test]
+    fn graphical_app_starts_on_the_login_route() {
+        let cli = cli();
+        let mut app = App::new();
+        configure_project_plugins(
+            &mut app,
+            GraphicalRuntimeConfig::from_cli(&cli),
+            ClientRuntime::new(),
+        );
+
+        app.update();
+
+        let ui_shell = app.world().resource::<UiShellState>();
+        assert_eq!(ui_shell.current(), UiRoute::Login);
     }
 }

@@ -17,6 +17,8 @@ rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
 O binario imprime o estado inicial e a URL efetiva do servidor.
 Se a validacao de assets falhar no boot, o estado inicial sera
 `asset-check-failed` e o servidor continua disponivel para inspeção local.
+O mesmo runtime grafico usa `ready-for-login` como a superficie inicial de
+login antes de seguir para server select, character select e world.
 
 ## Consultar estado
 

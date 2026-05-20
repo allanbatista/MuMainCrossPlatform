@@ -1,3 +1,4 @@
+use bevy::prelude::Resource;
 use camino::Utf8Path;
 use mu_assets::{load_terrain_world_bundle, TerrainWorldBundle, TerrainWorldError};
 use mu_gameplay::{
@@ -39,7 +40,7 @@ pub enum ClientRuntimeError {
     World(#[from] TerrainWorldError),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Resource)]
 pub struct ClientRuntime {
     render_assets: RenderAssets,
     world: WorldManager,

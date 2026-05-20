@@ -1,6 +1,8 @@
+use bevy::prelude::Resource;
+
 pub use mu_network::session::{SessionEvent, SessionPhase};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Resource)]
 pub struct SessionState {
     phase: SessionPhase,
     last_event: Option<SessionEvent>,

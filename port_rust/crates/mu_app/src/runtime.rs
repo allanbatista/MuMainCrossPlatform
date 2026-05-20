@@ -97,7 +97,7 @@ pub fn run(cli: Cli) -> ExitCode {
 
         match state {
             AppState::AssetCheckFailed => ExitCode::from(3),
-            AppState::Boot => run_graphical(&cli),
+            AppState::Boot => run_graphical(&cli, runtime),
             AppState::ReadyForLogin | AppState::Exit => ExitCode::SUCCESS,
         }
     }
