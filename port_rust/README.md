@@ -158,7 +158,8 @@ sessao de jogo completa.
   bridge de control-http quando a sessao esta conectada.
 - `skill-targeted` enfileira o pacote de targeted skill atraves do bridge
   de control-http quando a sessao esta conectada; passe `skill_id=` e
-  `target_id=`.
+  `target_id=`. Quando o pacote entra, a HUD do world tambem mostra o card
+  de skill feedback com os cues de particle/audio enfileirados.
 - A camada de events esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `events` no smoke local.

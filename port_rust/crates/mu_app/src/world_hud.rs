@@ -3,6 +3,8 @@ use bevy::prelude::{
     Node, Plugin, PositionType, PostUpdate, Res, ResMut, Resource, Text, TextColor, TextFont,
     UiRect, Val,
 };
+use mu_audio::AudioRuntime;
+use mu_render::SkillParticleQueue;
 use mu_ui::{
     chat_screen, hotkeys_screen, hud_screen, minimap_screen, ChatMessageCount, ChatScreen,
     HotkeyBinding, HotkeysScreen, HudButton, HudGauge, HudScreen, MiniMapMarker, MiniMapScreen,
@@ -29,6 +31,7 @@ const HUD_ACCENT: Color = Color::srgb(0.25, 0.82, 0.86);
 const CHAT_ACCENT: Color = Color::srgb(0.92, 0.61, 0.24);
 const MINIMAP_ACCENT: Color = Color::srgb(0.42, 0.78, 0.42);
 const HOTKEYS_ACCENT: Color = Color::srgb(0.86, 0.70, 0.26);
+const SKILL_FEEDBACK_ACCENT: Color = Color::srgb(0.84, 0.42, 0.25);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct WorldHudPlugin;
@@ -53,6 +56,15 @@ struct WorldHudKey {
     chat: ChatScreen,
     minimap: MiniMapScreen,
     hotkeys: HotkeysScreen,
+    skill_feedback: Option<SkillFeedbackKey>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct SkillFeedbackKey {
+    particle_count: usize,
+    audio_events: usize,
+    particle_snapshot: String,
+    audio_diagnostics: String,
 }
 
 #[derive(Component)]
@@ -68,6 +80,8 @@ impl Plugin for WorldHudPlugin {
 fn sync_world_hud_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
+    skill_particles: Option<Res<SkillParticleQueue>>,
+    audio_runtime: Option<Res<AudioRuntime>>,
     client_runtime: Res<ClientRuntime>,
     mut state: ResMut<WorldHudState>,
 ) {
@@ -85,6 +99,7 @@ fn sync_world_hud_system(
         chat: chat_screen(),
         minimap: minimap_screen(),
         hotkeys: hotkeys_screen(),
+        skill_feedback: skill_feedback_key(skill_particles.as_deref(), audio_runtime.as_deref()),
     };
 
     if state.key.as_ref() == Some(&key) && state.root.is_some() {
@@ -100,12 +115,18 @@ fn sync_world_hud_system(
 }
 
 fn world_hud_views(key: &WorldHudKey) -> Vec<WorldHudSurfaceView> {
-    vec![
+    let mut views = vec![
         hud_view(key.hud),
         chat_view(key.chat),
         minimap_view(key.minimap),
         hotkeys_view(key.hotkeys),
-    ]
+    ];
+
+    if let Some(skill_feedback) = key.skill_feedback.as_ref() {
+        views.push(skill_feedback_view(skill_feedback));
+    }
+
+    views
 }
 
 fn hud_view(screen: HudScreen) -> WorldHudSurfaceView {
@@ -166,6 +187,18 @@ fn hotkeys_view(screen: HotkeysScreen) -> WorldHudSurfaceView {
         ),
         body: hotkeys_body(&screen),
         accent: HOTKEYS_ACCENT,
+    }
+}
+
+fn skill_feedback_view(key: &SkillFeedbackKey) -> WorldHudSurfaceView {
+    WorldHudSurfaceView {
+        title: "Skill Feedback",
+        status: format!(
+            "particle_count={} | audio_events={}",
+            key.particle_count, key.audio_events
+        ),
+        body: skill_feedback_body(key),
+        accent: SKILL_FEEDBACK_ACCENT,
     }
 }
 
@@ -391,6 +424,20 @@ fn hotkeys_body(screen: &HotkeysScreen) -> String {
     body
 }
 
+fn skill_feedback_body(key: &SkillFeedbackKey) -> String {
+    let mut body = String::new();
+
+    push_paragraph(
+        &mut body,
+        "Status",
+        "The targeted skill feedback surface is active.",
+    );
+    push_paragraph(&mut body, "Particle queue", &key.particle_snapshot);
+    push_paragraph(&mut body, "Audio diagnostics", &key.audio_diagnostics);
+
+    body
+}
+
 fn hud_gauge_label(gauge: &HudGauge) -> String {
     format!(
         "{} | {} / {}",
@@ -499,7 +546,8 @@ fn spawn_world_hud(commands: &mut Commands, views: &[WorldHudSurfaceView]) -> En
 }
 
 fn spawn_world_hud_surface(commands: &mut Commands, view: &WorldHudSurfaceView) -> Entity {
-    let card_name = format!("world-hud-{}-card", view.title.to_lowercase());
+    let slug = hud_surface_slug(view.title);
+    let card_name = format!("world-hud-{slug}-card");
     let card = commands
         .spawn((
             Node {
@@ -514,7 +562,7 @@ fn spawn_world_hud_surface(commands: &mut Commands, view: &WorldHudSurfaceView) 
         ))
         .id();
 
-    let accent_name = format!("world-hud-{}-accent", view.title.to_lowercase());
+    let accent_name = format!("world-hud-{slug}-accent");
     let accent = commands
         .spawn((
             Node {
@@ -539,7 +587,7 @@ fn spawn_world_hud_surface(commands: &mut Commands, view: &WorldHudSurfaceView) 
     );
     commands.entity(card).add_child(status);
 
-    let panel_name = format!("world-hud-{}-panel", view.title.to_lowercase());
+    let panel_name = format!("world-hud-{slug}-panel");
     let panel = commands
         .spawn((
             Node {
@@ -559,6 +607,34 @@ fn spawn_world_hud_surface(commands: &mut Commands, view: &WorldHudSurfaceView) 
     commands.entity(panel).add_child(body);
 
     card
+}
+
+fn hud_surface_slug(title: &str) -> String {
+    title.to_lowercase().replace(' ', "-")
+}
+
+fn skill_feedback_key(
+    skill_particles: Option<&SkillParticleQueue>,
+    audio_runtime: Option<&AudioRuntime>,
+) -> Option<SkillFeedbackKey> {
+    let particle_count = skill_particles.map_or(0, SkillParticleQueue::len);
+    let audio_events = audio_runtime.map_or(0, AudioRuntime::pending_audio_events);
+
+    if particle_count == 0 && audio_events == 0 {
+        return None;
+    }
+
+    Some(SkillFeedbackKey {
+        particle_count,
+        audio_events,
+        particle_snapshot: skill_particles
+            .map(SkillParticleQueue::snapshot)
+            .unwrap_or_else(|| "Particle queue unavailable.".to_string()),
+        audio_diagnostics: audio_runtime
+            .map(AudioRuntime::diagnostics)
+            .map(|diagnostics| diagnostics.to_string())
+            .unwrap_or_else(|| "Audio runtime unavailable.".to_string()),
+    })
 }
 
 fn spawn_text_block(
@@ -707,6 +783,32 @@ mod tests {
         assert!(minimap.contains("Potion Merchant"));
         assert!(hotkeys.contains("The hotkey bar surface is active."));
         assert!(hotkeys.contains("Q | Greater Healing Potion"));
+    }
+
+    #[test]
+    fn world_hud_includes_skill_feedback_card_when_queue_is_present() {
+        let key = super::WorldHudKey {
+            hud: hud_screen(),
+            chat: chat_screen(),
+            minimap: minimap_screen(),
+            hotkeys: hotkeys_screen(),
+            skill_feedback: Some(super::SkillFeedbackKey {
+                particle_count: 1,
+                audio_events: 1,
+                particle_snapshot:
+                    "state=ready|count=1|events=[skill=6|cue=teleport-burst|target=77]".to_string(),
+                audio_diagnostics: "state=ready|queued_audio_events=1".to_string(),
+            }),
+        };
+
+        let views = super::world_hud_views(&key);
+
+        assert_eq!(views.len(), 5);
+        let skill_feedback = views.last().expect("skill feedback card missing");
+        assert_eq!(skill_feedback.title, "Skill Feedback");
+        assert!(skill_feedback.status.contains("particle_count=1"));
+        assert!(skill_feedback.body.contains("teleport-burst"));
+        assert!(skill_feedback.body.contains("queued_audio_events=1"));
     }
 
     #[test]

@@ -241,7 +241,8 @@ in the local config file instead of being typed every time.
   through the live session with no extra payload.
 - `POST /command?name=skill-targeted` queues the targeted skill packet
   through the live session. Pass the skill id in `skill_id=` and the target
-  player id in `target_id=`.
+  player id in `target_id=`. When the packet is accepted, the world HUD also
+  shows the latest skill feedback card with the queued particle/audio cues.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=events` can step into the visible events route shell for

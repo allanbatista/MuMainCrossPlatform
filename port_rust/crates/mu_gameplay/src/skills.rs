@@ -233,6 +233,10 @@ impl SkillDefinition {
     }
 }
 
+pub fn presentation_for_skill_id(skill_id: SkillId) -> SkillPresentation {
+    SkillDefinition::default().presentation(skill_id)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillCatalog {
     definitions: Vec<Option<SkillDefinition>>,
@@ -648,6 +652,7 @@ mod tests {
         AT_SKILL_TRIPLE_SHOT_MASTERY, AT_SKILL_TRIPLE_SHOT_STR,
     };
     use crate::classes::CharacterClass;
+    use crate::presentation_for_skill_id;
 
     fn make_skill(
         name: &str,
@@ -733,6 +738,26 @@ mod tests {
         assert_eq!(
             legacy_effect.presentation(AT_SKILL_TRIPLE_SHOT),
             SkillPresentation::new(SkillEffectCue::LegacyEffect(77), SkillAudioCue::Bow)
+        );
+    }
+
+    #[test]
+    fn fallback_presentation_uses_skill_id_heuristics() {
+        assert_eq!(
+            presentation_for_skill_id(AT_SKILL_TELEPORT),
+            SkillPresentation::new(SkillEffectCue::Teleport, SkillAudioCue::Teleport)
+        );
+        assert_eq!(
+            presentation_for_skill_id(AT_SKILL_ICE_ARROW_STR),
+            SkillPresentation::new(SkillEffectCue::Projectile, SkillAudioCue::IceArrow)
+        );
+        assert_eq!(
+            presentation_for_skill_id(AT_SKILL_SUMMON_POLLUTION),
+            SkillPresentation::new(SkillEffectCue::Summon, SkillAudioCue::SummonPollution)
+        );
+        assert_eq!(
+            presentation_for_skill_id(9999),
+            SkillPresentation::new(SkillEffectCue::MagicCast, SkillAudioCue::Magic)
         );
     }
 

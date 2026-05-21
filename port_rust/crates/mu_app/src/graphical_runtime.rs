@@ -12,14 +12,18 @@ use bevy::prelude::{
 };
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::{Utf8Path, Utf8PathBuf};
-use mu_audio::AudioRuntimePlugin;
+use mu_audio::{AudioRuntime, AudioRuntimePlugin};
+use mu_gameplay::presentation_for_skill_id;
 use mu_gameplay::{
     DuelManager, DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin,
     GameShopPlugin, GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
     MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultManager,
     VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
-use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
+use mu_render::{
+    RenderAssetsPlugin, RenderEntitiesPlugin, SkillParticlePlugin, SkillParticleQueue,
+    TerrainPlugin,
+};
 use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
 
 use crate::auth_shell::AuthShellPlugin;
@@ -148,6 +152,7 @@ fn configure_project_plugins(
             TerrainPlugin,
             RenderEntitiesPlugin,
             AudioRuntimePlugin,
+            SkillParticlePlugin,
             UiShellPlugin,
             WorldPlugin,
             MovementPlugin,
@@ -285,6 +290,8 @@ fn setup_boot_camera_and_initial_route(
 fn sync_control_http_snapshot_to_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
     bootstrap: Option<ResMut<BootstrapRuntime>>,
+    mut audio_runtime: Option<ResMut<AudioRuntime>>,
+    mut skill_particles: Option<ResMut<SkillParticleQueue>>,
     mut inventory: ResMut<InventoryManager>,
     mut equipment: ResMut<EquipmentManager>,
     mut vault: ResMut<VaultManager>,
@@ -404,7 +411,13 @@ fn sync_control_http_snapshot_to_runtime(
         Some(ControlCommand::SkillTargeted) => {
             if let (Some(skill_id), Some(target_id)) = (snapshot.skill_id, snapshot.skill_target_id)
             {
-                let _ = bootstrap.queue_skill_targeted_request(skill_id, target_id);
+                queue_skill_targeted_feedback(
+                    &*bootstrap,
+                    audio_runtime.as_deref_mut(),
+                    skill_particles.as_deref_mut(),
+                    skill_id,
+                    target_id,
+                );
             }
         }
         Some(ControlCommand::DuelStop) => {
@@ -459,6 +472,28 @@ fn sync_control_http_snapshot_to_runtime(
     }
 
     control_http.mark_applied(snapshot.command_count);
+}
+
+fn queue_skill_targeted_feedback(
+    bootstrap: &BootstrapRuntime,
+    audio_runtime: Option<&mut AudioRuntime>,
+    skill_particles: Option<&mut SkillParticleQueue>,
+    skill_id: u16,
+    target_id: u16,
+) {
+    if !bootstrap.queue_skill_targeted_request(skill_id, target_id) {
+        return;
+    }
+
+    let presentation = presentation_for_skill_id(skill_id);
+
+    if let Some(skill_particles) = skill_particles {
+        let _ = skill_particles.push_presentation(skill_id, presentation, Some(target_id));
+    }
+
+    if let Some(audio_runtime) = audio_runtime {
+        let _ = audio_runtime.queue_skill_audio(skill_id, presentation, false);
+    }
 }
 
 fn apply_vault_money_transfer_command(
@@ -668,10 +703,12 @@ mod tests {
     use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
     use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
+    use mu_audio::{AudioRuntime, AudioRuntimePlugin};
     use mu_gameplay::{
         DuelManager, DuelPlugin, EquipmentManager, EquipmentSlot, InventoryManager, InventorySlot,
-        Item, ItemPacketData, ItemRequirements, ItemSize, VaultManager,
+        Item, ItemPacketData, ItemRequirements, ItemSize, VaultManager, AT_SKILL_TELEPORT,
     };
+    use mu_render::{SkillParticlePlugin, SkillParticleQueue};
     use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc as tokio_mpsc;
@@ -1618,6 +1655,67 @@ mod tests {
             app.world().resource::<UiShellState>().current(),
             UiRoute::World
         );
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_skill_feedback_when_skill_is_targeted() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins((
+            mu_ui::UiShellPlugin,
+            AudioRuntimePlugin,
+            SkillParticlePlugin,
+        ));
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.skill_id = Some(AT_SKILL_TELEPORT);
+            snapshot.skill_target_id = Some(0x5678);
+            snapshot.apply_command(ControlCommand::SkillTargeted);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("skill targeted command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::SkillTargeted {
+                skill_id,
+                target_id,
+            } => {
+                assert_eq!(skill_id, AT_SKILL_TELEPORT);
+                assert_eq!(target_id, 0x5678);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        let particles = app.world().resource::<SkillParticleQueue>();
+        assert_eq!(particles.len(), 1);
+        assert!(particles.snapshot().contains("teleport-burst"));
+
+        let audio_runtime = app.world().resource::<AudioRuntime>();
+        assert_eq!(audio_runtime.pending_audio_events(), 1);
+        assert!(audio_runtime
+            .diagnostics()
+            .to_string()
+            .contains("queued_audio_events=1"));
     }
 
     #[test]

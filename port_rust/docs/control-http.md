@@ -227,7 +227,9 @@ body bruto; se o payload vier incompleto, a resposta sera `400`.
 `duel-channel-quit` envia o pacote de quit de channel pela sessao viva sem
 payload extra. `skill-targeted` envia o pacote de targeted skill pela
 sessao viva e aceita o skill em `skill_id=` e o alvo em `target_id=`; se o
-payload vier incompleto, a resposta sera `400`.
+payload vier incompleto, a resposta sera `400`. Quando o bridge aceita o
+pedido, a world HUD tambem exibe o card de skill feedback com o particle
+queue e o audio queue locais.
 `inventory-use` atualiza a rota visivel para inventory,
 aceita `slot=` ou `item_slot=` com o slot linear do inventory, aceita
 `target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e envia o
