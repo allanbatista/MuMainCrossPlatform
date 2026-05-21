@@ -2,8 +2,8 @@ use bevy::prelude::Resource;
 use camino::Utf8Path;
 use mu_assets::{load_terrain_world_bundle, TerrainWorldBundle, TerrainWorldError};
 use mu_gameplay::{
-    MovementManager, PartyManager, WorldEntitiesManager, WorldEntityPose, WorldManager,
-    WorldMonsterManager, WorldNpcManager, WorldPlayerRole, WorldPlayerSpawn,
+    world_position_from_tile, MovementManager, PartyManager, WorldEntitiesManager, WorldEntityPose,
+    WorldManager, WorldMonsterManager, WorldNpcManager, WorldPlayerRole, WorldPlayerSpawn,
 };
 use mu_render::{
     RenderAssets, RenderAssetsError, RenderEntities, RenderEntitiesState, TerrainRenderer,
@@ -16,6 +16,7 @@ const DEFAULT_LOCAL_PLAYER_MODEL: &str = "local-player";
 const DEFAULT_LOCAL_PLAYER_POSITION: [f64; 3] = [0.0, 1.0, 0.0];
 const DEFAULT_LOCAL_PLAYER_ROTATION: [f64; 3] = [0.0, 0.0, 0.0];
 const DEFAULT_LOCAL_PLAYER_SCALE: [f64; 3] = [1.0, 1.0, 1.0];
+const DEFAULT_REMOTE_PLAYER_MODEL: &str = "remote-player";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ClientRuntimeState {
@@ -201,8 +202,38 @@ impl ClientRuntime {
         self.sync_world_projection();
     }
 
+    pub fn set_remote_player_position(&mut self, key: u32, position: [f64; 3]) {
+        if let Some(remote_player) = self.world_entities.remote_player_mut(key) {
+            remote_player.pose.position = position;
+        } else {
+            self.world_entities
+                .upsert_remote_player(WorldPlayerSpawn::new(
+                    WorldPlayerRole::Remote,
+                    format!("Remote {key}"),
+                    key,
+                    DEFAULT_REMOTE_PLAYER_MODEL,
+                    WorldEntityPose::new(
+                        position,
+                        DEFAULT_LOCAL_PLAYER_ROTATION,
+                        DEFAULT_LOCAL_PLAYER_SCALE,
+                    ),
+                ));
+        }
+
+        self.sync_world_projection();
+    }
+
+    pub fn set_remote_player_tile_position(&mut self, key: u32, position_x: u8, position_y: u8) {
+        self.set_remote_player_position(key, world_position_from_tile(position_x, position_y));
+    }
+
     pub fn translate_local_player(&mut self, delta: [f64; 3]) {
         self.world_entities.translate_local_player(delta);
+        self.sync_world_projection();
+    }
+
+    pub fn clear_remote_players(&mut self) {
+        self.world_entities.clear_remote_players();
         self.sync_world_projection();
     }
 
@@ -301,7 +332,7 @@ impl ClientRuntime {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClientRuntime, ClientRuntimeState, DEFAULT_LOCAL_PLAYER_LABEL,
+        world_position_from_tile, ClientRuntime, ClientRuntimeState, DEFAULT_LOCAL_PLAYER_LABEL,
         DEFAULT_LOCAL_PLAYER_POSITION,
     };
     use std::fs;
@@ -548,6 +579,47 @@ mod tests {
         assert_eq!(runtime.state(), ClientRuntimeState::AssetError);
         assert!(runtime.last_error().is_some());
         assert!(runtime.snapshot().contains("render_assets=asset-error"));
+    }
+
+    #[test]
+    fn runtime_tracks_remote_players_and_clears_them() {
+        let mut runtime = ClientRuntime::new();
+
+        runtime.set_remote_player_tile_position(42, 7, 8);
+
+        let initial_remote_position = world_position_from_tile(7, 8);
+        assert_eq!(runtime.world_entities().remote_players().len(), 1);
+        assert_eq!(
+            runtime
+                .world_entities()
+                .remote_player(42)
+                .map(|remote_player| remote_player.pose.position),
+            Some(initial_remote_position)
+        );
+        assert!(runtime
+            .render_entities()
+            .snapshot()
+            .contains("remote_count=1"));
+
+        runtime.set_remote_player_tile_position(42, 8, 9);
+
+        assert_eq!(runtime.world_entities().remote_players().len(), 1);
+        assert_eq!(
+            runtime
+                .world_entities()
+                .remote_player(42)
+                .map(|remote_player| remote_player.pose.position),
+            Some(world_position_from_tile(8, 9))
+        );
+
+        runtime.clear_remote_players();
+
+        assert!(runtime.world_entities().remote_players().is_empty());
+        assert!(runtime
+            .render_entities()
+            .catalog()
+            .remote_players
+            .is_empty());
     }
 
     #[test]

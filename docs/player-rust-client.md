@@ -73,6 +73,9 @@ in the local config file instead of being typed every time.
   hotkey surfaces while the 3D scene is active.
 - The world shell now seeds a local avatar marker and keeps it synchronized
   with authoritative movement replies when the live session is active.
+- Remote player markers now appear when live movement packets arrive for
+  non-local keys, and the remote roster clears on logout/disconnect so stale
+  markers do not survive session loss.
 - The selected character name is carried into the world shell, so the local
   avatar label and chat sender use the chosen roster entry instead of the
   generic `Player` placeholder when the name is available.

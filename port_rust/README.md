@@ -51,6 +51,9 @@ sessao de jogo completa.
 - O world route agora tambem cria um avatar local, envia o movimento via
   sessao viva e aplica as respostas autoritativas no runtime; a predicao local
   continua imediata para manter a resposta do controle.
+- Os marcadores de remote player agora aparecem quando o live session entrega
+  movement packets para chaves nao locais, e a fila remota limpa no
+  logout/disconnect para nao deixar marcador stale.
 - O world shell agora prioriza entidades proximas quando amostra object,
   npc, monster e remote player visiveis, em vez de pegar as primeiras
   entradas arbitrarias, para deixar a cena 3D mais parecida com a area do

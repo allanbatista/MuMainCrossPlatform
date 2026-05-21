@@ -1155,6 +1155,7 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.clear_social_rosters();
             mail.reset();
             clear_party_state(client_runtime);
+            client_runtime.clear_remote_players();
             bootstrap.clear_gens_ranking_snapshot();
 
             if bootstrap.character_delete_state() == CharacterDeleteScreenState::Submitting {
@@ -1190,6 +1191,7 @@ fn apply_session_event(
             bootstrap.clear_social_rosters();
             bootstrap.clear_gens_ranking_snapshot();
             mail.reset();
+            client_runtime.clear_remote_players();
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
         SessionEvent::LoginFailure => {
@@ -1203,6 +1205,7 @@ fn apply_session_event(
             bootstrap.clear_social_rosters();
             mail.reset();
             clear_party_state(client_runtime);
+            client_runtime.clear_remote_players();
             bootstrap.clear_gens_ranking_snapshot();
             ui_shell.set_route(UiRoute::Login);
         }
@@ -1215,6 +1218,7 @@ fn apply_session_event(
             bootstrap.clear_social_rosters();
             mail.reset();
             clear_party_state(client_runtime);
+            client_runtime.clear_remote_players();
             bootstrap.clear_gens_ranking_snapshot();
             ui_shell.set_route(UiRoute::Login);
         }
@@ -1227,6 +1231,7 @@ fn apply_session_event(
             bootstrap.clear_social_rosters();
             mail.reset();
             clear_party_state(client_runtime);
+            client_runtime.clear_remote_players();
             bootstrap.clear_gens_ranking_snapshot();
 
             if pending_world_map {
@@ -1261,18 +1266,33 @@ fn apply_session_event(
 }
 
 fn apply_movement_update(update: MovementUpdate, client_runtime: &mut ClientRuntime) {
-    let Some(local_key) = client_runtime.world_entities().local_player_key() else {
-        return;
-    };
+    let local_key = client_runtime.world_entities().local_player_key();
 
     match update {
-        MovementUpdate::Character(update) if local_key == u32::from(update.key) => {
-            client_runtime.set_local_player_tile_position(update.target_x, update.target_y);
+        MovementUpdate::Character(update) => {
+            let key = u32::from(update.key);
+            if local_key == Some(key) || (local_key.is_none() && key == 0) {
+                client_runtime.set_local_player_tile_position(update.target_x, update.target_y);
+            } else {
+                client_runtime.set_remote_player_tile_position(
+                    key,
+                    update.target_x,
+                    update.target_y,
+                );
+            }
         }
-        MovementUpdate::Position(update) if local_key == u32::from(update.key) => {
-            client_runtime.set_local_player_tile_position(update.position_x, update.position_y);
+        MovementUpdate::Position(update) => {
+            let key = u32::from(update.key);
+            if local_key == Some(key) || (local_key.is_none() && key == 0) {
+                client_runtime.set_local_player_tile_position(update.position_x, update.position_y);
+            } else {
+                client_runtime.set_remote_player_tile_position(
+                    key,
+                    update.position_x,
+                    update.position_y,
+                );
+            }
         }
-        _ => {}
     }
 }
 
@@ -1291,6 +1311,7 @@ fn apply_logout(
     bootstrap.clear_social_rosters();
     mail.reset();
     clear_party_state(client_runtime);
+    client_runtime.clear_remote_players();
     bootstrap.clear_gens_ranking_snapshot();
 
     match kind {
@@ -4674,6 +4695,9 @@ mod tests {
         let mut ui_shell = UiShellState::default();
         let mut client_runtime = ClientRuntime::new();
 
+        client_runtime.set_remote_player_tile_position(42, 7, 8);
+        assert_eq!(client_runtime.world_entities().remote_players().len(), 1);
+
         apply_bootstrap_signal(
             BootstrapSignal::FriendRoster(friend_roster.clone()),
             &mut bootstrap,
@@ -4734,6 +4758,15 @@ mod tests {
         assert!(bootstrap.guild_roster_snapshot().is_none());
         assert!(bootstrap.guild_union_roster_snapshot().is_none());
         assert_eq!(client_runtime.party().party_number(), 0);
+        assert!(client_runtime.world_entities().remote_players().is_empty());
+        assert!(client_runtime
+            .render_entities()
+            .catalog()
+            .remote_players
+            .is_empty());
+
+        client_runtime.set_remote_player_tile_position(84, 9, 10);
+        assert_eq!(client_runtime.world_entities().remote_players().len(), 1);
 
         apply_bootstrap_signal(
             BootstrapSignal::FriendRoster(friend_roster),
@@ -4790,6 +4823,12 @@ mod tests {
         assert!(bootstrap.guild_roster_snapshot().is_none());
         assert!(bootstrap.guild_union_roster_snapshot().is_none());
         assert_eq!(client_runtime.party().party_number(), 0);
+        assert!(client_runtime.world_entities().remote_players().is_empty());
+        assert!(client_runtime
+            .render_entities()
+            .catalog()
+            .remote_players
+            .is_empty());
     }
 
     #[test]
@@ -5494,7 +5533,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fake_server_applies_authoritative_movement_updates() {
+    async fn fake_server_applies_remote_and_local_movement_updates() {
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -5513,6 +5552,8 @@ mod tests {
         .unwrap();
         let join_map = join_map_packet(1);
         let movement_request = walk_request(0, 0, 0, 0, []).unwrap();
+        let remote_key = 0x0042;
+        let remote_commit = encode_move_position_update(remote_key, 7, 8).unwrap();
         let movement_commit = encode_move_position_update(0, 3, 4).unwrap();
         let (server, game_server) = spawn_bootstrap_handshake_servers(
             ConnectionScript::new()
@@ -5522,7 +5563,10 @@ mod tests {
                 .expect_packet(select_character(b"Astra").unwrap())
                 .send_packet(join_map.clone())
                 .expect_packet(movement_request.clone())
+                .send_packet(remote_commit.clone())
+                .delay(Duration::from_millis(100))
                 .send_packet(movement_commit.clone())
+                .delay(Duration::from_millis(100))
                 .close(),
         )
         .await;
@@ -5549,6 +5593,7 @@ mod tests {
 
         assert_eq!(ui_shell.current(), UiRoute::World);
         assert!(bootstrap.queue_movement_request(MovementCommand::new(0, 0, 0, 0, [])));
+        let expected_remote_position = mu_gameplay::world_position_from_tile(7, 8);
 
         for _ in 0..100 {
             let signals = bootstrap.drain_signals();
@@ -5562,12 +5607,18 @@ mod tests {
                 );
             }
 
-            if client_runtime
+            let local_ready = client_runtime
                 .world_entities()
                 .local_player()
                 .map(|player| player.pose.position == expected_position)
-                .unwrap_or(false)
-            {
+                .unwrap_or(false);
+            let remote_ready = client_runtime
+                .world_entities()
+                .remote_player(remote_key.into())
+                .map(|player| player.pose.position == expected_remote_position)
+                .unwrap_or(false);
+
+            if local_ready && remote_ready {
                 break;
             }
 
@@ -5593,6 +5644,23 @@ mod tests {
                 .pose
                 .position,
             expected_position
+        );
+        assert_eq!(
+            client_runtime
+                .world_entities()
+                .remote_player(remote_key.into())
+                .map(|player| player.pose.position),
+            Some(expected_remote_position)
+        );
+        assert_eq!(
+            client_runtime
+                .render_entities()
+                .catalog()
+                .remote_players
+                .iter()
+                .find(|player| player.key == remote_key.to_string())
+                .map(|player| player.pose.position),
+            Some(expected_remote_position)
         );
 
         server.finish().await.unwrap();

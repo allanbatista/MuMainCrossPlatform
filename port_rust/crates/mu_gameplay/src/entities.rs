@@ -256,6 +256,26 @@ impl WorldEntitiesManager {
         &self.remote_players
     }
 
+    pub fn remote_player(&self, key: u32) -> Option<&WorldPlayerSpawn> {
+        self.remote_players
+            .iter()
+            .find(|remote_player| remote_player.key == key)
+    }
+
+    pub fn remote_player_mut(&mut self, key: u32) -> Option<&mut WorldPlayerSpawn> {
+        self.remote_players
+            .iter_mut()
+            .find(|remote_player| remote_player.key == key)
+    }
+
+    pub fn upsert_remote_player(&mut self, remote_player: WorldPlayerSpawn) {
+        if let Some(existing_remote_player) = self.remote_player_mut(remote_player.key) {
+            *existing_remote_player = remote_player;
+        } else {
+            self.remote_players.push(remote_player);
+        }
+    }
+
     pub fn objects(&self) -> &[WorldObjectSpawn] {
         &self.objects
     }
@@ -519,6 +539,35 @@ mod tests {
             manager.snapshot(),
             "state=ready|world_summary=none|local=role=local|label=Hero|key=17|model=data/character/dark_knight.glb|pose=position=1,2,3|rotation=0,90,0|scale=1,1,1|remote_count=1|remote=[role=remote|label=Ally|key=23|model=data/character/wizard.glb|pose=position=4,5,6|rotation=0,180,0|scale=1,1,1]|object_count=3|objects=[id=obj_00000|label=stone_01|type=30|model=data/object_1/stone_01.glb|pose=position=1397.105,44.23,682.558|rotation=0,0,-60|scale=0.94,0.94,0.94;id=obj_00001|label=stone_01|type=30|model=data/object_1/stone_01.glb|pose=position=784.989,-20.855,643.003|rotation=0,0,150|scale=1,1,1;...]"
         );
+    }
+
+    #[test]
+    fn world_entities_manager_upserts_remote_players_by_key() {
+        let mut manager = WorldEntitiesManager::new();
+        manager.upsert_remote_player(WorldPlayerSpawn::new(
+            WorldPlayerRole::Remote,
+            "Ally",
+            23,
+            "data/character/wizard.glb",
+            WorldEntityPose::new([4.0, 5.0, 6.0], [0.0, 180.0, 0.0], [1.0, 1.0, 1.0]),
+        ));
+        manager.upsert_remote_player(WorldPlayerSpawn::new(
+            WorldPlayerRole::Remote,
+            "Scout",
+            23,
+            "data/character/dark_knight.glb",
+            WorldEntityPose::new([7.0, 8.0, 9.0], [0.0, 90.0, 0.0], [1.0, 1.0, 1.0]),
+        ));
+
+        assert_eq!(manager.remote_players().len(), 1);
+        let remote_player = manager
+            .remote_player(23)
+            .expect("remote player should exist");
+        assert_eq!(remote_player.label, "Scout");
+        assert_eq!(remote_player.model, "data/character/dark_knight.glb");
+        assert_eq!(remote_player.pose.position, [7.0, 8.0, 9.0]);
+        assert!(manager.snapshot().contains("remote_count=1"));
+        assert!(manager.snapshot().contains("label=Scout"));
     }
 
     #[test]

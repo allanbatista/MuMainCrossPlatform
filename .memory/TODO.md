@@ -64,3 +64,10 @@ parity is still required.
 
 `party-invite` is wired end-to-end now, but the incoming invite response and
 party-kick flows still need their own slice if full party parity is required.
+
+# [medium] Remote marker e2e handoff
+
+The live remote-player movement slice is implemented and validated locally,
+but the requested `e2e-validator` handoff was not run in this session because
+that tool is unavailable here. The next step is to execute the visible-world
+handoff when the validator is available.
