@@ -187,6 +187,9 @@ sessao de jogo completa.
 - A camada de GameShop esta documentada em `docs/game-shop.md` e cobre o
   runtime de catalog/details/storage/empty/error, a seguranca transacional, a
   UI snapshot do jogo e o shell visivel controlado por `game-shop`.
+- A camada de Marketplace/player shop esta documentada em
+  `docs/trade-player-shop-mail.md` e cobre o runtime da loja pessoal, a UI
+  snapshot do player shop e o shell visivel controlado por `marketplace`.
 - A camada de MU Helper esta documentada em `docs/mu-helper.md` e cobre o
   modelo de configuracao, o runtime de execucao, os estados ativo/inativo/
   bloqueado e a shell visivel controlada por `mu-helper`.
@@ -229,7 +232,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|skill-targeted|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  marketplace|trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|skill-targeted|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 

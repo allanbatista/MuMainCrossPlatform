@@ -20,6 +20,7 @@ pub mod logging;
 pub(crate) mod mu_helper_shell;
 pub(crate) mod npc_shop_shell;
 pub(crate) mod party_shell;
+pub(crate) mod player_shop_shell;
 pub(crate) mod quests_shell;
 mod runtime;
 pub mod session_state;

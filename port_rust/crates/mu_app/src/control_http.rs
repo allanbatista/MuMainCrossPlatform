@@ -29,6 +29,7 @@ pub enum ControlCommand {
     Shop,
     GameShop,
     Trade,
+    Marketplace,
     Party,
     Gate,
     Siege,
@@ -97,6 +98,7 @@ impl ControlCommand {
             Self::Shop => "shop",
             Self::GameShop => "game-shop",
             Self::Trade => "trade",
+            Self::Marketplace => "marketplace",
             Self::Party => "party",
             Self::Gate => "gate",
             Self::Siege => "siege",
@@ -169,6 +171,7 @@ impl ControlCommand {
             "shop" => Some(Self::Shop),
             "game-shop" | "game_shop" => Some(Self::GameShop),
             "trade" => Some(Self::Trade),
+            "marketplace" | "player-shop" | "player_shop" => Some(Self::Marketplace),
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
             "siege" => Some(Self::Siege),
@@ -411,6 +414,12 @@ impl ControlSnapshot {
             ControlCommand::Trade => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Trade;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Marketplace => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Marketplace;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -1864,6 +1873,19 @@ mod tests {
         );
         assert_eq!(ControlCommand::GameShop.as_str(), "game-shop");
         assert_eq!(
+            ControlCommand::parse("marketplace"),
+            Some(ControlCommand::Marketplace)
+        );
+        assert_eq!(
+            ControlCommand::parse("player-shop"),
+            Some(ControlCommand::Marketplace)
+        );
+        assert_eq!(
+            ControlCommand::parse("player_shop"),
+            Some(ControlCommand::Marketplace)
+        );
+        assert_eq!(ControlCommand::Marketplace.as_str(), "marketplace");
+        assert_eq!(
             ControlCommand::parse("mu-helper"),
             Some(ControlCommand::MuHelper)
         );
@@ -2412,6 +2434,29 @@ mod tests {
     }
 
     #[test]
+    fn control_http_route_accepts_marketplace_command() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=marketplace".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::Marketplace));
+        assert_eq!(snapshot.ui_route, UiRoute::Marketplace);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+    }
+
+    #[test]
     fn duel_channel_join_requests_require_a_payload() {
         let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
         let address = handle.address();
@@ -2581,6 +2626,11 @@ mod tests {
         snapshot.apply_command(ControlCommand::Trade);
 
         assert_eq!(snapshot.ui_route, UiRoute::Trade);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+
+        snapshot.apply_command(ControlCommand::Marketplace);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Marketplace);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
 
         snapshot.apply_command(ControlCommand::Party);

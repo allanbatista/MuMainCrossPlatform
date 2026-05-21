@@ -7,14 +7,14 @@ Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
 jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
 character select/world da Bevy runtime e a shell visual correspondente; no
 modo `--headless`, continua sendo um smoke server deterministico. As rotas
-`friend`, `guild`, `siege`, `duel`, `events` e `gens` tambem espelham as
-shells visiveis, e `friend` e `guild` aceitam comandos de subview para testar
-as telas internas. `friend-inbox` tambem dispara uma requisicao de letter list
-uma vez por ativacao logada antes de sobrepor as letters live quando elas
-chegam. `duel-start`, `duel-stop`, `duel-channel-join` e `duel-channel-quit`
-tambem alimentam o bridge de pacotes de duel quando a sessao viva esta
-disponivel. `skill-targeted` alimenta o bridge do pacote de targeted skill
-na mesma sessao viva.
+`friend`, `guild`, `siege`, `duel`, `events`, `gens` e `marketplace`
+tambem espelham as shells visiveis, e `friend` e `guild` aceitam comandos de
+subview para testar as telas internas. `friend-inbox` tambem dispara uma
+requisicao de letter list uma vez por ativacao logada antes de sobrepor as
+letters live quando elas chegam. `duel-start`, `duel-stop`,
+`duel-channel-join` e `duel-channel-quit` tambem alimentam o bridge de
+pacotes de duel quando a sessao viva esta disponivel. `skill-targeted`
+alimenta o bridge do pacote de targeted skill na mesma sessao viva.
 `party` tambem espelha a shell visivel e pede uma vez a party list live por
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
@@ -108,6 +108,7 @@ Exemplo:
 - `npc`
 - `shop`
 - `game-shop`
+- `marketplace`
 - `trade`
 - `party`
 - `gate`
@@ -159,7 +160,7 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `character-create`,
 `create-character`, `loading`, `world`, `chat`, `npc`, `select-character`,
-`shop`, `game-shop`, `trade`, `party`, `gate`, `siege`, `siege-inactive`,
+`shop`, `game-shop`, `marketplace`, `trade`, `party`, `gate`, `siege`, `siege-inactive`,
 `siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,

@@ -86,6 +86,9 @@ in the local config file instead of being typed every time.
   from the runtime or the local control HTTP smoke path.
 - The GameShop route now opens a visible Bevy shell that can be driven from
   the runtime or the local control HTTP smoke path with `game-shop`.
+- The Marketplace/player shop route now opens a visible Bevy shell that can
+  be driven from the runtime or the local control HTTP smoke path with
+  `marketplace`.
 - The chat route now opens a visible Bevy shell with a draft line; when the
   session is logged in, typing printable text and pressing Enter sends a
   public chat packet from the local player.
@@ -157,7 +160,7 @@ in the local config file instead of being typed every time.
 - The MU Helper route now opens a visible Bevy shell that mirrors the helper
   runtime snapshot and can be driven from the local control HTTP smoke path
   with `mu-helper`.
-- The world, HUD, chat, inventory, NPC/shop, trade, party, gate, events, Gens, quests, and GameShop
+- The world, HUD, chat, inventory, NPC/shop, trade, marketplace, party, gate, events, Gens, quests, and GameShop
   surfaces documented elsewhere in this repo still remain a staged port, not a
   finished parity pass.
 - Safe error screens when login, connection, or asset validation fails.
@@ -192,6 +195,8 @@ in the local config file instead of being typed every time.
   shells for local QA smoke.
 - `POST /command?name=game-shop` can step into the visible GameShop route
   shell for local QA smoke.
+- `POST /command?name=marketplace` can step into the visible Marketplace
+  route shell for local QA smoke.
 - `POST /command?name=trade` can step into the visible trade route shell for
   local QA smoke.
 - `POST /command?name=friend` can step into the visible friend route shell

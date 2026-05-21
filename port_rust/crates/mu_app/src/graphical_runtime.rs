@@ -17,8 +17,9 @@ use mu_gameplay::presentation_for_skill_id;
 use mu_gameplay::{
     DuelManager, DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin,
     GameShopPlugin, GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
-    MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultManager,
-    VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, PlayerShopPlugin, QuestPlugin, TradePlugin,
+    VaultManager, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin,
+    WorldPlugin,
 };
 use mu_render::{
     RenderAssetsPlugin, RenderEntitiesPlugin, SkillParticlePlugin, SkillParticleQueue,
@@ -42,6 +43,7 @@ use crate::inventory_shell::InventoryShellPlugin;
 use crate::mu_helper_shell::MuHelperShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
 use crate::party_shell::PartyShellPlugin;
+use crate::player_shop_shell::PlayerShopShellPlugin;
 use crate::quests_shell::QuestsShellPlugin;
 use crate::siege_shell::SiegeShellPlugin;
 use crate::trade_shell::TradeShellPlugin;
@@ -172,6 +174,7 @@ fn configure_project_plugins(
             InventoryPlugin,
             EquipmentPlugin,
             VaultPlugin,
+            PlayerShopPlugin,
             GameShopPlugin,
             MailPlugin,
             DuelPlugin,
@@ -197,6 +200,7 @@ fn configure_project_plugins(
             EventsShellPlugin,
             GensShellPlugin,
             GameShopShellPlugin,
+            PlayerShopShellPlugin,
             TradeShellPlugin,
             MuHelperShellPlugin,
             BootstrapRuntimePlugin,
