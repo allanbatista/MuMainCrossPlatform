@@ -6,7 +6,10 @@ use std::thread::{self, JoinHandle};
 
 use crate::{AppState, SessionPhase};
 use bevy::prelude::Resource;
-use mu_ui::{FriendScreenState, GuildScreenState, UiRoute, CHARACTER_CREATE_NAME_MIN_LENGTH};
+use mu_ui::{
+    FriendScreenState, GuildScreenState, SiegeScreenState, UiRoute,
+    CHARACTER_CREATE_NAME_MIN_LENGTH,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlCommand {
@@ -27,6 +30,10 @@ pub enum ControlCommand {
     Trade,
     Party,
     Gate,
+    Siege,
+    SiegeInactive,
+    SiegeSoldier,
+    SiegeCommander,
     Events,
     Gens,
     Friend,
@@ -85,6 +92,10 @@ impl ControlCommand {
             Self::Trade => "trade",
             Self::Party => "party",
             Self::Gate => "gate",
+            Self::Siege => "siege",
+            Self::SiegeInactive => "siege-inactive",
+            Self::SiegeSoldier => "siege-soldier",
+            Self::SiegeCommander => "siege-commander",
             Self::Events => "events",
             Self::Gens => "gens",
             Self::Friend => "friend",
@@ -147,6 +158,10 @@ impl ControlCommand {
             "trade" => Some(Self::Trade),
             "party" => Some(Self::Party),
             "gate" => Some(Self::Gate),
+            "siege" => Some(Self::Siege),
+            "siege-inactive" | "siege_inactive" => Some(Self::SiegeInactive),
+            "siege-soldier" | "siege_soldier" => Some(Self::SiegeSoldier),
+            "siege-commander" | "siege_commander" => Some(Self::SiegeCommander),
             "events" => Some(Self::Events),
             "gens" => Some(Self::Gens),
             "friend" => Some(Self::Friend),
@@ -215,6 +230,7 @@ pub struct ControlSnapshot {
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
     pub guild_union_name: Option<String>,
+    pub siege_screen_state: Option<SiegeScreenState>,
     pub inventory_use_slot: Option<u8>,
     pub inventory_use_target: Option<u8>,
     pub inventory_use_add_points: Option<bool>,
@@ -243,6 +259,7 @@ impl ControlSnapshot {
             guild_assignment_type: None,
             guild_security_code: None,
             guild_union_name: None,
+            siege_screen_state: None,
             inventory_use_slot: None,
             inventory_use_target: None,
             inventory_use_add_points: None,
@@ -260,6 +277,16 @@ impl ControlSnapshot {
     pub fn apply_command(&mut self, command: ControlCommand) -> bool {
         self.last_command = Some(command);
         self.command_count = self.command_count.saturating_add(1);
+
+        if !matches!(
+            command,
+            ControlCommand::Siege
+                | ControlCommand::SiegeInactive
+                | ControlCommand::SiegeSoldier
+                | ControlCommand::SiegeCommander
+        ) {
+            self.siege_screen_state = None;
+        }
 
         match command {
             ControlCommand::Boot => {
@@ -358,6 +385,34 @@ impl ControlSnapshot {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Gate;
                 self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::Siege => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Siege;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.siege_screen_state = Some(SiegeScreenState::Observer);
+                false
+            }
+            ControlCommand::SiegeInactive => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Siege;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.siege_screen_state = Some(SiegeScreenState::Inactive);
+                false
+            }
+            ControlCommand::SiegeSoldier => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Siege;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.siege_screen_state = Some(SiegeScreenState::Soldier);
+                false
+            }
+            ControlCommand::SiegeCommander => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Siege;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.siege_screen_state = Some(SiegeScreenState::Commander);
                 false
             }
             ControlCommand::Events => {
@@ -633,6 +688,10 @@ impl ControlSnapshot {
             .guild_screen_state
             .map(|state| format!("\"{}\"", state.as_str()))
             .unwrap_or_else(|| "null".to_string());
+        let siege_screen_state = self
+            .siege_screen_state
+            .map(|state| format!("\"{}\"", state.as_str()))
+            .unwrap_or_else(|| "null".to_string());
         let vault_money_amount = self
             .vault_money_amount
             .map(|value| value.to_string())
@@ -647,7 +706,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -667,6 +726,7 @@ impl ControlSnapshot {
             inventory_unequip_slot,
             friend_screen_state,
             guild_screen_state,
+            siege_screen_state,
             vault_money_amount,
             inventory_move_from_slot,
             inventory_move_to_slot,
@@ -1492,7 +1552,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -1685,6 +1745,35 @@ mod tests {
         assert_eq!(ControlCommand::Events.as_str(), "events");
         assert_eq!(ControlCommand::parse("gens"), Some(ControlCommand::Gens));
         assert_eq!(ControlCommand::Gens.as_str(), "gens");
+        assert_eq!(ControlCommand::parse("siege"), Some(ControlCommand::Siege));
+        assert_eq!(ControlCommand::Siege.as_str(), "siege");
+        assert_eq!(
+            ControlCommand::parse("siege-inactive"),
+            Some(ControlCommand::SiegeInactive)
+        );
+        assert_eq!(
+            ControlCommand::parse("siege_inactive"),
+            Some(ControlCommand::SiegeInactive)
+        );
+        assert_eq!(ControlCommand::SiegeInactive.as_str(), "siege-inactive");
+        assert_eq!(
+            ControlCommand::parse("siege-soldier"),
+            Some(ControlCommand::SiegeSoldier)
+        );
+        assert_eq!(
+            ControlCommand::parse("siege_soldier"),
+            Some(ControlCommand::SiegeSoldier)
+        );
+        assert_eq!(ControlCommand::SiegeSoldier.as_str(), "siege-soldier");
+        assert_eq!(
+            ControlCommand::parse("siege-commander"),
+            Some(ControlCommand::SiegeCommander)
+        );
+        assert_eq!(
+            ControlCommand::parse("siege_commander"),
+            Some(ControlCommand::SiegeCommander)
+        );
+        assert_eq!(ControlCommand::SiegeCommander.as_str(), "siege-commander");
         assert_eq!(
             ControlCommand::parse("friend-add"),
             Some(ControlCommand::FriendAdd)
@@ -1795,6 +1884,40 @@ mod tests {
 
         assert_eq!(snapshot.ui_route, UiRoute::Guild);
         assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_siege_view_overrides() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.apply_command(ControlCommand::Siege);
+        assert_eq!(snapshot.ui_route, UiRoute::Siege);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(
+            snapshot.siege_screen_state,
+            Some(mu_ui::SiegeScreenState::Observer)
+        );
+
+        snapshot.apply_command(ControlCommand::SiegeInactive);
+        assert_eq!(
+            snapshot.siege_screen_state,
+            Some(mu_ui::SiegeScreenState::Inactive)
+        );
+
+        snapshot.apply_command(ControlCommand::SiegeSoldier);
+        assert_eq!(
+            snapshot.siege_screen_state,
+            Some(mu_ui::SiegeScreenState::Soldier)
+        );
+
+        snapshot.apply_command(ControlCommand::SiegeCommander);
+        assert_eq!(
+            snapshot.siege_screen_state,
+            Some(mu_ui::SiegeScreenState::Commander)
+        );
+
+        snapshot.apply_command(ControlCommand::Chat);
+        assert_eq!(snapshot.siege_screen_state, None);
     }
 
     #[test]
@@ -2108,6 +2231,14 @@ mod tests {
 
         let (_, body) = send_request(
             address,
+            "POST /command?name=siege HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(body.contains(r#""ui_route":"siege""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
+        assert!(body.contains(r#""siege_screen_state":"observer""#));
+
+        let (_, body) = send_request(
+            address,
             "POST /command?name=events HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
         );
         assert!(body.contains(r#""ui_route":"events""#));
@@ -2164,7 +2295,7 @@ mod tests {
 
         let final_snapshot = handle.join().unwrap();
         assert_eq!(final_snapshot.state, AppState::Exit);
-        assert_eq!(final_snapshot.command_count, 25);
+        assert_eq!(final_snapshot.command_count, 26);
     }
 
     #[test]

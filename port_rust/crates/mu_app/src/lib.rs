@@ -23,6 +23,7 @@ pub(crate) mod party_shell;
 pub(crate) mod quests_shell;
 mod runtime;
 pub mod session_state;
+pub(crate) mod siege_shell;
 pub mod state;
 pub(crate) mod trade_shell;
 pub(crate) mod world_hud;

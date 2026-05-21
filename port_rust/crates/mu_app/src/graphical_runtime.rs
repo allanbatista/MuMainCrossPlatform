@@ -15,9 +15,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
     DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin, GameShopPlugin,
-    GensPlugin, InventoryPlugin, MailPlugin, MovementPlugin, MuHelperRuntimePlugin, NpcPlugin,
-    PartyPlugin, QuestPlugin, TradePlugin, VaultManager, VaultPlugin, WorldEntitiesPlugin,
-    WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
+    GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
+    MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultManager,
+    VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
@@ -39,6 +39,7 @@ use crate::mu_helper_shell::MuHelperShellPlugin;
 use crate::npc_shop_shell::NpcShopShellPlugin;
 use crate::party_shell::PartyShellPlugin;
 use crate::quests_shell::QuestsShellPlugin;
+use crate::siege_shell::SiegeShellPlugin;
 use crate::trade_shell::TradeShellPlugin;
 use crate::world_hud::WorldHudPlugin;
 use crate::world_motion::WorldMotionPlugin;
@@ -139,7 +140,10 @@ fn configure_project_plugins(
             NpcPlugin,
             EventPlugin,
             GensPlugin,
+            GuildCachePlugin,
             QuestPlugin,
+        ))
+        .add_plugins((
             InventoryPlugin,
             EquipmentPlugin,
             VaultPlugin,
@@ -163,6 +167,7 @@ fn configure_project_plugins(
             GateShellPlugin,
             FriendShellPlugin,
             GuildShellPlugin,
+            SiegeShellPlugin,
             DuelShellPlugin,
             EventsShellPlugin,
             GensShellPlugin,

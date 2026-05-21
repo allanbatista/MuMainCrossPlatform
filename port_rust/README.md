@@ -151,7 +151,9 @@ sessao de jogo completa.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
   snapshots de party info/list e o consumo do `PartyManager`.
 - A camada de siege warfare esta documentada em `docs/siege-warfare.md` e
-  cobre observer, soldier e commander na janela de castle siege.
+  cobre observer, soldier e commander na janela de castle siege; o runtime
+  grafico tambem expõe a shell visivel acionavel por `siege`,
+  `siege-inactive`, `siege-soldier` e `siege-commander` no smoke local.
 - A camada de world entities usa fixtures para local/remote players, objetos
   estaticos, NPCs e monstros; o runtime de render consome os mesmos managers
   para manter a superficie de world/screenshot consistente.
@@ -270,7 +272,7 @@ Veja tambem:
 - `docs/party-ui.md` para as snapshots de party info/list e o consumo do
   `PartyManager`.
 - `docs/siege-warfare.md` para a snapshot de siege warfare e os modos
-  observer, soldier e commander.
+  observer, soldier e commander, mais a shell visivel de castle siege.
 - `docs/quests-events-duel-gens.md` para o estado de quests, events, duel e
   gens.
 - `docs/game-shop.md` para o runtime, a seguranca transacional e as snapshots

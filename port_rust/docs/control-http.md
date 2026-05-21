@@ -7,8 +7,9 @@ Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
 jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
 character select/world da Bevy runtime e a shell visual correspondente; no
 modo `--headless`, continua sendo um smoke server deterministico. As rotas
-`friend`, `guild`, `duel`, `events` e `gens` tambem espelham as shells visiveis, e
-`friend` e `guild` aceitam comandos de subview para testar as telas internas.
+`friend`, `guild`, `siege`, `duel`, `events` e `gens` tambem espelham as
+shells visiveis, e `friend` e `guild` aceitam comandos de subview para testar
+as telas internas.
 Quando a sessao responde com as listas sociais, o runtime sobrepoe o
 roster/score/roles decodificados no shell correspondente ate o logout ou
 disconnect.
@@ -61,6 +62,7 @@ e o servidor continua disponivel para inspeção local.
 - `inventory_unequip_slot`
 - `friend_screen_state`
 - `guild_screen_state`
+- `siege_screen_state`
 - `vault_money_amount`
 - `inventory_move_from_slot`
 - `inventory_move_to_slot`
@@ -69,7 +71,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -94,6 +96,10 @@ Exemplo:
 - `trade`
 - `party`
 - `gate`
+- `siege`
+- `siege-inactive`
+- `siege-soldier`
+- `siege-commander`
 - `events`
 - `gens`
 - `friend`
@@ -132,7 +138,8 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `character-create`,
 `create-character`, `loading`, `world`, `chat`, `npc`, `select-character`,
-`shop`, `game-shop`, `trade`, `party`, `gate`, `events`, `gens`, `friend`,
+`shop`, `game-shop`, `trade`, `party`, `gate`, `siege`, `siege-inactive`,
+`siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
 `guild-error`, `guild-role-assign`, `guild-fire`, `guild-ban-union`, `duel`, `quests`,
@@ -157,6 +164,10 @@ abre a shell visivel de Gens com o snapshot existente do GensManager e,
 quando a sessao esta logada, pede uma vez o ranking live, hidrata o titulo
 local da classe Gens pela tabela legacy de 14 ranks e reaplica o snapshot
 decodificado quando a resposta chega.
+`siege` abre a shell visivel de castle siege com o snapshot existente do
+SiegeScreen; `siege-inactive`, `siege-soldier` e `siege-commander` mantem a
+mesma shell e alternam o modo do snapshot para `Inactive`, `Soldier` e
+`Commander`.
 `friend-roster`, `friend-inbox`, `friend-compose` e `friend-chat-rooms`
 selecionam as subvisoes da janela de friend; `friend-add` e
 `friend-delete` enviam as requisicoes de add/delete do friend atraves da

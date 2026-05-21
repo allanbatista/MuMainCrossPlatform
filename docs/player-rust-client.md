@@ -110,6 +110,9 @@ in the local config file instead of being typed every time.
 - The guild control plane also accepts `guild-ban-union` commands with a
   target guild name so QA can drive the existing alliance-removal packet
   helper through the live session.
+- The siege route now opens a visible Bevy shell that mirrors the siege
+  snapshot and can be driven from the local control HTTP smoke path with
+  `siege`, `siege-inactive`, `siege-soldier`, and `siege-commander`.
 - The inventory control plane also accepts `vault-deposit`,
   `vault-withdraw`, `inventory-use`, `inventory-equip`, `inventory-unequip`,
   and `inventory-move` commands with the matching slot or amount payloads so
@@ -218,6 +221,9 @@ in the local config file instead of being typed every time.
   local QA smoke.
 - `POST /command?name=gate` can step into the visible gate route shell for
   local QA smoke.
+- `POST /command?name=siege|siege-inactive|siege-soldier|siege-commander`
+  can step into the visible siege route shell for local QA smoke and switch
+  the siege snapshot mode.
 - `POST /command?name=quests` can step into the visible quests route shell
   for local QA smoke.
 - `POST /command?name=mu-helper` can step into the visible MU Helper route
