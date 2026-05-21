@@ -72,6 +72,13 @@ in the local config file instead of being typed every time.
   control HTTP commands with an amount in the body or `amount=` and
   `inventory-move` with `from_slot=`/`to_slot=` so QA can drive the live
   vault transfer and item move packet helpers.
+- The inventory shell also accepts `inventory-use`, `inventory-equip`, and
+  `inventory-unequip`. `inventory-use` queues the consume packet from an
+  inventory slot with `slot=` or `item_slot=`, optional `target=`, and
+  optional `add_points=`/`fruit=`; `inventory-equip` uses an inventory slot
+  and moves the item into equipment locally before queuing the move packet;
+  `inventory-unequip` uses an equipment slot and moves the item back into the
+  inventory locally before queuing the move packet.
 - The NPC and shop routes now open visible Bevy shells that can be driven
   from the runtime or the local control HTTP smoke path.
 - The GameShop route now opens a visible Bevy shell that can be driven from
@@ -97,11 +104,11 @@ in the local config file instead of being typed every time.
 - The guild control plane also accepts `guild-join` commands with a guild
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
-- The inventory control plane also accepts `vault-deposit` and
-  `vault-withdraw` commands with an amount in the body or `amount=` and
-  `inventory-move` commands with `from_slot=`/`to_slot=` so QA can drive the
-  existing vault money transfer and item move packet helpers through the live
-  session.
+- The inventory control plane also accepts `vault-deposit`,
+  `vault-withdraw`, `inventory-use`, `inventory-equip`, `inventory-unequip`,
+  and `inventory-move` commands with the matching slot or amount payloads so
+  QA can drive the existing vault money transfer, item consume, and item move
+  packet helpers through the live session.
 - Opening `guild-union` in a logged-in session also sends the alliance list
   request once per activation before keeping the shell visible.
 - When the friend or guild route opens while logged in, the client now sends
@@ -185,6 +192,10 @@ in the local config file instead of being typed every time.
 - `POST /command?name=inventory-move` queues the inventory move packet
   through the live session. Pass the source and destination linear slots in
   `from_slot=` and `to_slot=`.
+- `POST /command?name=inventory-use` queues the consume-item packet through
+  the live session. Pass the inventory slot in `slot=` or `item_slot=` and
+  optionally override `target=` and `add_points=`/`fruit=`; `inventory-equip`
+  uses an inventory slot and `inventory-unequip` uses an equipment slot.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=events` can step into the visible events route shell for

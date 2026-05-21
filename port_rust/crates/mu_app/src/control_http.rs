@@ -44,6 +44,9 @@ pub enum ControlCommand {
     GuildNoGuild,
     GuildError,
     GuildRoleAssign,
+    InventoryUse,
+    InventoryEquip,
+    InventoryUnequip,
     InventoryMove,
     VaultDeposit,
     VaultWithdraw,
@@ -97,6 +100,9 @@ impl ControlCommand {
             Self::GuildNoGuild => "guild-no-guild",
             Self::GuildError => "guild-error",
             Self::GuildRoleAssign => "guild-role-assign",
+            Self::InventoryUse => "inventory-use",
+            Self::InventoryEquip => "inventory-equip",
+            Self::InventoryUnequip => "inventory-unequip",
             Self::InventoryMove => "inventory-move",
             Self::VaultDeposit => "vault-deposit",
             Self::VaultWithdraw => "vault-withdraw",
@@ -156,6 +162,13 @@ impl ControlCommand {
             "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
             "guild-error" | "guild_error" => Some(Self::GuildError),
             "guild-role-assign" | "guild_role_assign" => Some(Self::GuildRoleAssign),
+            "inventory-use" | "inventory_use" | "item-use" | "item_use" => Some(Self::InventoryUse),
+            "inventory-equip" | "inventory_equip" | "item-equip" | "item_equip" => {
+                Some(Self::InventoryEquip)
+            }
+            "inventory-unequip" | "inventory_unequip" | "item-unequip" | "item_unequip" => {
+                Some(Self::InventoryUnequip)
+            }
             "inventory-move" | "inventory_move" | "item-move" | "item_move" => {
                 Some(Self::InventoryMove)
             }
@@ -189,6 +202,11 @@ pub struct ControlSnapshot {
     pub guild_player_name: Option<String>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
+    pub inventory_use_slot: Option<u8>,
+    pub inventory_use_target: Option<u8>,
+    pub inventory_use_add_points: Option<bool>,
+    pub inventory_equip_slot: Option<u8>,
+    pub inventory_unequip_slot: Option<u8>,
     pub inventory_move_from_slot: Option<u8>,
     pub inventory_move_to_slot: Option<u8>,
     pub friend_screen_state: Option<FriendScreenState>,
@@ -210,6 +228,11 @@ impl ControlSnapshot {
             guild_player_name: None,
             guild_role: None,
             guild_assignment_type: None,
+            inventory_use_slot: None,
+            inventory_use_target: None,
+            inventory_use_add_points: None,
+            inventory_equip_slot: None,
+            inventory_unequip_slot: None,
             inventory_move_from_slot: None,
             inventory_move_to_slot: None,
             friend_screen_state: None,
@@ -432,7 +455,10 @@ impl ControlSnapshot {
                 self.guild_screen_state = Some(GuildScreenState::Members);
                 false
             }
-            ControlCommand::InventoryMove => {
+            ControlCommand::InventoryUse
+            | ControlCommand::InventoryEquip
+            | ControlCommand::InventoryUnequip
+            | ControlCommand::InventoryMove => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Inventory;
                 self.session_phase = SessionPhase::LoggedIn;
@@ -540,6 +566,26 @@ impl ControlSnapshot {
             .guild_assignment_type
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let inventory_use_slot = self
+            .inventory_use_slot
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let inventory_use_target = self
+            .inventory_use_target
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let inventory_use_add_points = self
+            .inventory_use_add_points
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let inventory_equip_slot = self
+            .inventory_equip_slot
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let inventory_unequip_slot = self
+            .inventory_unequip_slot
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let friend_screen_state = self
             .friend_screen_state
             .map(|state| format!("\"{}\"", state.as_str()))
@@ -562,7 +608,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -573,6 +619,11 @@ impl ControlSnapshot {
             guild_player_name,
             guild_role,
             guild_assignment_type,
+            inventory_use_slot,
+            inventory_use_target,
+            inventory_use_add_points,
+            inventory_equip_slot,
+            inventory_unequip_slot,
             friend_screen_state,
             guild_screen_state,
             vault_money_amount,
@@ -866,6 +917,45 @@ fn route_request(
                     snapshot.guild_assignment_type = Some(assignment_type);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::InventoryUse => {
+                    let Some((slot, target, add_points)) = inventory_use_from_request(&request)
+                    else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing inventory use payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.inventory_use_slot = Some(slot);
+                    snapshot.inventory_use_target = Some(target);
+                    snapshot.inventory_use_add_points = Some(add_points);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::InventoryEquip => {
+                    let Some(slot) = inventory_action_slot_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing inventory equip payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.inventory_equip_slot = Some(slot);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::InventoryUnequip => {
+                    let Some(slot) = inventory_action_slot_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing inventory unequip payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.inventory_unequip_slot = Some(slot);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::InventoryMove => {
                     let Some((from_slot, to_slot)) = inventory_move_from_request(&request) else {
                         return HttpResponse::json(
@@ -1147,6 +1237,40 @@ fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
     Some((from_slot, to_slot))
 }
 
+fn inventory_action_slot_from_request(request: &HttpRequest) -> Option<u8> {
+    query_value(&request.query, "slot")
+        .or_else(|| query_value(&request.query, "item_slot"))
+        .or_else(|| query_value(&request.body, "slot"))
+        .or_else(|| query_value(&request.body, "item_slot"))?
+        .trim()
+        .parse::<u8>()
+        .ok()
+}
+
+fn inventory_use_from_request(request: &HttpRequest) -> Option<(u8, u8, bool)> {
+    let slot = inventory_action_slot_from_request(request)?;
+
+    let target = match query_value(&request.query, "target")
+        .or_else(|| query_value(&request.body, "target"))
+    {
+        Some(value) => value.trim().parse::<u8>().ok()?,
+        None => 0,
+    };
+
+    let add_points = match query_value(&request.query, "add_points")
+        .or_else(|| query_value(&request.query, "add-points"))
+        .or_else(|| query_value(&request.query, "fruit"))
+        .or_else(|| query_value(&request.body, "add_points"))
+        .or_else(|| query_value(&request.body, "add-points"))
+        .or_else(|| query_value(&request.body, "fruit"))
+    {
+        Some(value) => parse_bool_value(value)?,
+        None => true,
+    };
+
+    Some((slot, target, add_points))
+}
+
 fn vault_money_amount_from_request(request: &HttpRequest) -> Option<u32> {
     query_value(&request.query, "amount")
         .or_else(|| query_value(&request.body, "amount"))
@@ -1162,6 +1286,14 @@ fn vault_money_amount_from_request(request: &HttpRequest) -> Option<u32> {
         })?
         .parse::<u32>()
         .ok()
+}
+
+fn parse_bool_value(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1245,7 +1377,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -1317,6 +1449,60 @@ mod tests {
         assert_eq!(
             ControlCommand::GuildRoleAssign.as_str(),
             "guild-role-assign"
+        );
+        assert_eq!(
+            ControlCommand::parse("inventory-use"),
+            Some(ControlCommand::InventoryUse)
+        );
+        assert_eq!(
+            ControlCommand::parse("inventory_use"),
+            Some(ControlCommand::InventoryUse)
+        );
+        assert_eq!(
+            ControlCommand::parse("item-use"),
+            Some(ControlCommand::InventoryUse)
+        );
+        assert_eq!(
+            ControlCommand::parse("item_use"),
+            Some(ControlCommand::InventoryUse)
+        );
+        assert_eq!(ControlCommand::InventoryUse.as_str(), "inventory-use");
+        assert_eq!(
+            ControlCommand::parse("inventory-equip"),
+            Some(ControlCommand::InventoryEquip)
+        );
+        assert_eq!(
+            ControlCommand::parse("inventory_equip"),
+            Some(ControlCommand::InventoryEquip)
+        );
+        assert_eq!(
+            ControlCommand::parse("item-equip"),
+            Some(ControlCommand::InventoryEquip)
+        );
+        assert_eq!(
+            ControlCommand::parse("item_equip"),
+            Some(ControlCommand::InventoryEquip)
+        );
+        assert_eq!(ControlCommand::InventoryEquip.as_str(), "inventory-equip");
+        assert_eq!(
+            ControlCommand::parse("inventory-unequip"),
+            Some(ControlCommand::InventoryUnequip)
+        );
+        assert_eq!(
+            ControlCommand::parse("inventory_unequip"),
+            Some(ControlCommand::InventoryUnequip)
+        );
+        assert_eq!(
+            ControlCommand::parse("item-unequip"),
+            Some(ControlCommand::InventoryUnequip)
+        );
+        assert_eq!(
+            ControlCommand::parse("item_unequip"),
+            Some(ControlCommand::InventoryUnequip)
+        );
+        assert_eq!(
+            ControlCommand::InventoryUnequip.as_str(),
+            "inventory-unequip"
         );
         assert_eq!(
             ControlCommand::parse("inventory-move"),
@@ -1478,6 +1664,27 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.inventory_move_from_slot, Some(0x12));
         assert_eq!(snapshot.inventory_move_to_slot, Some(0x34));
+    }
+
+    #[test]
+    fn snapshot_tracks_inventory_item_action_payloads() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.inventory_use_slot = Some(7);
+        snapshot.inventory_use_target = Some(3);
+        snapshot.inventory_use_add_points = Some(false);
+        snapshot.inventory_equip_slot = Some(9);
+        snapshot.inventory_unequip_slot = Some(2);
+        snapshot.apply_command(ControlCommand::InventoryUse);
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""inventory_use_slot":7"#));
+        assert!(body.contains(r#""inventory_use_target":3"#));
+        assert!(body.contains(r#""inventory_use_add_points":false"#));
+        assert!(body.contains(r#""inventory_equip_slot":9"#));
+        assert!(body.contains(r#""inventory_unequip_slot":2"#));
+        assert!(body.contains(r#""ui_route":"inventory""#));
+        assert!(body.contains(r#""session_phase":"logged-in""#));
     }
 
     #[test]
@@ -1911,6 +2118,92 @@ mod tests {
         assert!(state_body.contains(r#""inventory_move_from_slot":null"#));
         assert!(state_body.contains(r#""inventory_move_to_slot":null"#));
         assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn inventory_item_actions_require_payloads() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-use HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing inventory use payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-equip HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing inventory equip payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-unequip HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing inventory unequip payload""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""inventory_use_slot":null"#));
+        assert!(state_body.contains(r#""inventory_equip_slot":null"#));
+        assert!(state_body.contains(r#""inventory_unequip_slot":null"#));
+        assert!(state_body.contains(r#""command_count":0"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn inventory_item_actions_accept_payloads() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-use&item_slot=7&target=3&fruit=false HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""last_command":"inventory-use""#));
+        assert!(body.contains(r#""inventory_use_slot":7"#));
+        assert!(body.contains(r#""inventory_use_target":3"#));
+        assert!(body.contains(r#""inventory_use_add_points":false"#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-equip&slot=9 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""last_command":"inventory-equip""#));
+        assert!(body.contains(r#""inventory_equip_slot":9"#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=inventory-unequip&item_slot=2 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""last_command":"inventory-unequip""#));
+        assert!(body.contains(r#""inventory_unequip_slot":2"#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""state":"ready-for-login""#));
+        assert!(state_body.contains(r#""ui_route":"inventory""#));
+        assert!(state_body.contains(r#""session_phase":"logged-in""#));
+        assert!(state_body.contains(r#""inventory_use_slot":7"#));
+        assert!(state_body.contains(r#""inventory_equip_slot":9"#));
+        assert!(state_body.contains(r#""inventory_unequip_slot":2"#));
+        assert!(state_body.contains(r#""command_count":3"#));
 
         handle.request_shutdown();
         let _ = handle.join();

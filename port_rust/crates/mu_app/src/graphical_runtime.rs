@@ -14,10 +14,10 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    DuelPlugin, EquipmentPlugin, EventPlugin, GameShopPlugin, GensPlugin, InventoryPlugin,
-    MailPlugin, MovementPlugin, MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin,
-    TradePlugin, VaultManager, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin,
-    WorldNpcPlugin, WorldPlugin,
+    DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin, GameShopPlugin,
+    GensPlugin, InventoryPlugin, MailPlugin, MovementPlugin, MuHelperRuntimePlugin, NpcPlugin,
+    PartyPlugin, QuestPlugin, TradePlugin, VaultManager, VaultPlugin, WorldEntitiesPlugin,
+    WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{RenderAssetsPlugin, RenderEntitiesPlugin, TerrainPlugin};
 use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
@@ -250,6 +250,7 @@ fn sync_control_http_snapshot_to_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
     bootstrap: Option<ResMut<BootstrapRuntime>>,
     mut inventory: ResMut<InventoryManager>,
+    mut equipment: ResMut<EquipmentManager>,
     mut vault: ResMut<VaultManager>,
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
@@ -327,6 +328,34 @@ fn sync_control_http_snapshot_to_runtime(
                 snapshot.inventory_move_to_slot,
             );
         }
+        Some(ControlCommand::InventoryUse) => {
+            apply_inventory_use_command(
+                &mut bootstrap,
+                &inventory,
+                snapshot.last_command,
+                snapshot.inventory_use_slot,
+                snapshot.inventory_use_target,
+                snapshot.inventory_use_add_points,
+            );
+        }
+        Some(ControlCommand::InventoryEquip) => {
+            apply_inventory_equip_command(
+                &mut bootstrap,
+                &mut inventory,
+                &mut equipment,
+                snapshot.last_command,
+                snapshot.inventory_equip_slot,
+            );
+        }
+        Some(ControlCommand::InventoryUnequip) => {
+            apply_inventory_unequip_command(
+                &mut bootstrap,
+                &mut inventory,
+                &mut equipment,
+                snapshot.last_command,
+                snapshot.inventory_unequip_slot,
+            );
+        }
         Some(ControlCommand::VaultDeposit) | Some(ControlCommand::VaultWithdraw) => {
             apply_vault_money_transfer_command(
                 &mut bootstrap,
@@ -399,6 +428,114 @@ fn apply_inventory_move_command(
     }
 }
 
+fn apply_inventory_use_command(
+    bootstrap: &mut BootstrapRuntime,
+    inventory: &InventoryManager,
+    command: Option<ControlCommand>,
+    slot: Option<u8>,
+    target: Option<u8>,
+    add_points: Option<bool>,
+) {
+    let Some(ControlCommand::InventoryUse) = command else {
+        return;
+    };
+
+    let Some(slot) = slot else {
+        return;
+    };
+    let Some(inventory_slot) = InventorySlot::from_linear(usize::from(slot)) else {
+        return;
+    };
+
+    if inventory.item_at(inventory_slot).is_none() {
+        return;
+    }
+
+    let target = target.unwrap_or(0);
+    let add_points = add_points.unwrap_or(true);
+    let _ = bootstrap.queue_inventory_use_request(slot, target, add_points);
+}
+
+fn apply_inventory_equip_command(
+    bootstrap: &mut BootstrapRuntime,
+    inventory: &mut InventoryManager,
+    equipment: &mut EquipmentManager,
+    command: Option<ControlCommand>,
+    slot: Option<u8>,
+) {
+    let Some(ControlCommand::InventoryEquip) = command else {
+        return;
+    };
+
+    let Some(slot) = slot else {
+        return;
+    };
+    let Some(inventory_slot) = InventorySlot::from_linear(usize::from(slot)) else {
+        return;
+    };
+
+    let Some(item_snapshot) = inventory.item_at(inventory_slot).cloned() else {
+        return;
+    };
+    let Ok(equipment_slot) = equipment.resolve_slot(&item_snapshot) else {
+        return;
+    };
+
+    let item = match inventory.take(inventory_slot) {
+        Ok(item) => item,
+        Err(_) => return,
+    };
+
+    let rollback_item = item.clone();
+    if equipment
+        .force_equip_without_requirements(equipment_slot, item)
+        .is_err()
+    {
+        let _ = inventory.insert(inventory_slot, rollback_item);
+        return;
+    }
+
+    let _ = bootstrap.queue_inventory_move_request(slot, equipment_slot.as_index() as u8);
+}
+
+fn apply_inventory_unequip_command(
+    bootstrap: &mut BootstrapRuntime,
+    inventory: &mut InventoryManager,
+    equipment: &mut EquipmentManager,
+    command: Option<ControlCommand>,
+    slot: Option<u8>,
+) {
+    let Some(ControlCommand::InventoryUnequip) = command else {
+        return;
+    };
+
+    let Some(slot) = slot else {
+        return;
+    };
+    let Some(equipment_slot) = EquipmentSlot::from_index(usize::from(slot)) else {
+        return;
+    };
+
+    let item = match equipment.take(equipment_slot) {
+        Ok(item) => item,
+        Err(_) => return,
+    };
+
+    let rollback_item = item.clone();
+    let inventory_slot = match inventory.add(item) {
+        Ok(slot) => slot,
+        Err(_) => {
+            let _ = equipment.force_equip_without_requirements(equipment_slot, rollback_item);
+            return;
+        }
+    };
+
+    let inventory_slot_index = inventory_slot
+        .linear_index()
+        .expect("inventory slot must have a linear index");
+    let _ = bootstrap.queue_inventory_move_request(slot, inventory_slot_index as u8);
+}
+
 fn sync_control_http_snapshot_from_runtime(
     control_http: Option<ResMut<ControlHttpState>>,
     session_state: Res<SessionState>,
@@ -441,7 +578,8 @@ mod tests {
     use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_gameplay::{
-        InventoryManager, InventorySlot, Item, ItemPacketData, ItemSize, VaultManager,
+        EquipmentManager, EquipmentSlot, InventoryManager, InventorySlot, Item, ItemPacketData,
+        ItemRequirements, ItemSize, VaultManager,
     };
     use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
@@ -502,6 +640,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(ControlHttpState::new(snapshot));
         app.add_systems(
@@ -535,6 +674,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot));
@@ -574,6 +714,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
@@ -632,6 +773,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
@@ -715,6 +857,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
@@ -775,6 +918,233 @@ mod tests {
     }
 
     #[test]
+    fn control_http_snapshot_queues_inventory_use() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut inventory = app.world_mut().resource_mut::<InventoryManager>();
+            inventory
+                .insert(
+                    InventorySlot::main(0),
+                    Item::stackable(ItemPacketData::new(1, 1), ItemSize::new(1, 1), 20, 5),
+                )
+                .expect("seed inventory item");
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.inventory_use_slot = Some(0);
+            snapshot.inventory_use_target = Some(3);
+            snapshot.inventory_use_add_points = Some(false);
+            snapshot.apply_command(ControlCommand::InventoryUse);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("inventory use command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::InventoryUse {
+                slot,
+                target,
+                add_points,
+            } => {
+                assert_eq!(slot, 0);
+                assert_eq!(target, 3);
+                assert!(!add_points);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        assert!(app
+            .world()
+            .resource::<InventoryManager>()
+            .item_at(InventorySlot::main(0))
+            .is_some());
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Inventory
+        );
+        assert_eq!(
+            app.world().resource::<SessionState>().phase(),
+            SessionPhase::LoggedIn
+        );
+    }
+
+    #[test]
+    fn control_http_snapshot_equips_inventory_items() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut inventory = app.world_mut().resource_mut::<InventoryManager>();
+            inventory
+                .insert(
+                    InventorySlot::main(0),
+                    Item::equipment(
+                        ItemPacketData::new(0, 10),
+                        ItemSize::new(1, 2),
+                        EquipmentSlot::WeaponRight,
+                        ItemRequirements::default(),
+                        false,
+                    ),
+                )
+                .expect("seed inventory item");
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.inventory_equip_slot = Some(0);
+            snapshot.apply_command(ControlCommand::InventoryEquip);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("inventory equip command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::InventoryMove { from_slot, to_slot } => {
+                assert_eq!(from_slot, 0);
+                assert_eq!(to_slot, 0);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        assert!(app
+            .world()
+            .resource::<InventoryManager>()
+            .item_at(InventorySlot::main(0))
+            .is_none());
+        assert!(app
+            .world()
+            .resource::<EquipmentManager>()
+            .slot(EquipmentSlot::WeaponRight)
+            .is_some());
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Inventory
+        );
+        assert_eq!(
+            app.world().resource::<SessionState>().phase(),
+            SessionPhase::LoggedIn
+        );
+    }
+
+    #[test]
+    fn control_http_snapshot_unequips_equipment_items() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut equipment = app.world_mut().resource_mut::<EquipmentManager>();
+            equipment
+                .force_equip_without_requirements(
+                    EquipmentSlot::WeaponRight,
+                    Item::equipment(
+                        ItemPacketData::new(0, 11),
+                        ItemSize::new(1, 2),
+                        EquipmentSlot::WeaponRight,
+                        ItemRequirements::default(),
+                        false,
+                    ),
+                )
+                .expect("seed equipment item");
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.inventory_unequip_slot = Some(0);
+            snapshot.apply_command(ControlCommand::InventoryUnequip);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("inventory unequip command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::InventoryMove { from_slot, to_slot } => {
+                assert_eq!(from_slot, 0);
+                assert_eq!(to_slot, 0);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        assert!(app
+            .world()
+            .resource::<EquipmentManager>()
+            .slot(EquipmentSlot::WeaponRight)
+            .is_none());
+        assert!(app
+            .world()
+            .resource::<InventoryManager>()
+            .item_at(InventorySlot::main(0))
+            .is_some());
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Inventory
+        );
+        assert_eq!(
+            app.world().resource::<SessionState>().phase(),
+            SessionPhase::LoggedIn
+        );
+    }
+
+    #[test]
     fn control_http_snapshot_queues_guild_join() {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
 
@@ -786,6 +1156,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
@@ -826,6 +1197,7 @@ mod tests {
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));

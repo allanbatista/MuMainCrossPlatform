@@ -86,6 +86,14 @@ impl EquipmentManager {
             return Err(EquipmentError::RequirementMismatch);
         }
 
+        self.force_equip_without_requirements(slot, item)
+    }
+
+    pub fn force_equip_without_requirements(
+        &mut self,
+        slot: EquipmentSlot,
+        item: Item,
+    ) -> Result<(), EquipmentError> {
         if !slot_allows_item(slot, &item) {
             return Err(EquipmentError::IncompatibleSlot);
         }
@@ -97,6 +105,15 @@ impl EquipmentManager {
 
         self.slots[slot_index] = Some(item);
         Ok(())
+    }
+
+    pub fn equip_without_requirements(
+        &mut self,
+        item: Item,
+    ) -> Result<EquipmentSlot, EquipmentError> {
+        let slot = self.resolve_slot(&item)?;
+        self.force_equip_without_requirements(slot, item)?;
+        Ok(slot)
     }
 
     pub fn equip(
@@ -269,5 +286,16 @@ mod tests {
             equipment.equip(item, &sheet),
             Err(super::EquipmentError::MissingEquipmentSlot)
         ));
+    }
+
+    #[test]
+    fn equipment_manager_equips_without_requirements_using_the_legacy_slot_rules() {
+        let mut equipment = EquipmentManager::new();
+        let slot = equipment.equip_without_requirements(weapon()).unwrap();
+
+        assert_eq!(slot, EquipmentSlot::WeaponRight);
+
+        let slot = equipment.equip_without_requirements(ring()).unwrap();
+        assert_eq!(slot, EquipmentSlot::RingRight);
     }
 }

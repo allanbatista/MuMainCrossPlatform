@@ -19,7 +19,7 @@ use mu_protocol::events::{decode_gens_ranking_info, GensRankingInfo};
 use mu_protocol::guild::{
     guild_join_request, guild_list_request, guild_role_assign_request, request_alliance_list,
 };
-use mu_protocol::items::{item_move_request_extended, ItemStorageKind};
+use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemStorageKind};
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
@@ -96,6 +96,11 @@ pub(crate) enum BootstrapCommand {
         player_name: String,
         role: u8,
         assignment_type: u8,
+    },
+    InventoryUse {
+        slot: u8,
+        target: u8,
+        add_points: bool,
     },
     InventoryMove {
         from_slot: u8,
@@ -406,6 +411,25 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::InventoryMove { from_slot, to_slot })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_inventory_use_request(
+        &self,
+        slot: u8,
+        target: u8,
+        add_points: bool,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::InventoryUse {
+                slot,
+                target,
+                add_points,
+            })
             .is_ok()
     }
 
@@ -1169,6 +1193,19 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::InventoryUse {
+            slot,
+            target,
+            add_points,
+        } => {
+            let packet = consume_item_request(slot, target, u8::from(add_points))
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::InventoryMove { from_slot, to_slot } => {
             let packet = item_move_request_extended(
                 INVENTORY_STORAGE_KIND,
@@ -1727,6 +1764,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn inventory_use_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_inventory_use_request(0x12, 0x34, true));
+
+        match command_receiver
+            .try_recv()
+            .expect("inventory use command missing")
+        {
+            BootstrapCommand::InventoryUse {
+                slot,
+                target,
+                add_points,
+            } => {
+                assert_eq!(slot, 0x12);
+                assert_eq!(target, 0x34);
+                assert!(add_points);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
     #[tokio::test]
     async fn guild_alliance_list_packets_send_the_expected_bytes() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1805,6 +1867,49 @@ mod tests {
                 0x34,
             )
             .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn inventory_use_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::InventoryUse {
+                slot: 0x12,
+                target: 0x34,
+                add_points: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            received,
+            super::consume_item_request(0x12, 0x34, 0).unwrap()
         );
     }
 

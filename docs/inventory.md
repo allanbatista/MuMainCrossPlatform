@@ -35,6 +35,14 @@ O port Rust separa a camada de items em quatro blocos:
 O control plane local de `mu_app` tambem oferece `inventory-move` para mover
 itens entre slots lineares do inventory e reenviar o movimento pelo helper
 `item_move_request_extended`.
+O mesmo control plane tambem expoe `inventory-use`, `inventory-equip` e
+`inventory-unequip`. `inventory-use` aceita `slot=`/`item_slot=`, com
+`target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e apenas
+enfileira `consume_item_request`; `inventory-equip` usa um slot linear do
+inventory, move o item localmente para o slot legacy de equipment e
+reenfileira `item_move_request_extended` com storage kind `0` nos dois lados;
+`inventory-unequip` faz o caminho inverso usando um slot de equipment e
+inserindo o item no primeiro slot livre do inventory.
 
 Uso esperado:
 

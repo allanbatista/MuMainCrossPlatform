@@ -119,6 +119,11 @@ sessao de jogo completa.
   `amount=` para enviar o pacote de transferencia de vault pela sessao viva.
 - O control-http tambem aceita `inventory-move` com `from_slot=` e
   `to_slot=` para enviar o pacote de movimento de item pela sessao viva.
+- O control-http tambem aceita `inventory-use`, `inventory-equip` e
+  `inventory-unequip`; `inventory-use` usa `slot=`/`item_slot=` e apenas
+  enfileira o `consume_item_request`, enquanto `inventory-equip` e
+  `inventory-unequip` movem localmente entre inventory/equipment antes de
+  reenfileirar o `item_move_request_extended`.
 - Abrir `guild-union` com a sessao logada tambem envia uma vez a requisicao
   de alliance list antes de manter a shell visivel.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
@@ -192,7 +197,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|vault-deposit|vault-withdraw|inventory-move|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -207,6 +212,11 @@ session worker.
 `role=` e o type em `type=` para enviar o pacote de role assignment da guild.
 `vault-deposit` e `vault-withdraw` aceitam o amount no body bruto ou em
 `amount=` para enviar o pacote de transferencia de vault pela sessao viva.
+`inventory-use` aceita `slot=` ou `item_slot=` e tambem `target=` e
+`add_points=`/`add-points=`/`fruit=` para enviar o pacote de consume item
+pela sessao viva. `inventory-equip` aceita um slot linear do inventory e
+`inventory-unequip` aceita um slot de equipment; ambos movem localmente o
+item antes de reenfileirar o packet de move.
 `inventory-move` aceita `from_slot=` e `to_slot=` para enviar o pacote de
 movimento de item pela sessao viva.
 
