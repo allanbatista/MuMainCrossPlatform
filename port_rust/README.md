@@ -151,7 +151,8 @@ sessao de jogo completa.
   tabela legacy de 14 ranks e reaplica o snapshot decodificado quando a
   resposta chega.
 - A camada de party esta documentada em `docs/party-ui.md` e cobre as
-  snapshots de party info/list e o consumo do `PartyManager`.
+  snapshots de party info/list, o consumo do `PartyManager` e a ponte que
+  pede uma vez a party list live por ativacao logada.
 - A camada de siege warfare esta documentada em `docs/siege-warfare.md` e
   cobre observer, soldier e commander na janela de castle siege; o runtime
   grafico tambem expõe a shell visivel acionavel por `siege`,

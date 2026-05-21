@@ -225,7 +225,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=gens` can step into the visible Gens HUD route shell
   for local QA smoke.
 - `POST /command?name=party` can step into the visible party route shell for
-  local QA smoke.
+  local QA smoke; when the session is logged in, the runtime also queues one
+  live party list request per activation and hydrates the decoded
+  party list/info/leave packets into `PartyManager`.
 - `POST /command?name=gate` can step into the visible gate route shell for
   local QA smoke.
 - `POST /command?name=siege|siege-inactive|siege-soldier|siege-commander`

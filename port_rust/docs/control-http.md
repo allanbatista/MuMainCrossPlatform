@@ -11,6 +11,9 @@ modo `--headless`, continua sendo um smoke server deterministico. As rotas
 shells visiveis, e `friend` e `guild` aceitam comandos de subview para testar
 as telas internas. `duel-start` e `duel-stop` tambem alimentam o bridge de
 pacotes de duel quando a sessao viva esta disponivel.
+`party` tambem espelha a shell visivel e pede uma vez a party list live por
+ativacao logada, decodificando list/info/leave no `PartyManager` quando a
+resposta chega.
 Quando a sessao responde com as listas sociais, o runtime sobrepoe o
 roster/score/roles decodificados no shell correspondente ate o logout ou
 disconnect.

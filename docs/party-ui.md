@@ -25,3 +25,7 @@ Behavior notes:
   ratio capped to the bar width.
 - The Rust snapshot resolves party map names through the shared legacy map
   name helper so the visible labels match the map manager output.
+- The Rust party shell requests the live party list once per logged-in
+  activation, decodes the legacy `0x42` list, `0x43` leave, and `0x44` info
+  packets into `PartyManager`, and clears party state on logout, disconnect,
+  and hard error paths.

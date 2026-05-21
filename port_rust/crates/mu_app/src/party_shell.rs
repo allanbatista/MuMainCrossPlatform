@@ -9,6 +9,7 @@ use mu_ui::{
     PartyScreenState, UiRoute, UiShellState,
 };
 
+use crate::bootstrap_runtime::BootstrapRuntime;
 use crate::{ClientRuntime, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -44,6 +45,7 @@ struct PartyShellKey {
 struct PartyShellState {
     root: Option<Entity>,
     key: Option<PartyShellKey>,
+    party_list_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -68,17 +70,28 @@ fn sync_party_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
+    bootstrap: Res<BootstrapRuntime>,
     runtime: Res<ClientRuntime>,
     mut state: ResMut<PartyShellState>,
 ) {
+    if session_state.phase() != SessionPhase::LoggedIn {
+        state.party_list_requested = false;
+    }
+
     let current = party_shell_key(ui_shell.current(), session_state.phase(), &runtime);
 
     let Some(key) = current else {
         clear_party_shell(&mut commands, &mut state);
+        state.party_list_requested = false;
         return;
     };
 
     if state.key.as_ref() == Some(&key) && state.root.is_some() {
+        maybe_queue_party_list_request(
+            &bootstrap,
+            session_state.phase(),
+            &mut state.party_list_requested,
+        );
         return;
     }
 
@@ -92,6 +105,11 @@ fn sync_party_shell_system(
     let root = spawn_party_shell(&mut commands, &view);
     state.root = Some(root);
     state.key = Some(key);
+    maybe_queue_party_list_request(
+        &bootstrap,
+        session_state.phase(),
+        &mut state.party_list_requested,
+    );
 }
 
 fn party_shell_key(
@@ -116,6 +134,24 @@ fn party_shell_key(
 
 fn party_shell_visible(route: UiRoute, phase: SessionPhase) -> bool {
     route == UiRoute::Party && phase != SessionPhase::Disconnected
+}
+
+fn maybe_queue_party_list_request(
+    bootstrap: &BootstrapRuntime,
+    phase: SessionPhase,
+    party_list_requested: &mut bool,
+) {
+    if !party_shell_should_queue_live_request(phase, *party_list_requested) {
+        return;
+    }
+
+    if bootstrap.queue_party_list_request() {
+        *party_list_requested = true;
+    }
+}
+
+fn party_shell_should_queue_live_request(phase: SessionPhase, requested: bool) -> bool {
+    phase == SessionPhase::LoggedIn && !requested
 }
 
 fn party_shell_hero_id(runtime: &ClientRuntime, party: &PartyManager) -> Option<String> {
@@ -406,7 +442,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{party_shell_view, PartyShellPlugin, PartyShellRoot};
-    use crate::{ClientRuntime, SessionPhase, SessionState};
+    use crate::{bootstrap_runtime::BootstrapRuntime, ClientRuntime, SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_gameplay::PartyMemberInfo;
     use mu_ui::{UiRoute, UiShellState};
@@ -420,6 +456,12 @@ mod tests {
         let mut query =
             world.query_filtered::<bevy::prelude::Entity, bevy::prelude::With<PartyShellRoot>>();
         query.iter(world).next()
+    }
+
+    fn party_list_request_count(world: &bevy::prelude::World) -> usize {
+        world
+            .resource::<BootstrapRuntime>()
+            .party_list_request_count()
     }
 
     fn sample_runtime() -> ClientRuntime {
@@ -523,6 +565,7 @@ mod tests {
         let mut session_state = SessionState::new();
         assert!(session_state.login_success());
         app.insert_resource(session_state);
+        app.insert_resource(BootstrapRuntime::idle());
         app.insert_resource(sample_runtime());
 
         app.update();
@@ -557,5 +600,66 @@ mod tests {
         app.update();
 
         assert_eq!(party_shell_root_count(app.world_mut()), 0);
+    }
+
+    #[test]
+    fn party_shell_requests_live_data_once_per_logged_in_activation() {
+        let mut app = App::new();
+        app.add_plugins((mu_ui::UiShellPlugin, PartyShellPlugin));
+
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::Party);
+        app.insert_resource(ui_shell);
+
+        let mut session_state = SessionState::new();
+        assert!(session_state.login_success());
+        app.insert_resource(session_state);
+
+        app.insert_resource(BootstrapRuntime::test_stub());
+        app.insert_resource(sample_runtime());
+
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 1);
+        assert_eq!(party_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<ClientRuntime>()
+            .party_mut()
+            .reset();
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 1);
+        assert_eq!(party_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::World);
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 0);
+        assert_eq!(party_list_request_count(app.world()), 1);
+
+        app.world_mut()
+            .resource_mut::<UiShellState>()
+            .set_route(UiRoute::Party);
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 1);
+        assert_eq!(party_list_request_count(app.world()), 2);
+
+        app.world_mut().resource_mut::<SessionState>().logout();
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 1);
+        assert_eq!(party_list_request_count(app.world()), 2);
+
+        app.world_mut()
+            .resource_mut::<SessionState>()
+            .login_success();
+        app.update();
+
+        assert_eq!(party_shell_root_count(app.world_mut()), 1);
+        assert_eq!(party_list_request_count(app.world()), 3);
     }
 }
