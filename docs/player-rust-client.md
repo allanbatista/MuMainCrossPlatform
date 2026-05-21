@@ -27,15 +27,17 @@ in the local config file instead of being typed every time.
 - A visible Bevy auth shell for login, server selection, and character
   selection while the client boots.
 - On connect, the bootstrap automatically sends the legacy server-list
-  request before waiting for the server-select response, so real servers can
-  drive the same handshake as the original client.
+  request, picks the first usable server from the roster, asks the
+  connect-server for connection info, and reconnects to the returned
+  game-server endpoint so real servers can drive the same handshake as the
+  original client.
 - The shared Options window is also available as a visible Bevy route and
   through the local control HTTP API with `options`.
 - Character selection and the visible character-create route.
 - The Bevy bootstrap now carries the client from login to character select and
-  immediately requests the character list using the legacy locale byte
-  (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`) before the
-  loaded world handoff starts.
+  immediately requests the character list after the login-success packet
+  using the legacy locale byte (`en`/`eng` -> `0`, `pt`/`por` -> `1`,
+  `es`/`spn` -> `2`) before the loaded world handoff starts.
 - When the roster arrives, the bootstrap stays on character select until a
   `select-character` request names a roster entry; the same request can be
   sent through the local control HTTP API with the character name in the body

@@ -14,9 +14,10 @@ sessao de jogo completa.
   shell visual de login/server select/character select, faz a transicao
   login -> server select -> character select -> world quando o fluxo de rede
   entrega o handoff do mapa; ao conectar, ele pede automaticamente a server
-  list legacy antes de esperar a resposta de server select. Depois de
-  `login-success`, ele pede automaticamente a character list usando o byte
-  legado do idioma
+  list legacy, escolhe o primeiro servidor usavel, pede a connection-info ao
+  connect-server e reconecta ao endpoint retornado antes de pedir a character
+  list. Depois de `login-success`, ele pede automaticamente a character list
+  usando o byte legado do idioma
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). Quando o roster
   chega, ele fica em character select ate receber um `select-character`
   explicito com o nome do personagem; o mesmo comando pode vir pelo

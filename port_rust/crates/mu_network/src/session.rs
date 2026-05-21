@@ -101,6 +101,19 @@ impl Session {
     pub async fn reconnect(&mut self) -> Result<(), ClientError> {
         self.client.reconnect().await?;
         self.phase = SessionPhase::ReadyForLogin;
+        self.last_event = None;
+        tracing::info!(
+            component = "network-session",
+            action = "reconnect",
+            phase = self.phase.as_str()
+        );
+        Ok(())
+    }
+
+    pub async fn reconnect_to(&mut self, endpoint: SocketAddr) -> Result<(), ClientError> {
+        self.client.reconnect_to(endpoint).await?;
+        self.phase = SessionPhase::ReadyForLogin;
+        self.last_event = None;
         tracing::info!(
             component = "network-session",
             action = "reconnect",

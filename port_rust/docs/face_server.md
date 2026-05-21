@@ -4,6 +4,8 @@
 Ele responde com uma lista fixa de servidores e guarda tudo em memoria.
 
 Use quando voce quiser testar selecao de servidor sem depender do servidor real.
+O cliente Rust, ao receber essa lista, pede a connection-info da primeira
+entrada usavel e reconecta ao endpoint retornado.
 
 ## Como iniciar
 

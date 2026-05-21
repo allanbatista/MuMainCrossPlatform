@@ -18,7 +18,7 @@ use mu_gameplay::{
 };
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
-use mu_protocol::connect::server_list_request;
+use mu_protocol::connect::{connection_info_request, server_list_request, ServerEntry};
 use mu_protocol::events::gens_ranking_request;
 use mu_protocol::events::{
     decode_gens_ranking_info, duel_channel_join_request, duel_channel_quit_request,
@@ -1262,6 +1262,15 @@ fn spawn_bootstrap_worker(
                             break;
                         };
 
+                        match handle_connect_server_packet(&frame, &mut session, &sender).await {
+                            Ok(true) => continue,
+                            Ok(false) => {}
+                            Err(error) => {
+                                let _ = sender.send(BootstrapSignal::Error(error));
+                                break;
+                            }
+                        }
+
                         if let Some(signal) = classify_bootstrap_packet(&frame) {
                             let should_stop = matches!(signal, BootstrapSignal::Error(_));
                             let _ = sender.send(signal);
@@ -1301,6 +1310,18 @@ async fn send_server_list_request(session: &mut Session) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+async fn send_connection_info_request(
+    session: &mut Session,
+    connect_index: u16,
+) -> Result<(), String> {
+    let packet = connection_info_request(connect_index).map_err(|error| error.to_string())?;
+
+    session
+        .send(packet)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 async fn send_character_list_request(
     session: &mut Session,
     character_list_language: u8,
@@ -1312,6 +1333,87 @@ async fn send_character_list_request(
         .send(packet)
         .await
         .map_err(|error| error.to_string())
+}
+
+async fn handle_connect_server_packet(
+    frame: &PacketFrame<'_>,
+    session: &mut Session,
+    sender: &Sender<BootstrapSignal>,
+) -> Result<bool, String> {
+    match (frame.headcode, frame.subcode) {
+        (0xF4, 0x06) => {
+            let entries = decode_server_list_response(frame)?;
+            let _ = sender.send(BootstrapSignal::ServerList);
+
+            if let Some(entry) = select_bootstrap_server_entry(&entries) {
+                send_connection_info_request(session, entry.connect_index).await?;
+            }
+
+            Ok(true)
+        }
+        (0xF4, 0x03) => {
+            let endpoint = decode_connection_info_response(frame)?;
+            session
+                .reconnect_to(endpoint)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(true)
+        }
+        (0xF4, 0x05) => {
+            send_server_list_request(session).await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn decode_server_list_response(frame: &PacketFrame<'_>) -> Result<Vec<ServerEntry>, String> {
+    let payload = frame.payload;
+    if payload.len() < 2 {
+        return Err("server list packet missing roster header".to_string());
+    }
+
+    let count = usize::from(u16::from_be_bytes([payload[0], payload[1]]));
+    let entries = &payload[2..];
+    let expected_len = count
+        .checked_mul(3)
+        .ok_or_else(|| "server list packet is too large".to_string())?;
+    if entries.len() < expected_len {
+        return Err(format!(
+            "server list packet truncated: expected {expected_len} roster bytes, found {}",
+            entries.len()
+        ));
+    }
+
+    Ok(entries
+        .chunks_exact(3)
+        .take(count)
+        .map(|entry| ServerEntry::new(u16::from_le_bytes([entry[0], entry[1]]), entry[2]))
+        .collect())
+}
+
+fn select_bootstrap_server_entry(entries: &[ServerEntry]) -> Option<ServerEntry> {
+    entries.iter().copied().find(|entry| entry.percent < 100)
+}
+
+fn decode_connection_info_response(frame: &PacketFrame<'_>) -> Result<SocketAddr, String> {
+    let payload = frame.payload;
+    if payload.len() < 18 {
+        return Err(format!(
+            "server connection packet truncated: expected at least 18 data bytes, found {}",
+            payload.len()
+        ));
+    }
+
+    let ip = decode_legacy_name(&payload[..16]);
+    if ip.is_empty() {
+        return Err("server connection packet missing address".to_string());
+    }
+
+    let port = u16::from_le_bytes([payload[16], payload[17]]);
+    format!("{ip}:{port}")
+        .parse::<SocketAddr>()
+        .map_err(|error| format!("invalid server address {ip}:{port}: {error}"))
 }
 
 async fn send_character_select_request(
@@ -2101,7 +2203,10 @@ mod tests {
     use mu_network::Session;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
-    use mu_protocol::connect::server_list_request as connect_server_list_request;
+    use mu_protocol::connect::{
+        connection_info, connection_info_request,
+        server_list_request as connect_server_list_request, ServerEntry,
+    };
     use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
     use mu_protocol::events::{
@@ -2155,6 +2260,41 @@ mod tests {
             offline_fixture: None,
             evidence_dir: None,
         }
+    }
+
+    async fn spawn_bootstrap_handshake_servers(
+        game_connection: ConnectionScript,
+    ) -> (FakeServer, FakeServer) {
+        let game_server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(game_connection),
+        )
+        .await
+        .unwrap();
+
+        let server_list =
+            mu_protocol::connect::encode_server_list_response(&[ServerEntry::new(7, 42)]).unwrap();
+        let connection_info_packet = connection_info(
+            game_server.address().ip().to_string(),
+            game_server.address().port(),
+        )
+        .unwrap();
+
+        let server = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
+                    .send_packet(server_list)
+                    .expect_packet(connection_info_request(7).unwrap())
+                    .send_packet(connection_info_packet)
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        (server, game_server)
     }
 
     fn join_map_packet(map: u8) -> Vec<u8> {
@@ -4239,10 +4379,6 @@ mod tests {
 
     #[tokio::test]
     async fn fake_server_packets_drive_the_character_create_request_worker() {
-        let server_list = mu_protocol::connect::encode_server_list_response(&[
-            mu_protocol::connect::ServerEntry::new(7, 42),
-        ])
-        .unwrap();
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -4263,23 +4399,17 @@ mod tests {
             create_character(b"Astra", DEFAULT_CHARACTER_CREATE_CLASS).unwrap();
         let create_character_success =
             character_creation_successful(b"Astra", 0, 255, 1, 32, b"preview").unwrap();
-        let server = FakeServer::spawn(
-            "127.0.0.1:0".parse().unwrap(),
-            FakeServerScenario::single(
-                ConnectionScript::new()
-                    .expect_packet(connect_server_list_request().unwrap())
-                    .send_packet(server_list.clone())
-                    .send_packet(login_success.clone())
-                    .expect_packet(request_character_list(0).unwrap())
-                    .send_packet(character_list.clone())
-                    .expect_packet(create_character_request.clone())
-                    .send_packet(create_character_success.clone())
-                    .delay(Duration::from_millis(50))
-                    .close(),
-            ),
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(create_character_request.clone())
+                .send_packet(create_character_success.clone())
+                .delay(Duration::from_millis(50))
+                .close(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
@@ -4338,6 +4468,7 @@ mod tests {
         }
 
         server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
 
         assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
         assert_eq!(
@@ -4470,10 +4601,6 @@ mod tests {
 
     #[tokio::test]
     async fn fake_server_packets_drive_the_bootstrap_worker() {
-        let server_list = mu_protocol::connect::encode_server_list_response(&[
-            mu_protocol::connect::ServerEntry::new(7, 42),
-        ])
-        .unwrap();
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -4491,22 +4618,16 @@ mod tests {
         )
         .unwrap();
         let join_map = join_map_packet(1);
-        let server = FakeServer::spawn(
-            "127.0.0.1:0".parse().unwrap(),
-            FakeServerScenario::single(
-                ConnectionScript::new()
-                    .expect_packet(connect_server_list_request().unwrap())
-                    .send_packet(server_list.clone())
-                    .send_packet(login_success.clone())
-                    .expect_packet(request_character_list(0).unwrap())
-                    .send_packet(character_list.clone())
-                    .expect_packet(select_character(b"Astra").unwrap())
-                    .send_packet(join_map.clone())
-                    .close(),
-            ),
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(select_character(b"Astra").unwrap())
+                .send_packet(join_map.clone())
+                .close(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
@@ -4551,6 +4672,7 @@ mod tests {
         assert!(bootstrap.last_error().is_none());
 
         server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
     }
 
     #[tokio::test]
@@ -4592,10 +4714,6 @@ mod tests {
 
     #[tokio::test]
     async fn fake_server_packets_drive_the_friend_management_request_worker() {
-        let server_list = mu_protocol::connect::encode_server_list_response(&[
-            mu_protocol::connect::ServerEntry::new(7, 42),
-        ])
-        .unwrap();
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -4615,24 +4733,18 @@ mod tests {
         let join_map = join_map_packet(1);
         let friend_add_request = friend_add_request(b"Astra").unwrap();
         let friend_delete_request = friend_delete(b"Astra").unwrap();
-        let server = FakeServer::spawn(
-            "127.0.0.1:0".parse().unwrap(),
-            FakeServerScenario::single(
-                ConnectionScript::new()
-                    .expect_packet(connect_server_list_request().unwrap())
-                    .send_packet(server_list.clone())
-                    .send_packet(login_success.clone())
-                    .expect_packet(request_character_list(0).unwrap())
-                    .send_packet(character_list.clone())
-                    .expect_packet(select_character(b"Astra").unwrap())
-                    .send_packet(join_map.clone())
-                    .expect_packet(friend_add_request.clone())
-                    .expect_packet(friend_delete_request.clone())
-                    .close(),
-            ),
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(select_character(b"Astra").unwrap())
+                .send_packet(join_map.clone())
+                .expect_packet(friend_add_request.clone())
+                .expect_packet(friend_delete_request.clone())
+                .close(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
@@ -4673,14 +4785,11 @@ mod tests {
         }
 
         server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
     }
 
     #[tokio::test]
     async fn fake_server_applies_authoritative_movement_updates() {
-        let server_list = mu_protocol::connect::encode_server_list_response(&[
-            mu_protocol::connect::ServerEntry::new(7, 42),
-        ])
-        .unwrap();
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -4700,24 +4809,18 @@ mod tests {
         let join_map = join_map_packet(1);
         let movement_request = walk_request(0, 0, 0, 0, []).unwrap();
         let movement_commit = encode_move_position_update(0, 3, 4).unwrap();
-        let server = FakeServer::spawn(
-            "127.0.0.1:0".parse().unwrap(),
-            FakeServerScenario::single(
-                ConnectionScript::new()
-                    .expect_packet(connect_server_list_request().unwrap())
-                    .send_packet(server_list.clone())
-                    .send_packet(login_success.clone())
-                    .expect_packet(request_character_list(0).unwrap())
-                    .send_packet(character_list.clone())
-                    .expect_packet(select_character(b"Astra").unwrap())
-                    .send_packet(join_map.clone())
-                    .expect_packet(movement_request.clone())
-                    .send_packet(movement_commit.clone())
-                    .close(),
-            ),
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(select_character(b"Astra").unwrap())
+                .send_packet(join_map.clone())
+                .expect_packet(movement_request.clone())
+                .send_packet(movement_commit.clone())
+                .close(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
@@ -4789,14 +4892,11 @@ mod tests {
         );
 
         server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
     }
 
     #[tokio::test]
     async fn fake_server_sends_public_chat_messages() {
-        let server_list = mu_protocol::connect::encode_server_list_response(&[
-            mu_protocol::connect::ServerEntry::new(7, 42),
-        ])
-        .unwrap();
         let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
         let character_list = character_list_extended(
             1,
@@ -4815,23 +4915,17 @@ mod tests {
         .unwrap();
         let join_map = join_map_packet(1);
         let chat_packet = public_chat_message(b"Hero", b"hello").unwrap();
-        let server = FakeServer::spawn(
-            "127.0.0.1:0".parse().unwrap(),
-            FakeServerScenario::single(
-                ConnectionScript::new()
-                    .expect_packet(connect_server_list_request().unwrap())
-                    .send_packet(server_list.clone())
-                    .send_packet(login_success.clone())
-                    .expect_packet(request_character_list(0).unwrap())
-                    .send_packet(character_list.clone())
-                    .expect_packet(select_character(b"Astra").unwrap())
-                    .send_packet(join_map.clone())
-                    .expect_packet(chat_packet.clone())
-                    .close(),
-            ),
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(select_character(b"Astra").unwrap())
+                .send_packet(join_map.clone())
+                .expect_packet(chat_packet.clone())
+                .close(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let mut bootstrap = {
             let (sender, receiver) = std::sync::mpsc::channel();
@@ -4876,5 +4970,6 @@ mod tests {
         }
 
         server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
     }
 }

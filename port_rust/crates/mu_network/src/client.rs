@@ -45,8 +45,13 @@ impl Client {
     }
 
     pub async fn reconnect(&mut self) -> Result<(), ClientError> {
+        self.reconnect_to(self.endpoint).await
+    }
+
+    pub async fn reconnect_to(&mut self, endpoint: SocketAddr) -> Result<(), ClientError> {
         let transport =
-            TcpTransport::connect(self.endpoint, self.connect_timeout, self.read_timeout).await?;
+            TcpTransport::connect(endpoint, self.connect_timeout, self.read_timeout).await?;
+        self.endpoint = endpoint;
         self.transport = Some(transport);
         Ok(())
     }
@@ -121,6 +126,47 @@ mod tests {
         assert_eq!(client.receive().await.unwrap(), Some(response));
 
         server.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reconnects_to_a_new_endpoint() {
+        let response_a = encode_server_list_response(&[ServerEntry::new(7, 42)]).unwrap();
+        let response_b = encode_server_list_response(&[ServerEntry::new(9, 17)]).unwrap();
+        let server_a = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .send_packet(response_a.clone())
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+        let server_b = FakeServer::spawn(
+            "127.0.0.1:0".parse().unwrap(),
+            FakeServerScenario::single(
+                ConnectionScript::new()
+                    .send_packet(response_b.clone())
+                    .close(),
+            ),
+        )
+        .await
+        .unwrap();
+
+        let mut client = Client::connect(
+            server_a.address(),
+            Duration::from_millis(250),
+            Duration::from_millis(250),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(client.receive().await.unwrap(), Some(response_a));
+        client.reconnect_to(server_b.address()).await.unwrap();
+        assert_eq!(client.receive().await.unwrap(), Some(response_b));
+
+        server_a.finish().await.unwrap();
+        server_b.finish().await.unwrap();
     }
 
     #[tokio::test]
