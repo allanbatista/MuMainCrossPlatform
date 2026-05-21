@@ -15,7 +15,9 @@ use mu_gameplay::{CharacterClass, MovementCommand};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
 use mu_protocol::events::gens_ranking_request;
-use mu_protocol::events::{decode_gens_ranking_info, GensRankingInfo};
+use mu_protocol::events::{
+    decode_gens_ranking_info, duel_start_request, duel_stop_request, GensRankingInfo,
+};
 use mu_protocol::guild::{
     guild_join_request, guild_kick_player_request, guild_list_request, guild_role_assign_request,
     remove_alliance_guild_request, request_alliance_list,
@@ -116,6 +118,11 @@ pub(crate) enum BootstrapCommand {
         direction: VaultMoneyMoveDirection,
         amount: u32,
     },
+    DuelStart {
+        player_id: u16,
+        player_name: String,
+    },
+    DuelStop,
 }
 
 #[derive(Debug, Resource)]
@@ -478,6 +485,31 @@ impl BootstrapRuntime {
         command_sender
             .send(BootstrapCommand::VaultMoneyTransfer { direction, amount })
             .is_ok()
+    }
+
+    pub(crate) fn queue_duel_start_request(
+        &self,
+        player_id: u16,
+        player_name: impl Into<String>,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::DuelStart {
+                player_id,
+                player_name: player_name.into(),
+            })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_duel_stop_request(&self) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender.send(BootstrapCommand::DuelStop).is_ok()
     }
 
     #[cfg(test)]
@@ -1247,6 +1279,26 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::DuelStart {
+            player_id,
+            player_name,
+        } => {
+            let packet =
+                duel_start_request(player_id, player_name).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::DuelStop => {
+            let packet = duel_stop_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::InventoryUse {
             slot,
             target,
@@ -1390,7 +1442,9 @@ mod tests {
     use mu_protocol::chat::public_chat_message;
     use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
-    use mu_protocol::events::{gens_ranking_request, GensRankingInfo};
+    use mu_protocol::events::{
+        duel_start_request, duel_stop_request, gens_ranking_request, GensRankingInfo,
+    };
     use mu_protocol::guild::guild_join_request;
     use mu_protocol::guild::guild_kick_player_request;
     use mu_protocol::guild::guild_list_request;
@@ -2165,6 +2219,78 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn duel_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::DuelStart {
+                player_id: 0x1234,
+                player_name: "Astra".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, duel_start_request(0x1234, b"Astra").unwrap());
+    }
+
+    #[tokio::test]
+    async fn duel_stop_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::DuelStop)
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, duel_stop_request().unwrap());
+    }
+
     #[test]
     fn gens_ranking_packets_classify_and_store_runtime_state() {
         let packet = gens_ranking_packet();
@@ -2317,6 +2443,38 @@ mod tests {
             BootstrapCommand::GuildBanUnion(guild_name) => {
                 assert_eq!(guild_name, "Alliance");
             }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn duel_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_duel_start_request(0x1234, "Astra"));
+        assert!(bootstrap.queue_duel_stop_request());
+
+        match command_receiver
+            .try_recv()
+            .expect("duel start command missing")
+        {
+            BootstrapCommand::DuelStart {
+                player_id,
+                player_name,
+            } => {
+                assert_eq!(player_id, 0x1234);
+                assert_eq!(player_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("duel stop command missing")
+        {
+            BootstrapCommand::DuelStop => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
     }

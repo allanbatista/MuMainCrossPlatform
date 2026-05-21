@@ -53,3 +53,9 @@ remain for later if full guild parity is still required.
 `guild-join` is now done. The next guild parity slice can wire
 `guild_create_request` or the remaining guild union management flows if full
 guild parity is still required.
+
+# [medium] Duel lifecycle follow-up
+
+`duel-start` and `duel-stop` are now bridged through the control plane, but
+the rest of the legacy duel lifecycle still needs a later slice if full duel
+parity is still required.

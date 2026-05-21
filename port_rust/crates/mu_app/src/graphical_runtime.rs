@@ -337,6 +337,17 @@ fn sync_control_http_snapshot_to_runtime(
                 let _ = bootstrap.queue_guild_ban_union_request(guild_name);
             }
         }
+        Some(ControlCommand::DuelStart) => {
+            if let (Some(player_id), Some(player_name)) = (
+                snapshot.duel_player_id,
+                snapshot.duel_player_name.as_deref(),
+            ) {
+                let _ = bootstrap.queue_duel_start_request(player_id, player_name);
+            }
+        }
+        Some(ControlCommand::DuelStop) => {
+            let _ = bootstrap.queue_duel_stop_request();
+        }
         Some(ControlCommand::InventoryMove) => {
             apply_inventory_move_command(
                 &mut bootstrap,
@@ -775,6 +786,67 @@ mod tests {
             crate::bootstrap_runtime::BootstrapCommand::FriendDelete(friend_name) => {
                 assert_eq!(friend_name, "Astra");
             }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_duel_actions() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.duel_player_id = Some(0x1234);
+            snapshot.duel_player_name = Some("Astra".to_string());
+            snapshot.apply_command(ControlCommand::DuelStart);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("duel start command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::DuelStart {
+                player_id,
+                player_name,
+            } => {
+                assert_eq!(player_id, 0x1234);
+                assert_eq!(player_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.apply_command(ControlCommand::DuelStop);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("duel stop command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::DuelStop => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
     }

@@ -60,6 +60,8 @@ pub enum ControlCommand {
     VaultDeposit,
     VaultWithdraw,
     Duel,
+    DuelStart,
+    DuelStop,
     Quests,
     MuHelper,
     LoginSuccess,
@@ -122,6 +124,8 @@ impl ControlCommand {
             Self::VaultDeposit => "vault-deposit",
             Self::VaultWithdraw => "vault-withdraw",
             Self::Duel => "duel",
+            Self::DuelStart => "duel-start",
+            Self::DuelStop => "duel-stop",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
@@ -201,6 +205,8 @@ impl ControlCommand {
             "vault-deposit" | "vault_deposit" => Some(Self::VaultDeposit),
             "vault-withdraw" | "vault_withdraw" => Some(Self::VaultWithdraw),
             "duel" => Some(Self::Duel),
+            "duel-start" | "duel_start" => Some(Self::DuelStart),
+            "duel-stop" | "duel_stop" => Some(Self::DuelStop),
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
@@ -226,6 +232,8 @@ pub struct ControlSnapshot {
     pub friend_name: Option<String>,
     pub guild_master_player_id: Option<u16>,
     pub guild_player_name: Option<String>,
+    pub duel_player_id: Option<u16>,
+    pub duel_player_name: Option<String>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
@@ -255,6 +263,8 @@ impl ControlSnapshot {
             friend_name: None,
             guild_master_player_id: None,
             guild_player_name: None,
+            duel_player_id: None,
+            duel_player_name: None,
             guild_role: None,
             guild_assignment_type: None,
             guild_security_code: None,
@@ -560,6 +570,12 @@ impl ControlSnapshot {
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
+            ControlCommand::DuelStart | ControlCommand::DuelStop => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Duel;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
             ControlCommand::Quests => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Quests;
@@ -642,6 +658,15 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let duel_player_id = self
+            .duel_player_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let duel_player_name = self
+            .duel_player_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
         let guild_role = self
             .guild_role
             .map(|value| value.to_string())
@@ -706,7 +731,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -715,6 +740,8 @@ impl ControlSnapshot {
             friend_name,
             guild_master_player_id,
             guild_player_name,
+            duel_player_id,
+            duel_player_name,
             guild_role,
             guild_assignment_type,
             guild_security_code,
@@ -1044,6 +1071,20 @@ fn route_request(
                     snapshot.guild_union_name = Some(guild_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::DuelStart => {
+                    let Some((player_id, player_name)) = duel_start_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing duel start payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.duel_player_id = Some(player_id);
+                    snapshot.duel_player_name = Some(player_name);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::DuelStop => snapshot.apply_command(command),
                 ControlCommand::InventoryUse => {
                     let Some((slot, target, add_points)) = inventory_use_from_request(&request)
                     else {
@@ -1396,6 +1437,31 @@ fn guild_ban_union_from_request(request: &HttpRequest) -> Option<String> {
     }
 }
 
+fn duel_start_from_request(request: &HttpRequest) -> Option<(u16, String)> {
+    let player_id = query_value(&request.query, "player_id")
+        .or_else(|| query_value(&request.query, "player-id"))
+        .or_else(|| query_value(&request.body, "player_id"))
+        .or_else(|| query_value(&request.body, "player-id"))?
+        .trim()
+        .parse::<u16>()
+        .ok()?;
+
+    let player_name = query_value(&request.query, "player_name")
+        .or_else(|| query_value(&request.query, "player-name"))
+        .or_else(|| query_value(&request.query, "player"))
+        .or_else(|| query_value(&request.body, "player_name"))
+        .or_else(|| query_value(&request.body, "player-name"))
+        .or_else(|| query_value(&request.body, "player"))?
+        .trim()
+        .to_string();
+
+    if player_name.is_empty() {
+        return None;
+    }
+
+    Some((player_id, player_name))
+}
+
 fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
     let from_slot = query_value(&request.query, "from_slot")
         .or_else(|| query_value(&request.body, "from_slot"))?
@@ -1524,11 +1590,13 @@ impl HttpResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{spawn, ControlCommand, ControlSnapshot};
+    use super::{route_request, spawn, ControlCommand, ControlSnapshot, HttpRequest};
     use crate::{AppState, SessionPhase};
     use mu_ui::{FriendScreenState, GuildScreenState, UiRoute};
     use std::io::{Read, Write};
     use std::net::TcpStream;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, Mutex};
 
     fn read_response(stream: &mut TcpStream) -> (String, String) {
         let mut response = String::new();
@@ -1552,7 +1620,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"duel_player_id":null,"duel_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -1831,6 +1899,24 @@ mod tests {
         assert_eq!(ControlCommand::parse("duel"), Some(ControlCommand::Duel));
         assert_eq!(ControlCommand::Duel.as_str(), "duel");
         assert_eq!(
+            ControlCommand::parse("duel-start"),
+            Some(ControlCommand::DuelStart)
+        );
+        assert_eq!(
+            ControlCommand::parse("duel_start"),
+            Some(ControlCommand::DuelStart)
+        );
+        assert_eq!(ControlCommand::DuelStart.as_str(), "duel-start");
+        assert_eq!(
+            ControlCommand::parse("duel-stop"),
+            Some(ControlCommand::DuelStop)
+        );
+        assert_eq!(
+            ControlCommand::parse("duel_stop"),
+            Some(ControlCommand::DuelStop)
+        );
+        assert_eq!(ControlCommand::DuelStop.as_str(), "duel-stop");
+        assert_eq!(
             ControlCommand::parse("vault-deposit"),
             Some(ControlCommand::VaultDeposit)
         );
@@ -1966,6 +2052,48 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.guild_master_player_id, Some(0x1234));
         assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_duel_start_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.duel_player_id = Some(0x1234);
+        snapshot.duel_player_name = Some("Astra".to_string());
+        snapshot.apply_command(ControlCommand::DuelStart);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Duel);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.duel_player_id, Some(0x1234));
+        assert_eq!(snapshot.duel_player_name.as_deref(), Some("Astra"));
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""duel_player_id":4660"#));
+        assert!(body.contains(r#""duel_player_name":"Astra""#));
+    }
+
+    #[test]
+    fn control_http_route_accepts_duel_start_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=duel-start&player_id=4660&player_name=Astra".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::DuelStart));
+        assert_eq!(snapshot.duel_player_id, Some(4660));
+        assert_eq!(snapshot.duel_player_name.as_deref(), Some("Astra"));
+        assert_eq!(snapshot.ui_route, UiRoute::Duel);
     }
 
     #[test]

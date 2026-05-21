@@ -127,6 +127,8 @@ in the local config file instead of being typed every time.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.
+- `duel-start` and `duel-stop` queue the live duel challenge packets through
+  the local control HTTP bridge when a session is connected.
 - The events route now opens a visible Bevy shell that mirrors the event
   manager snapshot and can be driven from the local control HTTP smoke path
   with `events`.
@@ -211,6 +213,11 @@ in the local config file instead of being typed every time.
   the live session. Pass the inventory slot in `slot=` or `item_slot=` and
   optionally override `target=` and `add_points=`/`fruit=`; `inventory-equip`
   uses an inventory slot and `inventory-unequip` uses an equipment slot.
+- `POST /command?name=duel-start` queues the duel start packet through the
+  live session. Pass the target player ID in `player_id=` and the target
+  player name in `player_name=`.
+- `POST /command?name=duel-stop` queues the duel stop packet through the
+  live session with no extra payload.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=events` can step into the visible events route shell for
