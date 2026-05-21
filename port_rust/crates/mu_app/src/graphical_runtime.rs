@@ -314,6 +314,14 @@ fn sync_control_http_snapshot_to_runtime(
                 let _ = bootstrap.queue_guild_join_request(guild_master_player_id);
             }
         }
+        Some(ControlCommand::GuildCreate) => {
+            if let (Some(guild_name), Some(guild_emblem)) = (
+                snapshot.guild_create_name.as_deref(),
+                snapshot.guild_create_emblem,
+            ) {
+                let _ = bootstrap.queue_guild_create_request(guild_name, guild_emblem);
+            }
+        }
         Some(ControlCommand::GuildRoleAssign) => {
             if let (Some(player_name), Some(role), Some(assignment_type)) = (
                 snapshot.guild_player_name.as_deref(),
@@ -1270,6 +1278,52 @@ mod tests {
         {
             crate::bootstrap_runtime::BootstrapCommand::GuildJoin(guild_master_player_id) => {
                 assert_eq!(guild_master_player_id, 0x1234);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_guild_create() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.guild_create_name = Some("Guild".to_string());
+            snapshot.guild_create_emblem = Some([1u8; 32]);
+            snapshot.apply_command(ControlCommand::GuildCreate);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("guild create command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::GuildCreate {
+                guild_name,
+                guild_emblem,
+            } => {
+                assert_eq!(guild_name, "Guild");
+                assert_eq!(guild_emblem, [1u8; 32]);
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }

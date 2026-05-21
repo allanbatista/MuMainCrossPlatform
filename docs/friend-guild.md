@@ -25,6 +25,9 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   rival-name, and member-role data from the live session when it arrives.
 - `POST /command?name=guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` smoke the matching guild subviews.
+- `POST /command?name=guild-create` queues the guild creation packet when a
+  guild name and 32-byte emblem payload are provided as `guild_name=` and
+  `guild_emblem=` hex. The name follows the legacy 4-8 character limit.
 - Both shells clear when the route changes away or the session disconnects.
 - When `friend` or `guild` opens while the session is logged in, the runtime
   queues the matching live list request once per activation and clears that
@@ -71,6 +74,9 @@ player and security code are provided, and `guild-ban-union` queues the
 existing alliance-removal packet when a target guild name is provided. When
 the live guild list arrives, the summary and members data are overlaid with
 the decoded score, rival name, and member roles from the session.
+`guild-create` queues the existing guild create packet when a guild name and
+hex-encoded 32-byte emblem payload are provided; the name follows the legacy
+4-8 character limit.
 
 ```rust
 use mu_ui::{guild_screen, GuildScreenState};

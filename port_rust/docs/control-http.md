@@ -124,6 +124,7 @@ Exemplo:
 - `guild-no-guild`
 - `guild-error`
 - `guild-join`
+- `guild-create`
 - `guild-role-assign`
 - `guild-fire`
 - `guild-ban-union`
@@ -152,7 +153,8 @@ Exemplo:
 `siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
-`guild-error`, `guild-role-assign`, `guild-fire`, `guild-ban-union`,
+`guild-error`, `guild-join`, `guild-create`, `guild-role-assign`,
+`guild-fire`, `guild-ban-union`,
 `duel-start`, `duel-stop`, `duel`, `quests`,
 `mu-helper`,
 `login-success` e `login-failure` alteram a rota/session state do runtime
@@ -189,17 +191,22 @@ a resposta sera `400`.
 `guild-error` selecionam as subvisoes da janela de guild. `guild-join` envia
 o pacote de join da guild atraves da sessao viva e aceita o guild master
 player ID na query ou no corpo em `master_id=`; se o payload vier
-incompleto, a resposta sera `400`. `guild-role-assign` envia o pacote de
-role assignment da guild atraves da sessao viva e aceita o player na query
-ou no corpo em `player=`, o role em `role=` e o tipo em `type=`; se o
-payload vier incompleto, a resposta sera `400`. `guild-fire` envia o pacote
-de kick do membro da guild atraves da sessao viva e aceita o player na
-query ou no corpo em `player=` e o codigo de seguranca em
-`security_code=`/`security-code=`/`authority_code=`/`authority-code=`; se o
-payload vier incompleto, a resposta sera `400`. `guild-ban-union` envia o
-pacote de alliance removal pela sessao viva e aceita o nome da guild na
-query ou no corpo em `guild_name=`/`union_name=`; se o payload vier
-incompleto, a resposta sera `400`. `duel-start` envia o pacote de duel
+incompleto, a resposta sera `400`. `guild-create` envia o pacote de create
+da guild atraves da sessao viva e aceita o nome da guild em `guild_name=`
+e o emblema em `guild_emblem=` como 64 caracteres hexadecimais que
+decodificam os 32 bytes do mark; nomes fora do limite legado de 4 a 8
+caracteres retornam `400`. Se o payload vier incompleto, a resposta sera
+`400`. `guild-role-assign` envia o pacote de role assignment da guild
+atraves da sessao viva e aceita o player na query ou no corpo em `player=`,
+o role em `role=` e o tipo em `type=`; se o payload vier incompleto, a
+resposta sera `400`. `guild-fire` envia o pacote de kick do membro da guild
+atraves da sessao viva e aceita o player na query ou no corpo em `player=`
+e o codigo de seguranca em `security_code=`/`security-code=`/`
+`authority_code=`/`authority-code=`; se o payload vier incompleto, a
+resposta sera `400`. `guild-ban-union` envia o pacote de alliance removal
+pela sessao viva e aceita o nome da guild na query ou no corpo em
+`guild_name=`/`union_name=`; se o payload vier incompleto, a resposta sera
+`400`. `duel-start` envia o pacote de duel
 challenge pela sessao viva e aceita o player alvo na query ou no corpo em
 `player_id=` e `player_name=`; se o payload vier incompleto, a resposta sera
 `400`. `duel-stop` envia o pacote de duel stop pela sessao viva sem payload
@@ -242,6 +249,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-create&guild_name=Guild&guild_emblem=0000000000000000000000000000000000000000000000000000000000000000'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
@@ -264,6 +272,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=friend'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-compose'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-chat-rooms'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-create&guild_name=Guild&guild_emblem=0000000000000000000000000000000000000000000000000000000000000000'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-members'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-union'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'

@@ -6,6 +6,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::{AppState, SessionPhase};
 use bevy::prelude::Resource;
+use mu_gameplay::MAX_GUILD_NAME_LENGTH;
 use mu_ui::{
     FriendScreenState, GuildScreenState, SiegeScreenState, UiRoute,
     CHARACTER_CREATE_NAME_MIN_LENGTH,
@@ -41,6 +42,7 @@ pub enum ControlCommand {
     FriendAdd,
     FriendDelete,
     GuildJoin,
+    GuildCreate,
     FriendRoster,
     FriendInbox,
     FriendCompose,
@@ -105,6 +107,7 @@ impl ControlCommand {
             Self::FriendAdd => "friend-add",
             Self::FriendDelete => "friend-delete",
             Self::GuildJoin => "guild-join",
+            Self::GuildCreate => "guild-create",
             Self::FriendRoster => "friend-roster",
             Self::FriendInbox => "friend-inbox",
             Self::FriendCompose => "friend-compose",
@@ -173,6 +176,7 @@ impl ControlCommand {
             "friend-add" | "friend_add" => Some(Self::FriendAdd),
             "friend-delete" | "friend_delete" => Some(Self::FriendDelete),
             "guild-join" | "guild_join" => Some(Self::GuildJoin),
+            "guild-create" | "guild_create" => Some(Self::GuildCreate),
             "friend-roster" | "friend_roster" => Some(Self::FriendRoster),
             "friend-inbox" | "friend_inbox" => Some(Self::FriendInbox),
             "friend-compose" | "friend_compose" => Some(Self::FriendCompose),
@@ -232,6 +236,8 @@ pub struct ControlSnapshot {
     pub friend_name: Option<String>,
     pub guild_master_player_id: Option<u16>,
     pub guild_player_name: Option<String>,
+    pub guild_create_name: Option<String>,
+    pub guild_create_emblem: Option<[u8; 32]>,
     pub duel_player_id: Option<u16>,
     pub duel_player_name: Option<String>,
     pub guild_role: Option<u8>,
@@ -263,6 +269,8 @@ impl ControlSnapshot {
             friend_name: None,
             guild_master_player_id: None,
             guild_player_name: None,
+            guild_create_name: None,
+            guild_create_emblem: None,
             duel_player_id: None,
             duel_player_name: None,
             guild_role: None,
@@ -452,6 +460,13 @@ impl ControlSnapshot {
                 false
             }
             ControlCommand::GuildJoin => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = None;
+                false
+            }
+            ControlCommand::GuildCreate => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Guild;
                 self.session_phase = SessionPhase::LoggedIn;
@@ -658,6 +673,16 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let guild_create_name = self
+            .guild_create_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
+        let guild_create_emblem = self
+            .guild_create_emblem
+            .as_ref()
+            .map(|value| format!("\"{}\"", guild_emblem_to_hex(value)))
+            .unwrap_or_else(|| "null".to_string());
         let duel_player_id = self
             .duel_player_id
             .map(|value| value.to_string())
@@ -731,7 +756,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -740,6 +765,8 @@ impl ControlSnapshot {
             friend_name,
             guild_master_player_id,
             guild_player_name,
+            guild_create_name,
+            guild_create_emblem,
             duel_player_id,
             duel_player_name,
             guild_role,
@@ -1027,6 +1054,20 @@ fn route_request(
                     };
 
                     snapshot.guild_master_player_id = Some(guild_master_player_id);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::GuildCreate => {
+                    let Some((guild_name, guild_emblem)) = guild_create_from_request(&request)
+                    else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing guild create payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.guild_create_name = Some(guild_name);
+                    snapshot.guild_create_emblem = Some(guild_emblem);
                     snapshot.apply_command(command)
                 }
                 ControlCommand::GuildRoleAssign => {
@@ -1364,6 +1405,76 @@ fn guild_join_from_request(request: &HttpRequest) -> Option<u16> {
         .ok()
 }
 
+fn guild_create_from_request(request: &HttpRequest) -> Option<(String, [u8; 32])> {
+    let guild_name = query_value(&request.query, "guild_name")
+        .or_else(|| query_value(&request.query, "guild-name"))
+        .or_else(|| query_value(&request.body, "guild_name"))
+        .or_else(|| query_value(&request.body, "guild-name"))?
+        .trim()
+        .to_string();
+
+    let guild_name_length = guild_name.chars().count();
+    if guild_name.is_empty() || guild_name_length < 4 || guild_name_length > MAX_GUILD_NAME_LENGTH {
+        return None;
+    }
+
+    let guild_emblem = guild_emblem_from_request(request)?;
+
+    Some((guild_name, guild_emblem))
+}
+
+fn guild_emblem_from_request(request: &HttpRequest) -> Option<[u8; 32]> {
+    let value = query_value(&request.query, "guild_emblem")
+        .or_else(|| query_value(&request.query, "guild-emblem"))
+        .or_else(|| query_value(&request.body, "guild_emblem"))
+        .or_else(|| query_value(&request.body, "guild-emblem"))?
+        .trim();
+
+    decode_guild_emblem_hex(value)
+}
+
+fn decode_guild_emblem_hex(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64 {
+        return None;
+    }
+
+    let bytes = value.as_bytes();
+    let mut emblem = [0u8; 32];
+
+    let mut index = 0;
+    while index < emblem.len() {
+        emblem[index] = decode_hex_byte(bytes[index * 2], bytes[index * 2 + 1])?;
+        index += 1;
+    }
+
+    Some(emblem)
+}
+
+fn decode_hex_byte(high: u8, low: u8) -> Option<u8> {
+    Some((decode_hex_digit(high)? << 4) | decode_hex_digit(low)?)
+}
+
+fn decode_hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn guild_emblem_to_hex(value: &[u8; 32]) -> String {
+    const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+
+    let mut output = String::with_capacity(64);
+    for &byte in value {
+        output.push(HEX_DIGITS[(byte >> 4) as usize] as char);
+        output.push(HEX_DIGITS[(byte & 0x0f) as usize] as char);
+    }
+
+    output
+}
+
 fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, u8)> {
     let player_name = query_value(&request.query, "player")
         .or_else(|| query_value(&request.body, "player"))?
@@ -1620,7 +1731,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"duel_player_id":null,"duel_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -1681,6 +1792,15 @@ mod tests {
             Some(ControlCommand::GuildJoin)
         );
         assert_eq!(ControlCommand::GuildJoin.as_str(), "guild-join");
+        assert_eq!(
+            ControlCommand::parse("guild-create"),
+            Some(ControlCommand::GuildCreate)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_create"),
+            Some(ControlCommand::GuildCreate)
+        );
+        assert_eq!(ControlCommand::GuildCreate.as_str(), "guild-create");
         assert_eq!(
             ControlCommand::parse("guild-role-assign"),
             Some(ControlCommand::GuildRoleAssign)
@@ -2052,6 +2172,25 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.guild_master_player_id, Some(0x1234));
         assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_guild_create_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.guild_create_name = Some("Guild".to_string());
+        snapshot.guild_create_emblem = Some([1u8; 32]);
+        snapshot.apply_command(ControlCommand::GuildCreate);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.guild_create_name.as_deref(), Some("Guild"));
+        assert_eq!(snapshot.guild_create_emblem, Some([1u8; 32]));
+        assert_eq!(snapshot.guild_screen_state, None);
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""guild_create_name":"Guild""#));
+        assert!(body.contains(&format!(r#""guild_create_emblem":"{}""#, "01".repeat(32))));
     }
 
     #[test]
@@ -2673,6 +2812,50 @@ mod tests {
             "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         );
         assert!(state_body.contains(r#""guild_master_player_id":4660"#));
+        assert!(state_body.contains(r#""command_count":1"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn guild_create_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-create HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild create payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-create&guild_name=Guild&guild_emblem=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild create payload""#));
+
+        let emblem = "01".repeat(32);
+        let (head, body) = send_request(
+            address,
+            format!(
+                "POST /command?name=guild-create&guild_name=Guild&guild_emblem={emblem} HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .as_str(),
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""guild_create_name":"Guild""#));
+        assert!(body.contains(&format!(r#""guild_create_emblem":"{}""#, emblem)));
+        assert!(body.contains(r#""guild_screen_state":null"#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""guild_create_name":"Guild""#));
+        assert!(state_body.contains(&format!(r#""guild_create_emblem":"{}""#, emblem)));
         assert!(state_body.contains(r#""command_count":1"#));
 
         handle.request_shutdown();

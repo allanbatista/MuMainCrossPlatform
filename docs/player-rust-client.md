@@ -109,6 +109,9 @@ in the local config file instead of being typed every time.
 - The guild control plane also accepts `guild-join` commands with a guild
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
+- The guild control plane also accepts `guild-create` commands with a guild
+  name (4-8 characters) and a 64-character hex emblem payload so QA can
+  drive the existing guild create packet helper through the live session.
 - The guild control plane also accepts `guild-fire` commands with a target
   player and security code so QA can drive the existing guild kick packet
   helper through the live session.
@@ -202,6 +205,9 @@ in the local config file instead of being typed every time.
 - `POST /command?name=guild-join` queues the guild join packet through the
   live session. Pass the guild master player ID in the body or as
   `master_id=`.
+- `POST /command?name=guild-create` queues the guild create packet through
+  the live session. Pass the guild name in `guild_name=` and the hex-encoded
+  32-byte emblem payload in `guild_emblem=`.
 - `POST /command?name=guild-role-assign` queues the guild role-assignment
   packet through the live session. Pass the target player in `player=`, the
   role in `role=`, and the assignment type in `type=`.

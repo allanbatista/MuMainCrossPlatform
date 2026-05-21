@@ -23,8 +23,8 @@ use mu_protocol::events::{
     decode_gens_ranking_info, duel_start_request, duel_stop_request, GensRankingInfo,
 };
 use mu_protocol::guild::{
-    guild_join_request, guild_kick_player_request, guild_list_request, guild_role_assign_request,
-    remove_alliance_guild_request, request_alliance_list,
+    guild_create_request, guild_join_request, guild_kick_player_request, guild_list_request,
+    guild_role_assign_request, remove_alliance_guild_request, request_alliance_list,
 };
 use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemStorageKind};
 use mu_protocol::login::{create_character, request_character_list, select_character};
@@ -130,6 +130,10 @@ pub(crate) enum BootstrapCommand {
     FriendDelete(String),
     GuildListRequest,
     GuildAllianceListRequest,
+    GuildCreate {
+        guild_name: String,
+        guild_emblem: [u8; 32],
+    },
     GuildJoin(u16),
     GuildRoleAssign {
         player_name: String,
@@ -474,6 +478,23 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::GuildAllianceListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_guild_create_request(
+        &self,
+        guild_name: impl Into<String>,
+        guild_emblem: [u8; 32],
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildCreate {
+                guild_name: guild_name.into(),
+                guild_emblem,
+            })
             .is_ok()
     }
 
@@ -1577,6 +1598,18 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::GuildCreate {
+            guild_name,
+            guild_emblem,
+        } => {
+            let packet = guild_create_request(guild_name, guild_emblem)
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::GuildJoin(guild_master_player_id) => {
             let packet =
                 guild_join_request(guild_master_player_id).map_err(|error| error.to_string())?;
@@ -1786,6 +1819,7 @@ mod tests {
     use mu_protocol::events::{
         duel_start_request, duel_stop_request, gens_ranking_request, GensRankingInfo,
     };
+    use mu_protocol::guild::guild_create_request;
     use mu_protocol::guild::guild_join_request;
     use mu_protocol::guild::guild_kick_player_request;
     use mu_protocol::guild::guild_list_request;
@@ -2238,6 +2272,29 @@ mod tests {
     }
 
     #[test]
+    fn guild_create_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_guild_create_request("Guild", [1u8; 32]));
+
+        match command_receiver
+            .try_recv()
+            .expect("guild create command missing")
+        {
+            BootstrapCommand::GuildCreate {
+                guild_name,
+                guild_emblem,
+            } => {
+                assert_eq!(guild_name, "Guild");
+                assert_eq!(guild_emblem, [1u8; 32]);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn guild_role_assign_requests_queue_commands() {
         let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
         let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
@@ -2501,6 +2558,45 @@ mod tests {
             .unwrap();
 
         assert_eq!(received, guild_join_request(0x1234).unwrap());
+    }
+
+    #[tokio::test]
+    async fn guild_create_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::GuildCreate {
+                guild_name: "Guild".to_string(),
+                guild_emblem: [1u8; 32],
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, guild_create_request(b"Guild", [1u8; 32]).unwrap());
     }
 
     #[tokio::test]

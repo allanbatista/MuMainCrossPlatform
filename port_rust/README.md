@@ -117,6 +117,9 @@ sessao de jogo completa.
   sessao viva.
 - O control-http tambem aceita `guild-join` com `master_id=` para enviar o
   pacote de join da guild pela sessao viva.
+- O control-http tambem aceita `guild-create` com `guild_name=` e
+  `guild_emblem=` hex de 64 caracteres para enviar o pacote de create da
+  guild pela sessao viva; o nome segue o limite legado de 4-8 caracteres.
 - O control-http tambem aceita `guild-role-assign` com `player=`, `role=` e
   `type=` para enviar o pacote de role assignment da guild pela sessao viva.
 - O control-http tambem aceita `guild-fire` com `player=` e
@@ -216,7 +219,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -230,6 +233,10 @@ subvisoes da janela de friend; `friend-inbox` tambem dispara uma vez a
 requisicao de letter list quando a sessao esta logada.
 `guild-join` aceita o guild master player ID no body bruto ou em
 `master_id=` e envia o pacote de join da guild pela sessao viva.
+`guild-create` aceita o nome da guild em `guild_name=` e o emblema em
+`guild_emblem=` como 64 caracteres hexadecimais que decodificam os 32 bytes
+do mark e envia o pacote de create da guild pela sessao viva; o nome segue o
+limite legado de 4-8 caracteres.
 `guild-role-assign` aceita o player no body bruto ou em `player=`, o role em
 `role=` e o type em `type=` para enviar o pacote de role assignment da guild.
 `guild-fire` aceita o player na query ou no corpo em `player=` e o security
