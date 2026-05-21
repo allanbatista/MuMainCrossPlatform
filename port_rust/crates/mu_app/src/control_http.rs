@@ -66,6 +66,7 @@ pub enum ControlCommand {
     DuelStop,
     DuelChannelJoin,
     DuelChannelQuit,
+    SkillTargeted,
     Quests,
     MuHelper,
     LoginSuccess,
@@ -133,6 +134,7 @@ impl ControlCommand {
             Self::DuelStop => "duel-stop",
             Self::DuelChannelJoin => "duel-channel-join",
             Self::DuelChannelQuit => "duel-channel-quit",
+            Self::SkillTargeted => "skill-targeted",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
@@ -221,6 +223,9 @@ impl ControlCommand {
             "duel-channel-quit" | "duel_channel_quit" | "duel-quit-channel" => {
                 Some(Self::DuelChannelQuit)
             }
+            "skill-targeted" | "skill_targeted" | "skill-target" | "skill_target" => {
+                Some(Self::SkillTargeted)
+            }
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
@@ -251,6 +256,8 @@ pub struct ControlSnapshot {
     pub duel_player_id: Option<u16>,
     pub duel_player_name: Option<String>,
     pub duel_channel_id: Option<u8>,
+    pub skill_id: Option<u16>,
+    pub skill_target_id: Option<u16>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
@@ -285,6 +292,8 @@ impl ControlSnapshot {
             duel_player_id: None,
             duel_player_name: None,
             duel_channel_id: None,
+            skill_id: None,
+            skill_target_id: None,
             guild_role: None,
             guild_assignment_type: None,
             guild_security_code: None,
@@ -600,9 +609,14 @@ impl ControlSnapshot {
             ControlCommand::DuelStart
             | ControlCommand::DuelStop
             | ControlCommand::DuelChannelJoin
-            | ControlCommand::DuelChannelQuit => {
+            | ControlCommand::DuelChannelQuit
+            | ControlCommand::SkillTargeted => {
                 self.state = AppState::ReadyForLogin;
-                self.ui_route = UiRoute::Duel;
+                self.ui_route = if matches!(command, ControlCommand::SkillTargeted) {
+                    UiRoute::World
+                } else {
+                    UiRoute::Duel
+                };
                 self.session_phase = SessionPhase::LoggedIn;
                 if matches!(command, ControlCommand::DuelChannelQuit) {
                     self.duel_channel_id = None;
@@ -714,6 +728,14 @@ impl ControlSnapshot {
             .duel_channel_id
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let skill_id = self
+            .skill_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let skill_target_id = self
+            .skill_target_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let guild_role = self
             .guild_role
             .map(|value| value.to_string())
@@ -778,7 +800,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -792,6 +814,8 @@ impl ControlSnapshot {
             duel_player_id,
             duel_player_name,
             duel_channel_id,
+            skill_id,
+            skill_target_id,
             guild_role,
             guild_assignment_type,
             guild_security_code,
@@ -1162,6 +1186,19 @@ fn route_request(
                 }
                 ControlCommand::DuelChannelQuit => {
                     snapshot.duel_channel_id = None;
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::SkillTargeted => {
+                    let Some((skill_id, target_id)) = skill_targeted_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing skill targeted payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.skill_id = Some(skill_id);
+                    snapshot.skill_target_id = Some(target_id);
                     snapshot.apply_command(command)
                 }
                 ControlCommand::DuelStop => snapshot.apply_command(command),
@@ -1632,6 +1669,26 @@ fn duel_channel_join_from_request(request: &HttpRequest) -> Option<u8> {
     }
 }
 
+fn skill_targeted_from_request(request: &HttpRequest) -> Option<(u16, u16)> {
+    let skill_id = query_value(&request.query, "skill_id")
+        .or_else(|| query_value(&request.query, "skill-id"))
+        .or_else(|| query_value(&request.body, "skill_id"))
+        .or_else(|| query_value(&request.body, "skill-id"))?
+        .trim()
+        .parse::<u16>()
+        .ok()?;
+
+    let target_id = query_value(&request.query, "target_id")
+        .or_else(|| query_value(&request.query, "target-id"))
+        .or_else(|| query_value(&request.body, "target_id"))
+        .or_else(|| query_value(&request.body, "target-id"))?
+        .trim()
+        .parse::<u16>()
+        .ok()?;
+
+    Some((skill_id, target_id))
+}
+
 fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
     let from_slot = query_value(&request.query, "from_slot")
         .or_else(|| query_value(&request.body, "from_slot"))?
@@ -1790,7 +1847,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2120,6 +2177,19 @@ mod tests {
             "duel-channel-quit"
         );
         assert_eq!(
+            ControlCommand::parse("skill-targeted"),
+            Some(ControlCommand::SkillTargeted)
+        );
+        assert_eq!(
+            ControlCommand::parse("skill_targeted"),
+            Some(ControlCommand::SkillTargeted)
+        );
+        assert_eq!(
+            ControlCommand::parse("skill-target"),
+            Some(ControlCommand::SkillTargeted)
+        );
+        assert_eq!(ControlCommand::SkillTargeted.as_str(), "skill-targeted");
+        assert_eq!(
             ControlCommand::parse("vault-deposit"),
             Some(ControlCommand::VaultDeposit)
         );
@@ -2377,6 +2447,46 @@ mod tests {
     }
 
     #[test]
+    fn skill_targeted_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=skill-targeted HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing skill targeted payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=skill-targeted&skill_id=bad&target_id=7 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing skill targeted payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=skill-targeted&skill_id=6&target_id=77 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""skill_id":6"#));
+        assert!(body.contains(r#""skill_target_id":77"#));
+        assert!(body.contains(r#""ui_route":"world""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""skill_id":6"#));
+        assert!(state_body.contains(r#""skill_target_id":77"#));
+        assert!(state_body.contains(r#""command_count":1"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
     fn snapshot_tracks_guild_fire_payload() {
         let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
 
@@ -2402,6 +2512,20 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.guild_union_name.as_deref(), Some("Alliance"));
         assert_eq!(snapshot.guild_screen_state, Some(GuildScreenState::Union));
+    }
+
+    #[test]
+    fn snapshot_tracks_skill_targeted_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.skill_id = Some(6);
+        snapshot.skill_target_id = Some(77);
+        snapshot.apply_command(ControlCommand::SkillTargeted);
+
+        assert_eq!(snapshot.ui_route, UiRoute::World);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.skill_id, Some(6));
+        assert_eq!(snapshot.skill_target_id, Some(77));
     }
 
     #[test]

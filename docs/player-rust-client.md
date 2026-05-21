@@ -173,7 +173,7 @@ in the local config file instead of being typed every time.
 - Start the graphical client with `--control-http 127.0.0.1:0` to expose the
   local HTTP automation surface while the Bevy window is running.
 - `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
-  and `command_count`.
+  `skill_id`, `skill_target_id`, and `command_count`.
 - `POST /command?name=ready-for-login|server-select|character-select|character-create|create-character|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
 - `POST /command?name=select-character` can continue from character select
@@ -239,6 +239,9 @@ in the local config file instead of being typed every time.
   raw body value.
 - `POST /command?name=duel-channel-quit` queues the duel channel quit packet
   through the live session with no extra payload.
+- `POST /command?name=skill-targeted` queues the targeted skill packet
+  through the live session. Pass the skill id in `skill_id=` and the target
+  player id in `target_id=`.
 - `POST /command?name=duel` can step into the visible duel route shell for
   local QA smoke.
 - `POST /command?name=events` can step into the visible events route shell for

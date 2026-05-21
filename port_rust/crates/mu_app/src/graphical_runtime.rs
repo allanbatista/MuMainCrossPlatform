@@ -401,6 +401,12 @@ fn sync_control_http_snapshot_to_runtime(
             }
             let _ = bootstrap.queue_duel_channel_quit_request();
         }
+        Some(ControlCommand::SkillTargeted) => {
+            if let (Some(skill_id), Some(target_id)) = (snapshot.skill_id, snapshot.skill_target_id)
+            {
+                let _ = bootstrap.queue_skill_targeted_request(skill_id, target_id);
+            }
+        }
         Some(ControlCommand::DuelStop) => {
             let _ = bootstrap.queue_duel_stop_request();
         }
@@ -1562,6 +1568,56 @@ mod tests {
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_skill_targeted() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.skill_id = Some(0x1234);
+            snapshot.skill_target_id = Some(0x5678);
+            snapshot.apply_command(ControlCommand::SkillTargeted);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("skill targeted command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::SkillTargeted {
+                skill_id,
+                target_id,
+            } => {
+                assert_eq!(skill_id, 0x1234);
+                assert_eq!(target_id, 0x5678);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::World
+        );
     }
 
     #[test]

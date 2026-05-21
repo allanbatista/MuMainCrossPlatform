@@ -13,7 +13,8 @@ as telas internas. `friend-inbox` tambem dispara uma requisicao de letter list
 uma vez por ativacao logada antes de sobrepor as letters live quando elas
 chegam. `duel-start`, `duel-stop`, `duel-channel-join` e `duel-channel-quit`
 tambem alimentam o bridge de pacotes de duel quando a sessao viva esta
-disponivel.
+disponivel. `skill-targeted` alimenta o bridge do pacote de targeted skill
+na mesma sessao viva.
 `party` tambem espelha a shell visivel e pede uma vez a party list live por
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
@@ -58,9 +59,13 @@ e o servidor continua disponivel para inspeção local.
 - `friend_name`
 - `guild_master_player_id`
 - `guild_player_name`
+- `guild_create_name`
+- `guild_create_emblem`
 - `duel_player_id`
 - `duel_player_name`
 - `duel_channel_id`
+- `skill_id`
+- `skill_target_id`
 - `guild_role`
 - `guild_assignment_type`
 - `guild_security_code`
@@ -81,7 +86,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -134,6 +139,7 @@ Exemplo:
 - `duel-stop`
 - `duel-channel-join`
 - `duel-channel-quit`
+- `skill-targeted`
 - `inventory-use`
 - `inventory-equip`
 - `inventory-unequip`
@@ -219,7 +225,9 @@ extra. `duel-channel-join` envia o pacote de join de channel pela sessao
 viva e aceita o channel em `channel_id=`/`channel-id=`/`channel=` ou como
 body bruto; se o payload vier incompleto, a resposta sera `400`.
 `duel-channel-quit` envia o pacote de quit de channel pela sessao viva sem
-payload extra.
+payload extra. `skill-targeted` envia o pacote de targeted skill pela
+sessao viva e aceita o skill em `skill_id=` e o alvo em `target_id=`; se o
+payload vier incompleto, a resposta sera `400`.
 `inventory-use` atualiza a rota visivel para inventory,
 aceita `slot=` ou `item_slot=` com o slot linear do inventory, aceita
 `target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e envia o
@@ -263,6 +271,7 @@ curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-ban-union&guild_name=Alliance'
+curl -X POST 'http://127.0.0.1:12345/command?name=skill-targeted&skill_id=4660&target_id=22136'
 curl -X POST 'http://127.0.0.1:12345/command?name=vault-deposit&amount=250'
 curl -X POST 'http://127.0.0.1:12345/command?name=vault-withdraw&amount=125'
 curl -X POST 'http://127.0.0.1:12345/command?name=inventory-use&item_slot=7&target=3&fruit=false'

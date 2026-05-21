@@ -30,6 +30,7 @@ use mu_protocol::guild::{
 use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemStorageKind};
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
+use mu_protocol::skills::targeted_skill;
 use mu_protocol::social::{
     friend_add_request, friend_delete, friend_list_request, letter_list_request, party_list_request,
 };
@@ -179,6 +180,10 @@ pub(crate) enum BootstrapCommand {
     DuelStop,
     DuelChannelJoin(u8),
     DuelChannelQuit,
+    SkillTargeted {
+        skill_id: u16,
+        target_id: u16,
+    },
 }
 
 #[derive(Debug, Resource)]
@@ -348,6 +353,19 @@ impl BootstrapRuntime {
             .send(BootstrapCommand::Chat {
                 sender: sender.into(),
                 message: message.into(),
+            })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_skill_targeted_request(&self, skill_id: u16, target_id: u16) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::SkillTargeted {
+                skill_id,
+                target_id,
             })
             .is_ok()
     }
@@ -1800,6 +1818,17 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::SkillTargeted {
+            skill_id,
+            target_id,
+        } => {
+            let packet = targeted_skill(skill_id, target_id).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::InventoryUse {
             slot,
             target,
@@ -1960,6 +1989,7 @@ mod tests {
         character_creation_failed, character_creation_successful, character_list_extended,
         game_server_entered, CharacterListEntry,
     };
+    use mu_protocol::skills::targeted_skill;
     use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
     use mu_protocol::vault::vault_move_money_request;
     use mu_ui::{
@@ -3378,6 +3408,45 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn skill_targeted_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::SkillTargeted {
+                skill_id: 0x1234,
+                target_id: 0x5678,
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, targeted_skill(0x1234, 0x5678).unwrap());
+    }
+
     #[test]
     fn duel_channel_requests_queue_commands() {
         let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
@@ -3402,6 +3471,29 @@ mod tests {
             .expect("duel channel quit command missing")
         {
             BootstrapCommand::DuelChannelQuit => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn skill_targeted_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_skill_targeted_request(0x1234, 0x5678));
+
+        match command_receiver
+            .try_recv()
+            .expect("skill targeted command missing")
+        {
+            BootstrapCommand::SkillTargeted {
+                skill_id,
+                target_id,
+            } => {
+                assert_eq!(skill_id, 0x1234);
+                assert_eq!(target_id, 0x5678);
+            }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
     }

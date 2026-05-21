@@ -59,3 +59,9 @@ guild parity is still required.
 `duel-start` and `duel-stop` are now bridged through the control plane, but
 the rest of the legacy duel lifecycle still needs a later slice if full duel
 parity is still required.
+
+# [medium] Skill feedback follow-up
+
+`skill-targeted` now queues the legacy packet through the control plane, but
+the visible combat feedback path for targeted skill use still depends on the
+future render/audio skill-effect wiring.
