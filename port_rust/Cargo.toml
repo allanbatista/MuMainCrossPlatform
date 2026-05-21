@@ -1,0 +1,61 @@
+[workspace]
+members = [
+    "crates/port_rust",
+    "crates/mu_client",
+    "crates/mu_app",
+    "crates/mu_core",
+    "crates/mu_protocol",
+    "crates/mu_fake_server",
+    "crates/mu_network",
+    "crates/mu_assets",
+    "crates/mu_asset_pipeline",
+    "crates/mu_render",
+    "crates/mu_ui",
+    "crates/mu_audio",
+    "crates/mu_input",
+    "crates/mu_gameplay",
+    "crates/mu_editor_admin",
+    "crates/mu_test_support",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+bevy = { version = "0.18", default-features = false, features = [
+    "bevy_asset",
+    "bevy_camera",
+    "bevy_core_pipeline",
+    "bevy_gltf",
+    "bevy_light",
+    "bevy_log",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_render",
+    "bevy_window",
+    "bevy_winit",
+    "default_font",
+    "multi_threaded",
+    "png",
+    "sysinfo_plugin",
+    "x11",
+] }
+camino = "1"
+clap = { version = "4", features = ["derive", "env"] }
+insta = "1"
+proptest = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }

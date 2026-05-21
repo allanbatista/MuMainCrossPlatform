@@ -1,0 +1,324 @@
+# Rust Client Player Guide
+
+Use the Rust client the same way you would use a normal game release: start the
+launcher, point it at converted assets, choose a server, log in, and play.
+
+## Start
+
+The Rust client expects a converted asset root and a server address:
+
+```bash
+mu_client --asset-root /path/to/converted/assets --server 127.0.0.1:55901
+```
+
+On the packaged release, the asset root and server settings are usually stored
+in the local config file instead of being typed every time.
+
+## First Run
+
+- The client reads `config/client.toml` for local settings.
+- Video, audio, controls, network, and locale settings are persisted there.
+- Passwords, tokens, and raw session IDs are not saved.
+- If the asset root is missing or invalid, the graphical client still opens
+  the asset validation failure state instead of exiting immediately.
+
+## What Players See
+
+- A visible Bevy auth shell for login, server selection, and character
+  selection while the client boots.
+- On connect, the bootstrap automatically sends the legacy server-list
+  request, picks the first usable server from the roster, asks the
+  connect-server for connection info, and reconnects to the returned
+  game-server endpoint so real servers can drive the same handshake as the
+  original client.
+- The shared Options window is also available as a visible Bevy route and
+  through the local control HTTP API with `options`.
+- Character selection and the visible character-create and character-delete routes.
+- The Bevy bootstrap now carries the client from login to character select and
+  immediately requests the character list after the login-success packet
+  using the legacy locale byte (`en`/`eng` -> `0`, `pt`/`por` -> `1`,
+  `es`/`spn` -> `2`) before the loaded world handoff starts.
+- When the roster arrives, the bootstrap automatically picks the first usable
+  roster entry, sends `select-character`, and carries that character name
+  into the world handoff; the same request can still be sent through the
+  local control HTTP API with the character name in the body or a
+  `character=` query parameter when you want to override the default.
+- The character-create route opens the class picker and name prompt;
+  `character-create` opens the shell and `create-character` submits the
+  name, returning to character select on success or keeping the create
+  error surface on failure.
+- The character-delete route confirms the selected roster entry;
+  `character-delete` opens the shell and `delete-character` submits the
+  legacy delete packet with the local security code.
+- On the visible character-select surface, use `Up`/`Down` or `Left`/`Right`
+  to move the selection and `Enter` to confirm without the control HTTP API.
+  The shell shows the loading state until the roster is ready and then uses
+  the automatic roster selection unless you override it manually.
+- The world now opens a visible Bevy world shell with a camera, lighting,
+  a heightfield terrain derived from the loaded world bundle, a layered
+  terrain surface from the bundle's first two converted texture slots plus
+  the alpha map, the bundled terrain lightmap, sampled local/remote player
+  markers grounded to the visible terrain surface, and real converted models
+  for nearby objects, NPCs, and monsters.
+- The world shell now prefers nearby scene entities when sampling the visible
+  object, NPC, monster, and remote-player set instead of taking the first
+  arbitrary entries, so the 3D scene better matches the local play area while
+  still staying sampled for performance.
+- The world camera now follows the local avatar and uses the saved
+  `[Camera] zoom` value, so mouse-wheel zoom in the world route stays framed
+  while the 3D scene is active and persists through `config/client.toml`.
+- The world now also shows a visible HUD overlay with the legacy main-frame
+  gauges and buttons while the 3D scene is active.
+- The world HUD stack now also shows the visible chat log, minimap, and
+  hotkey surfaces while the 3D scene is active.
+- The world shell now seeds a local avatar marker and keeps it synchronized
+  with authoritative movement replies when the live session is active.
+- Remote player markers now appear when live movement packets arrive for
+  non-local keys, and the remote roster clears on logout/disconnect so stale
+  markers do not survive session loss.
+- The selected character name is carried into the world shell, so the local
+  avatar label and chat sender use the chosen roster entry instead of the
+  generic `Player` placeholder when the name is available.
+- If the terrain texture slots, alpha data, or lightmap are unavailable, the
+  visible surface falls back safely to the solid shell instead of breaking
+  the world route.
+- Press Tab while the world route is active to open or close the visible
+  inventory shell.
+- The inventory shell also accepts `vault-deposit` and `vault-withdraw`
+  control HTTP commands with an amount in the body or `amount=` and
+  `inventory-move` with `from_slot=`/`to_slot=` so QA can drive the live
+  vault transfer and item move packet helpers.
+- The inventory shell also accepts `inventory-use`, `inventory-equip`, and
+  `inventory-unequip`. `inventory-use` queues the consume packet from an
+  inventory slot with `slot=` or `item_slot=`, optional `target=`, and
+  optional `add_points=`/`fruit=`; `inventory-equip` uses an inventory slot
+  and moves the item into equipment locally before queuing the move packet;
+  `inventory-unequip` uses an equipment slot and moves the item back into the
+  inventory locally before queuing the move packet.
+- The NPC and shop routes now open visible Bevy shells that can be driven
+  from the runtime or the local control HTTP smoke path.
+- The GameShop route now opens a visible Bevy shell that can be driven from
+  the runtime or the local control HTTP smoke path with `game-shop`.
+- The Marketplace/player shop route now opens a visible Bevy shell that can
+  be driven from the runtime or the local control HTTP smoke path with
+  `marketplace`.
+- The chat route now opens a visible Bevy shell with a draft line; when the
+  session is logged in, typing printable text and pressing Enter sends a
+  public chat packet from the local player.
+- The trade route now opens a visible Bevy shell that can be driven from the
+  runtime or the local control HTTP smoke path.
+- The friend route now opens a visible Bevy shell that mirrors the mail
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
+  `friend-chat-rooms`; `friend-inbox` queues one live `letter_list_request`
+  per logged-in activation and overlays the decoded letter rows when they
+  arrive, while `letter-read` and `letter-delete` act on the selected
+  `letter_id` to mark or remove the live letter in the same shell. The live
+  friend list still overlays the roster and server-state data from the
+  session, including friend presence changes from `FS_FRIEND_STATE_CHANGE`.
+- The friend control plane also accepts `friend-add` and `friend-delete`
+  commands with a friend name in the body or `friend=` so QA can drive the
+  existing friend packet helpers through the live session.
+- The guild route now opens a visible Bevy shell that mirrors the guild
+  snapshot and can be driven from the local control HTTP smoke path with
+  `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
+  and `guild-error`; when the live guild list arrives, the shell overlays the
+  decoded score, rival name, member roles, and union data from the session.
+- The guild control plane also accepts `guild-join` commands with a guild
+  master player ID in the body or `master_id=` so QA can drive the existing
+  guild join packet helper through the live session.
+- The guild control plane also accepts `guild-create` commands with a guild
+  name (4-8 characters) and a 64-character hex emblem payload so QA can
+  drive the existing guild create packet helper through the live session.
+- The guild control plane also accepts `guild-fire` commands with a target
+  player and security code so QA can drive the existing guild kick packet
+  helper through the live session.
+- The guild control plane also accepts `guild-ban-union` commands with a
+  target guild name so QA can drive the existing alliance-removal packet
+  helper through the live session.
+- The siege route now opens a visible Bevy shell that mirrors the siege
+  snapshot and can be driven from the local control HTTP smoke path with
+  `siege`, `siege-inactive`, `siege-soldier`, and `siege-commander`.
+- The inventory control plane also accepts `vault-deposit`,
+  `vault-withdraw`, `inventory-use`, `inventory-equip`, `inventory-unequip`,
+  and `inventory-move` commands with the matching slot or amount payloads so
+  QA can drive the existing vault money transfer, item consume, and item move
+  packet helpers through the live session.
+- Opening `guild-union` in a logged-in session also sends the alliance list
+  request once per activation before keeping the shell visible, and the live
+  alliance list replaces the placeholder unions when it arrives.
+- When the friend or guild route opens while logged in, the client now sends
+  the matching live list request once per activation before keeping the shell
+  on screen, and `friend-inbox` also requests the live letter list once per
+  logged-in inbox activation. The decoded roster state stays visible until
+  logout or disconnect clears it.
+- The duel route now opens a visible Bevy shell that mirrors the duel
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `duel`.
+- `duel-start`, `duel-stop`, `duel-channel-join`, and `duel-channel-quit`
+  queue the live duel packet helpers through the local control HTTP bridge
+  when a session is connected.
+- The events route now opens a visible Bevy shell that mirrors the event
+  manager snapshot and can be driven from the local control HTTP smoke path
+  with `events`.
+- The Gens HUD route now opens a visible Bevy shell that mirrors the Gens
+  manager snapshot, sends one live ranking request per logged-in activation,
+  resolves the legacy rank title from the local 14-title table, and can be
+  driven from the local control HTTP smoke path with `gens`.
+- The party route now opens a visible Bevy shell that can be driven from the
+  runtime or the local control HTTP smoke path, and `party-invite` queues the
+  legacy invite packet when you pass a target player id while
+  `party-leave` queues the legacy leave/kick packet for the chosen party row
+  number.
+- The gate route now opens a visible Bevy shell that can be driven from the
+  runtime or the local control HTTP smoke path.
+- The quests route now opens a visible Bevy shell that can be driven from the
+  runtime or the local control HTTP smoke path.
+- The MU Helper route now opens a visible Bevy shell that mirrors the helper
+  runtime snapshot and can be driven from the local control HTTP smoke path
+  with `mu-helper`.
+- The world, HUD, chat, inventory, NPC/shop, trade, marketplace, party, gate, events, Gens, quests, and GameShop
+  surfaces documented elsewhere in this repo still remain a staged port, not a
+  finished parity pass.
+- Safe error screens when login, connection, or asset validation fails.
+
+## World Controls
+
+- `WASD` moves the local avatar in the world shell.
+- `Tab` opens and closes the inventory shell while the world route is active.
+- When connected, movement requests are sent through the live session and the
+  returned position updates reconcile the runtime pose.
+
+## QA / Dev Control Plane
+
+- Start the graphical client with `--control-http 127.0.0.1:0` to expose the
+  local HTTP automation surface while the Bevy window is running.
+- `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
+  `letter_id`, `skill_id`, `skill_target_id`, and `command_count`.
+- `POST /command?name=ready-for-login|server-select|character-select|character-create|character-delete|create-character|delete-character|loading|world|login-success|login-failure|mu-helper|exit|ping`
+  can step the auth/bootstrap flow for local QA and smoke tests.
+- `POST /command?name=select-character` can continue from character select
+  once the roster is visible. Pass the character name in the body or as
+  `character=` when using the local control HTTP API.
+- `POST /command?name=character-create` can open the visible character-create
+  shell for local QA smoke.
+- `POST /command?name=create-character` submits the visible character-create
+  form. Pass the name in the body or as `character=`; names shorter than 4
+  characters are rejected by the control plane.
+- `POST /command?name=character-delete` can open the visible character-delete
+  shell for local QA smoke.
+- `POST /command?name=delete-character` submits the visible character-delete
+  form. Pass the security code in `security_code=`; empty codes are rejected
+  by the control plane.
+- `POST /command?name=chat` can step into the visible chat route shell for
+  local QA smoke; once open, the shell accepts typed chat and Enter sends the
+  draft.
+- `POST /command?name=npc|shop` can step into the visible NPC and shop route
+  shells for local QA smoke.
+- `POST /command?name=game-shop` can step into the visible GameShop route
+  shell for local QA smoke.
+- `POST /command?name=marketplace` can step into the visible Marketplace
+  route shell for local QA smoke.
+- `POST /command?name=trade` can step into the visible trade route shell for
+  local QA smoke.
+- `POST /command?name=friend` can step into the visible friend route shell
+  for local QA smoke. `friend-roster`, `friend-inbox`, `friend-compose`, and
+  `friend-chat-rooms` select the matching friend subview, and
+  `friend-inbox` queues the live letter list once per logged-in activation
+  before the sample inbox is replaced. `letter-read` and `letter-delete`
+  act on the selected inbox `letter_id` to mark the letter read or remove it
+  from the local mail state.
+- `POST /command?name=friend-add` and `POST /command?name=friend-delete`
+  queue the matching friend packet helpers through the live session. Pass
+  the friend name in the body or as `friend=`.
+- `POST /command?name=letter-read` and `POST /command?name=letter-delete`
+  queue the matching mail packet helpers through the live session. Pass the
+  inbox id in `letter_id=` or the raw body payload.
+- `POST /command?name=guild` can step into the visible guild route shell for
+  local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
+  `guild-no-guild`, and `guild-error` select the matching guild subview.
+- `POST /command?name=guild-join` queues the guild join packet through the
+  live session. Pass the guild master player ID in the body or as
+  `master_id=`.
+- `POST /command?name=guild-create` queues the guild create packet through
+  the live session. Pass the guild name in `guild_name=` and the hex-encoded
+  32-byte emblem payload in `guild_emblem=`.
+- `POST /command?name=guild-role-assign` queues the guild role-assignment
+  packet through the live session. Pass the target player in `player=`, the
+  role in `role=`, and the assignment type in `type=`.
+- `POST /command?name=guild-fire` queues the guild member-kick packet
+  through the live session. Pass the target player in `player=` and the
+  security code in `security_code=`.
+- `POST /command?name=guild-ban-union` queues the guild alliance-removal
+  packet through the live session. Pass the target guild name in the body or
+  as `guild_name=`/`union_name=`.
+- `POST /command?name=vault-deposit` and `POST /command?name=vault-withdraw`
+  queue the matching vault money transfer packet through the live session.
+  Pass the amount in the body or as `amount=`.
+- `POST /command?name=inventory-move` queues the inventory move packet
+  through the live session. Pass the source and destination linear slots in
+  `from_slot=` and `to_slot=`.
+- `POST /command?name=inventory-use` queues the consume-item packet through
+  the live session. Pass the inventory slot in `slot=` or `item_slot=` and
+  optionally override `target=` and `add_points=`/`fruit=`; `inventory-equip`
+  uses an inventory slot and `inventory-unequip` uses an equipment slot.
+- `POST /command?name=duel-start` queues the duel start packet through the
+  live session. Pass the target player ID in `player_id=` and the target
+  player name in `player_name=`.
+- `POST /command?name=duel-stop` queues the duel stop packet through the
+  live session with no extra payload.
+- `POST /command?name=duel-channel-join` queues the duel channel join packet
+  through the live session. Pass the channel id in `channel_id=` or as the
+  raw body value.
+- `POST /command?name=duel-channel-quit` queues the duel channel quit packet
+  through the live session with no extra payload.
+- `POST /command?name=skill-targeted` queues the targeted skill packet
+  through the live session. Pass the skill id in `skill_id=` and the target
+  player id in `target_id=`. When the packet is accepted, the world HUD also
+  shows the latest skill feedback card with the queued particle/audio cues.
+- `POST /command?name=duel` can step into the visible duel route shell for
+  local QA smoke.
+- `POST /command?name=events` can step into the visible events route shell for
+  local QA smoke.
+- `POST /command?name=gens` can step into the visible Gens HUD route shell
+  for local QA smoke.
+- `POST /command?name=party` can step into the visible party route shell for
+  local QA smoke; when the session is logged in, the runtime also queues one
+  live party list request per activation and hydrates the decoded
+  party list/info/leave packets into `PartyManager`.
+- `POST /command?name=gate` can step into the visible gate route shell for
+  local QA smoke.
+- `POST /command?name=siege|siege-inactive|siege-soldier|siege-commander`
+  can step into the visible siege route shell for local QA smoke and switch
+  the siege snapshot mode.
+- `POST /command?name=quests` can step into the visible quests route shell
+  for local QA smoke.
+- `POST /command?name=mu-helper` can step into the visible MU Helper route
+  shell for local QA smoke.
+- `exit` also shuts down the graphical Bevy process, which is handy for smoke
+  automation.
+
+## If Something Fails
+
+- `asset-check-failed` means the converted asset root or manifest is wrong.
+- Login failures return to the login state instead of corrupting the session.
+- A disconnect during the map handoff is treated as part of the normal
+  login-to-world transfer, not as a fatal error.
+- Connection drops return the client to a safe state and log a diagnostic.
+
+## QA / Dev Smoke
+
+For local validation, the same client binary can be started in headless mode and
+with a local control HTTP endpoint:
+
+```bash
+mu_client --headless --control-http 127.0.0.1:0
+```
+
+That mode is for testing and automation, not for normal players.
+
+See also:
+
+- `docs/rust-client.md`
+- `docs/control-http.md`
+- `port_rust/README.md`

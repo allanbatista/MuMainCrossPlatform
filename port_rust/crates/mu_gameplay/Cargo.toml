@@ -1,0 +1,18 @@
+[package]
+name = "mu_gameplay"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+mu_assets = { path = "../mu_assets" }
+mu_input = { path = "../mu_input" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+camino = { workspace = true }
+mu_network = { path = "../mu_network" }
+mu_protocol = { path = "../mu_protocol" }
+proptest = { workspace = true }
+tokio = { workspace = true }

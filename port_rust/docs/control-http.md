@@ -1,0 +1,353 @@
+# Controle remoto do cliente por HTTP
+
+`mu_client` pode expor um servidor HTTP local de controle quando iniciado com
+`--control-http`.
+
+Ele serve para testar e inspecionar o estado do cliente sem mexer na rede do
+jogo. No modo grafico, o endpoint espelha o fluxo de login/server select/
+character select/world da Bevy runtime e a shell visual correspondente; no
+modo `--headless`, continua sendo um smoke server deterministico. As rotas
+`friend`, `guild`, `siege`, `duel`, `events`, `gens` e `marketplace`
+tambem espelham as shells visiveis, e `friend` e `guild` aceitam comandos de
+subview para testar as telas internas. `friend-inbox` tambem dispara uma
+requisicao de letter list uma vez por ativacao logada antes de sobrepor as
+letters live quando elas chegam. `duel-start`, `duel-stop`,
+`duel-channel-join` e `duel-channel-quit` tambem alimentam o bridge de
+pacotes de duel quando a sessao viva esta disponivel. `skill-targeted`
+alimenta o bridge do pacote de targeted skill na mesma sessao viva.
+Depois do login-success, o bootstrap automaticamente puxa a character list,
+escolhe o primeiro personagem usavel e envia `select-character`; o comando
+`select-character` continua disponivel no HTTP como override manual quando
+voce quiser escolher outro nome.
+`letter-read` e `letter-delete` atuam sobre a carta selecionada do inbox
+via `letter_id=` (ou body bruto); `letter-read` marca a carta como lida no
+`MailManager` local e enfileira o pacote legacy de read, enquanto
+`letter-delete` remove a carta da lista local e enfileira o pacote legacy
+de delete.
+`party` tambem espelha a shell visivel e pede uma vez a party list live por
+ativacao logada, decodificando list/info/leave no `PartyManager` quando a
+resposta chega.
+`party-invite` enfileira o pacote legacy de invite pela sessao viva e aceita
+o target player ID na query ou no corpo em `target_player_id=`; se o payload
+vier incompleto, a resposta sera `400`.
+`party-leave` enfileira o pacote legacy de leave/kick pela sessao viva e
+aceita o numero da party row em `member_number=` (ou `player_index=`); se o
+payload vier incompleto, a resposta sera `400`.
+Quando a sessao responde com as listas sociais, o runtime sobrepoe o
+roster/score/roles/unions decodificados no shell correspondente ate o logout
+ou disconnect.
+`character-create` abre a shell visivel de criacao, e `create-character`
+submete o nome informado para o worker de bootstrap. `character-delete`
+abre a shell visivel de confirmacao do personagem selecionado, e
+`delete-character` submete o pacote legacy de delete com `security_code=`
+para o worker de bootstrap.
+`inventory-use`, `inventory-equip` e `inventory-unequip` tambem espelham o
+fluxo visivel de inventory: `inventory-use` so dispara o consume packet,
+enquanto `inventory-equip` e `inventory-unequip` movem localmente entre
+inventory/equipment antes de enfileirar o packet de item-move.
+
+## Como iniciar
+
+```bash
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
+  --control-http 127.0.0.1:0
+```
+
+Para smoke headless, use:
+
+```bash
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- \
+  --headless \
+  --control-http 127.0.0.1:0
+```
+
+O binario imprime o estado inicial e a URL efetiva do servidor. Se a
+validacao de assets falhar no boot, o estado inicial sera `asset-check-failed`
+e o servidor continua disponivel para inspeção local.
+
+## Consultar estado
+
+`GET /state` e `GET /` retornam JSON com o estado atual:
+
+- `state`
+- `ui_route`
+- `session_phase`
+- `last_command`
+- `selected_character_name`
+- `friend_name`
+- `letter_id`
+- `guild_master_player_id`
+- `guild_player_name`
+- `guild_create_name`
+- `guild_create_emblem`
+- `duel_player_id`
+- `duel_player_name`
+- `duel_channel_id`
+- `skill_id`
+- `skill_target_id`
+- `guild_role`
+- `guild_assignment_type`
+- `guild_security_code`
+- `character_delete_security_code`
+- `guild_union_name`
+- `party_target_player_id`
+- `inventory_use_slot`
+- `inventory_use_target`
+- `inventory_use_add_points`
+- `inventory_equip_slot`
+- `inventory_unequip_slot`
+- `friend_screen_state`
+- `guild_screen_state`
+- `siege_screen_state`
+- `vault_money_amount`
+- `inventory_move_from_slot`
+- `inventory_move_to_slot`
+- `command_count`
+
+Exemplo:
+
+```json
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"character_delete_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+```
+
+## Enviar comandos
+
+`POST /command?name=...` aceita estes comandos:
+
+- `boot`
+- `asset-check-failed`
+- `ready-for-login`
+- `server-select`
+- `options`
+- `character-select`
+- `character-create`
+- `character-delete`
+- `create-character`
+- `delete-character`
+- `select-character`
+- `loading`
+- `world`
+- `chat`
+- `npc`
+- `shop`
+- `game-shop`
+- `marketplace`
+- `trade`
+- `party`
+- `party-invite`
+- `party-leave`
+- `gate`
+- `siege`
+- `siege-inactive`
+- `siege-soldier`
+- `siege-commander`
+- `events`
+- `gens`
+- `friend`
+- `friend-add`
+- `friend-delete`
+- `friend-roster`
+- `friend-inbox`
+- `friend-compose`
+- `friend-chat-rooms`
+- `letter-read`
+- `letter-delete`
+- `guild`
+- `guild-summary`
+- `guild-members`
+- `guild-union`
+- `guild-no-guild`
+- `guild-error`
+- `guild-join`
+- `guild-create`
+- `guild-role-assign`
+- `guild-fire`
+- `guild-ban-union`
+- `duel-start`
+- `duel-stop`
+- `duel-channel-join`
+- `duel-channel-quit`
+- `skill-targeted`
+- `inventory-use`
+- `inventory-equip`
+- `inventory-unequip`
+- `vault-deposit`
+- `vault-withdraw`
+- `inventory-move`
+- `duel`
+- `quests`
+- `mu-helper`
+- `login-success`
+- `login-failure`
+- `logout-login`
+- `logout-character`
+- `disconnect`
+- `exit`
+- `ping`
+
+`server-select`, `options`, `character-select`, `character-create`,
+`create-character`, `loading`, `world`, `chat`, `npc`, `select-character`,
+`shop`, `game-shop`, `marketplace`, `trade`, `party`, `party-invite`,
+`party-leave`, `gate`, `siege`, `siege-inactive`,
+`siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
+`friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
+`letter-read`, `letter-delete`,
+`guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
+`guild-error`, `guild-join`, `guild-create`, `guild-role-assign`,
+`guild-fire`, `guild-ban-union`,
+`duel-start`, `duel-stop`, `duel-channel-join`, `duel-channel-quit`,
+`duel`, `quests`,
+`mu-helper`,
+`login-success` e `login-failure` alteram a rota/session state do runtime
+grafico. `options` abre a janela compartilhada de options no auth shell.
+`character-create` abre a shell visivel de criacao com lista base de classes,
+prompt de nome e botoes create/cancel. `create-character` envia o nome
+recebido para o session worker e continua o bootstrap apenas quando o
+servidor confirma a criacao; o nome pode vir no body bruto, em `character=`
+ou como texto puro. Nomes com menos de 4 caracteres ou ausentes retornam
+`400` no control plane. `character-delete` abre a shell visivel de
+confirmacao do personagem selecionado e `delete-character` envia o pacote
+legacy de delete para o session worker com `security_code=`/`security-code=`
+ou `authority_code=`/`authority-code=`; o nome do personagem continua vindo
+da selecao atual. `select-character` envia o nome recebido para o session
+worker e continua o bootstrap apenas quando o personagem for nomeado. Se o
+nome vier vazio, a resposta sera `400` e o cliente continua em character
+select.
+`chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
+para enviar mensagem publica quando a sessao esta logada. `mu-helper` abre a
+shell visivel do MU Helper com o snapshot existente do runtime. `duel` abre
+a shell visivel de duel com o snapshot existente do runtime. `events` abre a
+shell visivel de events com o snapshot existente do EventManager. `gens`
+abre a shell visivel de Gens com o snapshot existente do GensManager e,
+quando a sessao esta logada, pede uma vez o ranking live, hidrata o titulo
+local da classe Gens pela tabela legacy de 14 ranks e reaplica o snapshot
+decodificado quando a resposta chega.
+`siege` abre a shell visivel de castle siege com o snapshot existente do
+SiegeScreen; `siege-inactive`, `siege-soldier` e `siege-commander` mantem a
+mesma shell e alternam o modo do snapshot para `Inactive`, `Soldier` e
+`Commander`.
+`friend-roster`, `friend-inbox`, `friend-compose` e `friend-chat-rooms`
+selecionam as subvisoes da janela de friend; `friend-inbox` tambem dispara
+uma vez a requisicao de letter list quando a sessao esta logada; `friend-add`
+e `friend-delete` enviam as requisicoes de add/delete do friend atraves da
+sessao viva e aceitam o nome no body ou em `friend=`; se o nome vier vazio,
+a resposta sera `400`.
+`letter-read` e `letter-delete` usam o `letter_id` selecionado no inbox
+para marcar a carta como lida ou remove-la da lista local, e aceitam o id
+em `letter_id=` ou como body bruto; se o payload vier incompleto, a
+resposta sera `400`.
+`guild-summary`, `guild-members`, `guild-union`, `guild-no-guild` e
+`guild-error` selecionam as subvisoes da janela de guild. `guild-join` envia
+o pacote de join da guild atraves da sessao viva e aceita o guild master
+player ID na query ou no corpo em `master_id=`; se o payload vier
+incompleto, a resposta sera `400`. `guild-create` envia o pacote de create
+da guild atraves da sessao viva e aceita o nome da guild em `guild_name=`
+e o emblema em `guild_emblem=` como 64 caracteres hexadecimais que
+decodificam os 32 bytes do mark; nomes fora do limite legado de 4 a 8
+caracteres retornam `400`. Se o payload vier incompleto, a resposta sera
+`400`. `guild-role-assign` envia o pacote de role assignment da guild
+atraves da sessao viva e aceita o player na query ou no corpo em `player=`,
+o role em `role=` e o tipo em `type=`; se o payload vier incompleto, a
+resposta sera `400`. `guild-fire` envia o pacote de kick do membro da guild
+atraves da sessao viva e aceita o player na query ou no corpo em `player=`
+e o codigo de seguranca em `security_code=`/`security-code=`/`
+`authority_code=`/`authority-code=`; se o payload vier incompleto, a
+resposta sera `400`. `guild-ban-union` envia o pacote de alliance removal
+pela sessao viva e aceita o nome da guild na query ou no corpo em
+`guild_name=`/`union_name=`; se o payload vier incompleto, a resposta sera
+`400`. `duel-start` envia o pacote de duel
+challenge pela sessao viva e aceita o player alvo na query ou no corpo em
+`player_id=` e `player_name=`; se o payload vier incompleto, a resposta sera
+`400`. `duel-stop` envia o pacote de duel stop pela sessao viva sem payload
+extra. `duel-channel-join` envia o pacote de join de channel pela sessao
+viva e aceita o channel em `channel_id=`/`channel-id=`/`channel=` ou como
+body bruto; se o payload vier incompleto, a resposta sera `400`.
+`duel-channel-quit` envia o pacote de quit de channel pela sessao viva sem
+payload extra. `skill-targeted` envia o pacote de targeted skill pela
+sessao viva e aceita o skill em `skill_id=` e o alvo em `target_id=`; se o
+payload vier incompleto, a resposta sera `400`. Quando o bridge aceita o
+pedido, a world HUD tambem exibe o card de skill feedback com o particle
+queue e o audio queue locais.
+`inventory-use` atualiza a rota visivel para inventory,
+aceita `slot=` ou `item_slot=` com o slot linear do inventory, aceita
+`target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e envia o
+pacote `consume_item_request`; se o payload vier incompleto, a resposta sera
+`400`. `inventory-equip` atualiza a rota visivel para inventory, aceita
+`slot=` ou `item_slot=` com o slot linear do inventory, move o item para o
+slot de equipment resolvido localmente e enfileira o pacote de item-move;
+`inventory-unequip` usa um slot de equipment e faz o caminho inverso para o
+inventory. `vault-deposit` e `vault-withdraw` atualizam a rota visivel para
+inventory, aceitam o valor no body ou em `amount=` e enviam o pacote de
+transferencia de vault pela sessao viva; se o valor vier ausente ou zero, a
+resposta sera `400`. `inventory-move` atualiza a rota visivel para
+inventory, aceita `from_slot=` e `to_slot=` com os slots lineares do
+inventory e envia o pacote de movimento de item pela sessao viva; se o
+payload vier incompleto, a resposta sera `400`. Ao abrir `guild-union` com a
+sessao logada, o runtime tambem envia uma vez a requisicao de alliance list
+antes de manter a shell visivel e substitui as unions placeholder quando a
+resposta chega. `exit` atualiza o estado para `exit`, encerra o servidor e
+solicita saida do runtime grafico. Os demais apenas atualizam o snapshot.
+
+O comando tambem pode vir no corpo da requisicao como `name=...` ou como texto
+puro.
+
+Exemplos:
+
+```bash
+curl http://127.0.0.1:12345/state
+curl -X POST 'http://127.0.0.1:12345/command?name=ready-for-login'
+curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
+curl -X POST 'http://127.0.0.1:12345/command?name=options'
+curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
+curl -X POST 'http://127.0.0.1:12345/command?name=character-create'
+curl -X POST 'http://127.0.0.1:12345/command?name=character-delete'
+curl -X POST 'http://127.0.0.1:12345/command?name=create-character&character=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=delete-character&security_code=1234'
+curl -X POST 'http://127.0.0.1:12345/command?name=chat'
+curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-create&guild_name=Guild&guild_emblem=0000000000000000000000000000000000000000000000000000000000000000'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-ban-union&guild_name=Alliance'
+curl -X POST 'http://127.0.0.1:12345/command?name=skill-targeted&skill_id=4660&target_id=22136'
+curl -X POST 'http://127.0.0.1:12345/command?name=vault-deposit&amount=250'
+curl -X POST 'http://127.0.0.1:12345/command?name=vault-withdraw&amount=125'
+curl -X POST 'http://127.0.0.1:12345/command?name=inventory-use&item_slot=7&target=3&fruit=false'
+curl -X POST 'http://127.0.0.1:12345/command?name=inventory-equip&slot=9'
+curl -X POST 'http://127.0.0.1:12345/command?name=inventory-unequip&item_slot=2'
+curl -X POST 'http://127.0.0.1:12345/command?name=inventory-move&from_slot=0&to_slot=1'
+curl -X POST 'http://127.0.0.1:12345/command?name=npc'
+curl -X POST 'http://127.0.0.1:12345/command?name=shop'
+curl -X POST 'http://127.0.0.1:12345/command?name=game-shop'
+curl -X POST 'http://127.0.0.1:12345/command?name=trade'
+curl -X POST 'http://127.0.0.1:12345/command?name=party'
+curl -X POST 'http://127.0.0.1:12345/command?name=gate'
+curl -X POST 'http://127.0.0.1:12345/command?name=events'
+curl -X POST 'http://127.0.0.1:12345/command?name=gens'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-compose'
+curl -X POST 'http://127.0.0.1:12345/command?name=friend-chat-rooms'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-create&guild_name=Guild&guild_emblem=0000000000000000000000000000000000000000000000000000000000000000'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-members'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-union'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-ban-union&guild_name=Alliance'
+curl -X POST 'http://127.0.0.1:12345/command?name=duel'
+curl -X POST 'http://127.0.0.1:12345/command?name=quests'
+curl -X POST 'http://127.0.0.1:12345/command?name=mu-helper'
+curl -X POST 'http://127.0.0.1:12345/command' -d 'name=ping'
+curl -X POST 'http://127.0.0.1:12345/command' -d 'exit'
+```
+
+## Respostas
+
+- `200` para estado consultado e comandos aceitos.
+- `400` para comando ausente ou desconhecido.
+- `404` para rota inexistente.
+
+`GET /__shutdown` existe apenas para encerramento interno do servidor.

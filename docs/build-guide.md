@@ -364,3 +364,38 @@ When CMake detects it's running on Linux (`CMAKE_HOST_SYSTEM_NAME == "Linux"`) a
 Paths used by CMake-native commands (`copy_if_different`, `DEPENDS`) stay as Linux paths.
 
 The guard `CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"` ensures `wslpath` is never called on native Windows (where it doesn't exist).
+
+---
+
+## Rust Client Workspace
+
+The Rust port lives in `port_rust/` and is built with Cargo instead of CMake.
+Rust cross-platform client builds are validated locally, not through GitHub
+Actions. Use the commands below for local validation and smoke tests:
+
+```bash
+rtk cargo fmt --manifest-path port_rust/Cargo.toml --all --check
+rtk cargo test --manifest-path port_rust/Cargo.toml --workspace
+rtk cargo clippy --manifest-path port_rust/Cargo.toml --workspace --all-targets -- -D warnings
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless
+rtk cargo build --manifest-path port_rust/Cargo.toml --release -p mu_client
+rtk cargo run --manifest-path port_rust/Cargo.toml --release -p mu_client -- --headless
+rtk cargo run --manifest-path port_rust/Cargo.toml -p mu_client -- --headless --asset-root __missing_mu_asset_root__
+```
+
+To stage a distributable release bundle from converted assets:
+
+```bash
+rtk python3 scripts/package_rust_client.py \
+  --client-exe port_rust/target/release/mu_client.exe \
+  --asset-root port_rust/assets \
+  --output-dir dist/mu-client
+```
+
+The script copies `mu_client.exe` beside an `assets/` directory that already
+contains `manifest.muasset.json` and the converted runtime files.
+
+For player-facing usage and release-difference notes, see:
+
+- `docs/player-rust-client.md`
+- `docs/rust-client.md`

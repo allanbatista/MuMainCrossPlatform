@@ -1,0 +1,114 @@
+use std::io::{self, Write};
+use std::process::ExitCode;
+
+use crate::client_runtime::ClientRuntime;
+use crate::graphical_runtime::run_graphical;
+use crate::state::boot;
+use crate::{control_http, logging, AppState, Cli};
+
+pub fn run(cli: Cli) -> ExitCode {
+    let (mut state, asset_error) = boot(&cli);
+    let mut runtime = ClientRuntime::new();
+
+    if let Some(error) = asset_error {
+        logging::error(
+            logging::COMPONENT_BOOT,
+            logging::ERROR_ID_ASSET_VALIDATION_FAILED,
+            &error,
+        );
+        eprintln!("asset validation failed: {error}");
+    }
+
+    if state != AppState::AssetCheckFailed {
+        if let Some(asset_root) = &cli.asset_root {
+            if let Err(error) = runtime.load_render_assets(asset_root) {
+                logging::error(
+                    logging::COMPONENT_RUNTIME,
+                    logging::ERROR_ID_ASSET_VALIDATION_FAILED,
+                    &error,
+                );
+                eprintln!("asset validation failed: {error}");
+                state = AppState::AssetCheckFailed;
+            }
+        }
+    }
+
+    if !cli.headless {
+        if let Err(error) = write_line(state.as_str()) {
+            logging::error(
+                logging::COMPONENT_RUNTIME,
+                logging::ERROR_ID_CLIENT_STATE_WRITE_FAILED,
+                &error,
+            );
+            eprintln!("failed to write client state: {error}");
+            return ExitCode::from(1);
+        }
+
+        return run_graphical(&cli, runtime, state);
+    }
+
+    if let Some(address) = cli.control_http {
+        match control_http::spawn(address, state) {
+            Ok(handle) => {
+                if let Err(error) = write_line(&format!(
+                    "control-http listening on http://{}",
+                    handle.address()
+                )) {
+                    logging::error(
+                        logging::COMPONENT_CONTROL_HTTP,
+                        logging::ERROR_ID_LISTENING_ADDRESS_WRITE_FAILED,
+                        &error,
+                    );
+                    eprintln!("failed to write control-http address: {error}");
+                    handle.request_shutdown();
+                    let _ = handle.join();
+                    return ExitCode::from(1);
+                }
+
+                match handle.join() {
+                    Ok(_) => ExitCode::SUCCESS,
+                    Err(error) => {
+                        logging::error(
+                            logging::COMPONENT_CONTROL_HTTP,
+                            logging::ERROR_ID_SERVER_FAILED,
+                            &error,
+                        );
+                        eprintln!("control-http server failed: {error}");
+                        ExitCode::from(1)
+                    }
+                }
+            }
+            Err(error) => {
+                logging::error(
+                    logging::COMPONENT_CONTROL_HTTP,
+                    logging::ERROR_ID_BIND_FAILED,
+                    &error,
+                );
+                eprintln!("control-http bind failed: {error}");
+                ExitCode::from(1)
+            }
+        }
+    } else {
+        if let Err(error) = write_line(state.as_str()) {
+            logging::error(
+                logging::COMPONENT_RUNTIME,
+                logging::ERROR_ID_CLIENT_STATE_WRITE_FAILED,
+                &error,
+            );
+            eprintln!("failed to write client state: {error}");
+            return ExitCode::from(1);
+        }
+
+        match state {
+            AppState::AssetCheckFailed => ExitCode::from(3),
+            AppState::Boot => run_graphical(&cli, runtime, state),
+            AppState::ReadyForLogin | AppState::Exit => ExitCode::SUCCESS,
+        }
+    }
+}
+
+fn write_line(value: &str) -> io::Result<()> {
+    let mut stdout = io::stdout().lock();
+    writeln!(stdout, "{value}")?;
+    stdout.flush()
+}

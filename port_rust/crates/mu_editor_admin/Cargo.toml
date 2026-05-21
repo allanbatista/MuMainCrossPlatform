@@ -1,0 +1,10 @@
+[package]
+name = "mu_editor_admin"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+mu_render = { path = "../mu_render" }
+mu_gameplay = { path = "../mu_gameplay" }
