@@ -11,8 +11,8 @@ and UI snapshots:
   selection, and price-entry dialog.
 - `mu_ui::player_shop` renders the player-shop marketplace snapshot for edit,
   open, pricing, and error states.
-- `mu_gameplay::mail` tracks mail alerts, compose state, and the selected
-  letter for the friend route.
+- `mu_gameplay::mail` tracks mail alerts, compose state, the selected letter,
+  and the local read/delete actions used by the friend route.
 
 ## Trade
 
@@ -60,8 +60,11 @@ let mut mail = MailManager::new();
 mail.set_new_mail_alert(true);
 mail.set_compose("Blade", "Daily note", "Meet in Lorencia.");
 mail.select_letter(0x0102_0304);
+mail.mark_letter_read(0x0102_0304);
+mail.remove_letter(0x0102_0304);
 ```
 
 Recipient, subject, and body fields are clamped to the legacy compose limits.
 The mail state stays in gameplay and feeds the friend route without
-duplicating the compose limits.
+duplicating the compose limits. The friend inbox actions use the selected
+`letter_id` to mark a letter as read or delete it from the live inbox.

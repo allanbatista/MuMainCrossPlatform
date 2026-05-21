@@ -15,6 +15,11 @@ letters live quando elas chegam. `duel-start`, `duel-stop`,
 `duel-channel-join` e `duel-channel-quit` tambem alimentam o bridge de
 pacotes de duel quando a sessao viva esta disponivel. `skill-targeted`
 alimenta o bridge do pacote de targeted skill na mesma sessao viva.
+`letter-read` e `letter-delete` atuam sobre a carta selecionada do inbox
+via `letter_id=` (ou body bruto); `letter-read` marca a carta como lida no
+`MailManager` local e enfileira o pacote legacy de read, enquanto
+`letter-delete` remove a carta da lista local e enfileira o pacote legacy
+de delete.
 `party` tambem espelha a shell visivel e pede uma vez a party list live por
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
@@ -57,6 +62,7 @@ e o servidor continua disponivel para inspeção local.
 - `last_command`
 - `selected_character_name`
 - `friend_name`
+- `letter_id`
 - `guild_master_player_id`
 - `guild_player_name`
 - `guild_create_name`
@@ -86,7 +92,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -125,6 +131,8 @@ Exemplo:
 - `friend-inbox`
 - `friend-compose`
 - `friend-chat-rooms`
+- `letter-read`
+- `letter-delete`
 - `guild`
 - `guild-summary`
 - `guild-members`
@@ -163,6 +171,7 @@ Exemplo:
 `shop`, `game-shop`, `marketplace`, `trade`, `party`, `gate`, `siege`, `siege-inactive`,
 `siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
+`letter-read`, `letter-delete`,
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
 `guild-error`, `guild-join`, `guild-create`, `guild-role-assign`,
 `guild-fire`, `guild-ban-union`,
@@ -199,6 +208,10 @@ uma vez a requisicao de letter list quando a sessao esta logada; `friend-add`
 e `friend-delete` enviam as requisicoes de add/delete do friend atraves da
 sessao viva e aceitam o nome no body ou em `friend=`; se o nome vier vazio,
 a resposta sera `400`.
+`letter-read` e `letter-delete` usam o `letter_id` selecionado no inbox
+para marcar a carta como lida ou remove-la da lista local, e aceitam o id
+em `letter_id=` ou como body bruto; se o payload vier incompleto, a
+resposta sera `400`.
 `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild` e
 `guild-error` selecionam as subvisoes da janela de guild. `guild-join` envia
 o pacote de join da guild atraves da sessao viva e aceita o guild master

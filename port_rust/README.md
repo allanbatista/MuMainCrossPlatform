@@ -110,17 +110,22 @@ sessao de jogo completa.
   `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis.
   `friend-inbox` tambem pede uma vez a letter list live por ativacao logada
-  antes de sobrepor as letters decodificadas no mesmo shell. Quando a sessao
-  envia as respostas de listagem, o runtime decodifica friend/guild e
-  sobrepoe o roster/score/roles/unions live no mesmo shell. Friend presence
-  updates (`FS_FRIEND_STATE_CHANGE`) tambem atualizam o roster live, e o
-  caso `0xFC` rebaixa todos os amigos para offline. A tela de membros da
-  guild tambem expõe as acoes Appoint, Disband e Fire, e a tela de union
-  tambem expõe as acoes break/banish do fluxo legado e troca as unions
-  placeholder pelos allies decodificados quando o alliance list chega.
+  antes de sobrepor as letters decodificadas no mesmo shell, e
+  `letter-read`/`letter-delete` operam sobre o `letter_id` selecionado para
+  marcar a carta como lida ou remove-la. Quando a sessao envia as respostas
+  de listagem, o runtime decodifica friend/guild e sobrepoe o roster/score/
+  roles/unions live no mesmo shell. Friend presence updates
+  (`FS_FRIEND_STATE_CHANGE`) tambem atualizam o roster live, e o caso `0xFC`
+  rebaixa todos os amigos para offline. A tela de membros da guild tambem
+  expõe as acoes Appoint, Disband e Fire, e a tela de union tambem expõe as
+  acoes break/banish do fluxo legado e troca as unions placeholder pelos
+  allies decodificados quando o alliance list chega.
 - O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
   friend no body ou em `friend=` para enviar os pacotes de add/delete pela
   sessao viva.
+- O control-http tambem aceita `letter-read` e `letter-delete` com o
+  `letter_id` selecionado no inbox para marcar a carta como lida ou remove-la
+  da lista local antes de enfileirar os pacotes legacy de read/delete.
 - O control-http tambem aceita `guild-join` com `master_id=` para enviar o
   pacote de join da guild pela sessao viva.
 - O control-http tambem aceita `guild-create` com `guild_name=` e
@@ -234,7 +239,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  marketplace|trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|skill-targeted|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  marketplace|trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|letter-read|letter-delete|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|skill-targeted|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -246,6 +251,10 @@ session worker.
 `friend-inbox`, `friend-compose` e `friend-chat-rooms` selecionam as
 subvisoes da janela de friend; `friend-inbox` tambem dispara uma vez a
 requisicao de letter list quando a sessao esta logada.
+`letter-read` e `letter-delete` usam o `letter_id` selecionado no inbox
+para marcar a carta como lida ou remove-la da lista local, e aceitam o id
+em `letter_id=` ou como body bruto; se o payload vier incompleto, a
+resposta sera `400`.
 `guild-join` aceita o guild master player ID no body bruto ou em
 `master_id=` e envia o pacote de join da guild pela sessao viva.
 `guild-create` aceita o nome da guild em `guild_name=` e o emblema em

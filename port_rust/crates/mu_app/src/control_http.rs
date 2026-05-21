@@ -48,6 +48,8 @@ pub enum ControlCommand {
     FriendInbox,
     FriendCompose,
     FriendChatRooms,
+    LetterRead,
+    LetterDelete,
     GuildSummary,
     GuildMembers,
     GuildUnion,
@@ -117,6 +119,8 @@ impl ControlCommand {
             Self::FriendInbox => "friend-inbox",
             Self::FriendCompose => "friend-compose",
             Self::FriendChatRooms => "friend-chat-rooms",
+            Self::LetterRead => "letter-read",
+            Self::LetterDelete => "letter-delete",
             Self::GuildSummary => "guild-summary",
             Self::GuildMembers => "guild-members",
             Self::GuildUnion => "guild-union",
@@ -192,6 +196,8 @@ impl ControlCommand {
             "friend-chat-rooms" | "friend_chat_rooms" | "friend-chat_rooms" => {
                 Some(Self::FriendChatRooms)
             }
+            "letter-read" | "letter_read" => Some(Self::LetterRead),
+            "letter-delete" | "letter_delete" => Some(Self::LetterDelete),
             "guild-summary" | "guild_summary" => Some(Self::GuildSummary),
             "guild-members" | "guild_members" => Some(Self::GuildMembers),
             "guild-union" | "guild_union" => Some(Self::GuildUnion),
@@ -252,6 +258,7 @@ pub struct ControlSnapshot {
     pub last_command: Option<ControlCommand>,
     pub selected_character_name: Option<String>,
     pub friend_name: Option<String>,
+    pub letter_id: Option<u32>,
     pub guild_master_player_id: Option<u16>,
     pub guild_player_name: Option<String>,
     pub guild_create_name: Option<String>,
@@ -288,6 +295,7 @@ impl ControlSnapshot {
             last_command: None,
             selected_character_name: None,
             friend_name: None,
+            letter_id: None,
             guild_master_player_id: None,
             guild_player_name: None,
             guild_create_name: None,
@@ -487,6 +495,13 @@ impl ControlSnapshot {
                 self.ui_route = UiRoute::Friend;
                 self.session_phase = SessionPhase::LoggedIn;
                 self.friend_screen_state = None;
+                false
+            }
+            ControlCommand::LetterRead | ControlCommand::LetterDelete => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Friend;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.friend_screen_state = Some(FriendScreenState::Inbox);
                 false
             }
             ControlCommand::GuildJoin => {
@@ -705,6 +720,10 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let letter_id = self
+            .letter_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let guild_master_player_id = self
             .guild_master_player_id
             .map(|value| value.to_string())
@@ -809,13 +828,14 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
             last_command,
             selected_character_name,
             friend_name,
+            letter_id,
             guild_master_player_id,
             guild_player_name,
             guild_create_name,
@@ -1098,6 +1118,18 @@ fn route_request(
                     }
 
                     snapshot.friend_name = Some(friend_name);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::LetterRead | ControlCommand::LetterDelete => {
+                    let Some(letter_id) = letter_id_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing letter id"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.letter_id = Some(letter_id);
                     snapshot.apply_command(command)
                 }
                 ControlCommand::GuildJoin => {
@@ -1469,6 +1501,29 @@ fn friend_name_from_request(request: &HttpRequest) -> Option<String> {
                 Some(body.to_string())
             }
         })
+}
+
+fn letter_id_from_request(request: &HttpRequest) -> Option<u32> {
+    query_value(&request.query, "letter_id")
+        .or_else(|| query_value(&request.query, "letter-id"))
+        .or_else(|| query_value(&request.query, "letter_index"))
+        .or_else(|| query_value(&request.query, "letter-index"))
+        .or_else(|| query_value(&request.body, "letter_id"))
+        .or_else(|| query_value(&request.body, "letter-id"))
+        .or_else(|| query_value(&request.body, "letter_index"))
+        .or_else(|| query_value(&request.body, "letter-index"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() || body.contains('=') {
+                None
+            } else {
+                Some(body)
+            }
+        })?
+        .parse::<u32>()
+        .ok()
 }
 
 fn guild_join_from_request(request: &HttpRequest) -> Option<u16> {
@@ -1856,7 +1911,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2134,6 +2189,24 @@ mod tests {
             ControlCommand::parse("friend-chat-rooms"),
             Some(ControlCommand::FriendChatRooms)
         );
+        assert_eq!(
+            ControlCommand::parse("letter-read"),
+            Some(ControlCommand::LetterRead)
+        );
+        assert_eq!(
+            ControlCommand::parse("letter_read"),
+            Some(ControlCommand::LetterRead)
+        );
+        assert_eq!(ControlCommand::LetterRead.as_str(), "letter-read");
+        assert_eq!(
+            ControlCommand::parse("letter-delete"),
+            Some(ControlCommand::LetterDelete)
+        );
+        assert_eq!(
+            ControlCommand::parse("letter_delete"),
+            Some(ControlCommand::LetterDelete)
+        );
+        assert_eq!(ControlCommand::LetterDelete.as_str(), "letter-delete");
         assert_eq!(
             ControlCommand::parse("guild-summary"),
             Some(ControlCommand::GuildSummary)
@@ -2434,6 +2507,30 @@ mod tests {
     }
 
     #[test]
+    fn control_http_route_accepts_letter_actions_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=letter-read&letter_id=4660".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::LetterRead));
+        assert_eq!(snapshot.letter_id, Some(4660));
+        assert_eq!(snapshot.ui_route, UiRoute::Friend);
+        assert_eq!(snapshot.friend_screen_state, Some(FriendScreenState::Inbox));
+    }
+
+    #[test]
     fn control_http_route_accepts_marketplace_command() {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -2525,6 +2622,45 @@ mod tests {
         );
         assert!(state_body.contains(r#""skill_id":6"#));
         assert!(state_body.contains(r#""skill_target_id":77"#));
+        assert!(state_body.contains(r#""command_count":1"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn letter_actions_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=letter-read HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing letter id""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=letter-delete&letter_id=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing letter id""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=letter-delete&letter_index=4660 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""letter_id":4660"#));
+        assert!(body.contains(r#""friend_screen_state":"inbox""#));
+        assert!(body.contains(r#""ui_route":"friend""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""letter_id":4660"#));
         assert!(state_body.contains(r#""command_count":1"#));
 
         handle.request_shutdown();

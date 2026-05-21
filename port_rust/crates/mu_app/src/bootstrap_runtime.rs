@@ -33,7 +33,8 @@ use mu_protocol::login::{create_character, request_character_list, select_charac
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::skills::targeted_skill;
 use mu_protocol::social::{
-    friend_add_request, friend_delete, friend_list_request, letter_list_request, party_list_request,
+    friend_add_request, friend_delete, friend_list_request, letter_delete_request,
+    letter_list_request, letter_read_request, party_list_request,
 };
 use mu_protocol::vault::{vault_move_money_request, VaultMoneyMoveDirection};
 use mu_protocol::{decode_packet, PacketFrame};
@@ -147,6 +148,8 @@ pub(crate) enum BootstrapCommand {
     CreateCharacter(String),
     FriendListRequest,
     LetterListRequest,
+    LetterRead(u16),
+    LetterDelete(u16),
     GensRankingRequest,
     PartyListRequest,
     FriendAdd(String),
@@ -448,6 +451,34 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::LetterListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_letter_read_request(&self, letter_id: u32) -> bool {
+        if letter_id > u32::from(u16::MAX) {
+            return false;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::LetterRead(letter_id as u16))
+            .is_ok()
+    }
+
+    pub(crate) fn queue_letter_delete_request(&self, letter_id: u32) -> bool {
+        if letter_id > u32::from(u16::MAX) {
+            return false;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::LetterDelete(letter_id as u16))
             .is_ok()
     }
 
@@ -1762,6 +1793,22 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::LetterRead(letter_id) => {
+            let packet = letter_read_request(letter_id).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::LetterDelete(letter_id) => {
+            let packet = letter_delete_request(letter_id).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::PartyListRequest => {
             let packet = party_list_request().map_err(|error| error.to_string())?;
 
@@ -2075,7 +2122,10 @@ mod tests {
         game_server_entered, CharacterListEntry,
     };
     use mu_protocol::skills::targeted_skill;
-    use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
+    use mu_protocol::social::{
+        friend_add_request, friend_delete, friend_list_request, letter_delete_request,
+        letter_read_request,
+    };
     use mu_protocol::vault::vault_move_money_request;
     use mu_ui::{
         CharacterCreateScreenState, FriendEntry, FriendPresence, GuildMemberRole, UiRoute,
@@ -3234,6 +3284,104 @@ mod tests {
             BootstrapCommand::LetterListRequest => {}
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn letter_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_letter_read_request(0x1234));
+        assert!(bootstrap.queue_letter_delete_request(0x1234));
+        assert!(!bootstrap.queue_letter_read_request(u32::from(u16::MAX) + 1));
+        assert!(!bootstrap.queue_letter_delete_request(u32::from(u16::MAX) + 1));
+
+        match command_receiver
+            .try_recv()
+            .expect("letter read command missing")
+        {
+            BootstrapCommand::LetterRead(letter_id) => {
+                assert_eq!(letter_id, 0x1234);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        match command_receiver
+            .try_recv()
+            .expect("letter delete command missing")
+        {
+            BootstrapCommand::LetterDelete(letter_id) => {
+                assert_eq!(letter_id, 0x1234);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn letter_read_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::LetterRead(0x1234))
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, letter_read_request(0x1234).unwrap());
+    }
+
+    #[tokio::test]
+    async fn letter_delete_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::LetterDelete(0x1234))
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, letter_delete_request(0x1234).unwrap());
     }
 
     #[test]

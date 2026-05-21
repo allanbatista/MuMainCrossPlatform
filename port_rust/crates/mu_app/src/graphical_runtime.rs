@@ -16,10 +16,10 @@ use mu_audio::{AudioRuntime, AudioRuntimePlugin};
 use mu_gameplay::presentation_for_skill_id;
 use mu_gameplay::{
     DuelManager, DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin,
-    GameShopPlugin, GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
-    MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, PlayerShopPlugin, QuestPlugin, TradePlugin,
-    VaultManager, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin,
-    WorldPlugin,
+    GameShopPlugin, GensPlugin, GuildCachePlugin, InventoryPlugin, MailManager, MailPlugin,
+    MovementPlugin, MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, PlayerShopPlugin, QuestPlugin,
+    TradePlugin, VaultManager, VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin,
+    WorldNpcPlugin, WorldPlugin,
 };
 use mu_render::{
     RenderAssetsPlugin, RenderEntitiesPlugin, SkillParticlePlugin, SkillParticleQueue,
@@ -296,6 +296,7 @@ fn sync_control_http_snapshot_to_runtime(
     bootstrap: Option<ResMut<BootstrapRuntime>>,
     mut audio_runtime: Option<ResMut<AudioRuntime>>,
     mut skill_particles: Option<ResMut<SkillParticleQueue>>,
+    mut mail: ResMut<MailManager>,
     mut inventory: ResMut<InventoryManager>,
     mut equipment: ResMut<EquipmentManager>,
     mut vault: ResMut<VaultManager>,
@@ -319,6 +320,25 @@ fn sync_control_http_snapshot_to_runtime(
 
     if session_state.phase() != snapshot.session_phase {
         session_state.sync_phase(snapshot.session_phase);
+    }
+
+    let mut mail_letter_action = None;
+    match snapshot.last_command {
+        Some(ControlCommand::LetterRead) => {
+            if let Some(letter_id) = snapshot.letter_id {
+                if apply_letter_read_command(&mut mail, letter_id) {
+                    mail_letter_action = Some(ControlCommand::LetterRead);
+                }
+            }
+        }
+        Some(ControlCommand::LetterDelete) => {
+            if let Some(letter_id) = snapshot.letter_id {
+                if apply_letter_delete_command(&mut mail, letter_id) {
+                    mail_letter_action = Some(ControlCommand::LetterDelete);
+                }
+            }
+        }
+        _ => {}
     }
 
     let Some(mut bootstrap) = bootstrap else {
@@ -350,6 +370,20 @@ fn sync_control_http_snapshot_to_runtime(
         Some(ControlCommand::FriendDelete) => {
             if let Some(friend_name) = snapshot.friend_name.as_deref() {
                 let _ = bootstrap.queue_friend_delete_request(friend_name);
+            }
+        }
+        Some(ControlCommand::LetterRead) => {
+            if mail_letter_action == Some(ControlCommand::LetterRead) {
+                if let Some(letter_id) = snapshot.letter_id {
+                    let _ = bootstrap.queue_letter_read_request(letter_id);
+                }
+            }
+        }
+        Some(ControlCommand::LetterDelete) => {
+            if mail_letter_action == Some(ControlCommand::LetterDelete) {
+                if let Some(letter_id) = snapshot.letter_id {
+                    let _ = bootstrap.queue_letter_delete_request(letter_id);
+                }
             }
         }
         Some(ControlCommand::GuildJoin) => {
@@ -498,6 +532,25 @@ fn queue_skill_targeted_feedback(
     if let Some(audio_runtime) = audio_runtime {
         let _ = audio_runtime.queue_skill_audio(skill_id, presentation, false);
     }
+}
+
+fn apply_letter_read_command(mail: &mut MailManager, letter_id: u32) -> bool {
+    if !mail.letters().iter().any(|entry| entry.id == letter_id) {
+        return false;
+    }
+
+    mail.mark_letter_read(letter_id);
+    mail.select_letter(letter_id);
+    true
+}
+
+fn apply_letter_delete_command(mail: &mut MailManager, letter_id: u32) -> bool {
+    if !mail.letters().iter().any(|entry| entry.id == letter_id) {
+        return false;
+    }
+
+    mail.remove_letter(letter_id);
+    true
 }
 
 fn apply_vault_money_transfer_command(
@@ -710,7 +763,8 @@ mod tests {
     use mu_audio::{AudioRuntime, AudioRuntimePlugin};
     use mu_gameplay::{
         DuelManager, DuelPlugin, EquipmentManager, EquipmentSlot, InventoryManager, InventorySlot,
-        Item, ItemPacketData, ItemRequirements, ItemSize, VaultManager, AT_SKILL_TELEPORT,
+        Item, ItemPacketData, ItemRequirements, ItemSize, MailLetterEntry, MailManager, MailMode,
+        VaultManager, AT_SKILL_TELEPORT,
     };
     use mu_render::{SkillParticlePlugin, SkillParticleQueue};
     use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
@@ -787,6 +841,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(ControlHttpState::new(snapshot));
         app.add_systems(
             bevy::prelude::PreUpdate,
@@ -822,6 +877,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot));
         app.add_systems(
@@ -863,6 +919,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -909,6 +966,136 @@ mod tests {
     }
 
     #[test]
+    fn control_http_snapshot_queues_letter_read_and_marks_mail() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(DuelPlugin);
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut mail = app.world_mut().resource_mut::<MailManager>();
+            mail.upsert_letter(MailLetterEntry {
+                id: 0x1234,
+                sender: "Astra".to_string(),
+                subject: "Potion run".to_string(),
+                date: "05/19/2026".to_string(),
+                time: "10:12".to_string(),
+                read: false,
+            });
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.letter_id = Some(0x1234);
+            snapshot.apply_command(ControlCommand::LetterRead);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("letter read command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::LetterRead(letter_id) => {
+                assert_eq!(letter_id, 0x1234);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        let mail = app.world().resource::<MailManager>();
+        assert_eq!(mail.mode(), MailMode::Reading);
+        assert_eq!(mail.selected_letter_id(), Some(0x1234));
+        assert!(mail.letters()[0].read);
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Friend
+        );
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_letter_delete_and_updates_mail() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(DuelPlugin);
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut mail = app.world_mut().resource_mut::<MailManager>();
+            mail.upsert_letter(MailLetterEntry {
+                id: 0x1235,
+                sender: "Blade".to_string(),
+                subject: "Castle prep".to_string(),
+                date: "05/18/2026".to_string(),
+                time: "21:40".to_string(),
+                read: false,
+            });
+            mail.select_letter(0x1235);
+        }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.letter_id = Some(0x1235);
+            snapshot.apply_command(ControlCommand::LetterDelete);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("letter delete command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::LetterDelete(letter_id) => {
+                assert_eq!(letter_id, 0x1235);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        let mail = app.world().resource::<MailManager>();
+        assert_eq!(mail.mode(), MailMode::Inbox);
+        assert_eq!(mail.selected_letter_id(), None);
+        assert!(mail.letters().is_empty());
+        assert!(!mail.new_mail_alert());
+        assert_eq!(
+            app.world().resource::<UiShellState>().current(),
+            UiRoute::Friend
+        );
+    }
+
+    #[test]
     fn control_http_snapshot_queues_duel_actions() {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
 
@@ -923,6 +1110,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1019,6 +1207,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1103,6 +1292,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1175,6 +1365,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1248,6 +1439,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1325,6 +1517,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1402,6 +1595,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1443,6 +1637,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1489,6 +1684,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1538,6 +1734,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1584,6 +1781,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1625,6 +1823,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(
@@ -1679,6 +1878,7 @@ mod tests {
         app.insert_resource(InventoryManager::new());
         app.insert_resource(EquipmentManager::new());
         app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
         app.insert_resource(bootstrap);
         app.insert_resource(ControlHttpState::new(snapshot.clone()));
         app.add_systems(

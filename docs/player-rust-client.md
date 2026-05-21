@@ -102,9 +102,10 @@ in the local config file instead of being typed every time.
   with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms`; `friend-inbox` queues one live `letter_list_request`
   per logged-in activation and overlays the decoded letter rows when they
-  arrive, while the live friend list still overlays the roster and
-  server-state data from the session, including friend presence changes from
-  `FS_FRIEND_STATE_CHANGE`.
+  arrive, while `letter-read` and `letter-delete` act on the selected
+  `letter_id` to mark or remove the live letter in the same shell. The live
+  friend list still overlays the roster and server-state data from the
+  session, including friend presence changes from `FS_FRIEND_STATE_CHANGE`.
 - The friend control plane also accepts `friend-add` and `friend-delete`
   commands with a friend name in the body or `friend=` so QA can drive the
   existing friend packet helpers through the live session.
@@ -180,7 +181,7 @@ in the local config file instead of being typed every time.
 - Start the graphical client with `--control-http 127.0.0.1:0` to expose the
   local HTTP automation surface while the Bevy window is running.
 - `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
-  `skill_id`, `skill_target_id`, and `command_count`.
+  `letter_id`, `skill_id`, `skill_target_id`, and `command_count`.
 - `POST /command?name=ready-for-login|server-select|character-select|character-create|create-character|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
 - `POST /command?name=select-character` can continue from character select
@@ -206,10 +207,15 @@ in the local config file instead of being typed every time.
   for local QA smoke. `friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms` select the matching friend subview, and
   `friend-inbox` queues the live letter list once per logged-in activation
-  before the sample inbox is replaced.
+  before the sample inbox is replaced. `letter-read` and `letter-delete`
+  act on the selected inbox `letter_id` to mark the letter read or remove it
+  from the local mail state.
 - `POST /command?name=friend-add` and `POST /command?name=friend-delete`
   queue the matching friend packet helpers through the live session. Pass
   the friend name in the body or as `friend=`.
+- `POST /command?name=letter-read` and `POST /command?name=letter-delete`
+  queue the matching mail packet helpers through the live session. Pass the
+  inbox id in `letter_id=` or the raw body payload.
 - `POST /command?name=guild` can step into the visible guild route shell for
   local QA smoke. `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` select the matching guild subview.

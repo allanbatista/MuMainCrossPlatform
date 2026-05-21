@@ -129,6 +129,13 @@ impl MailManager {
         self.mode = MailMode::Reading;
     }
 
+    pub fn mark_letter_read(&mut self, letter_id: u32) {
+        if let Some(letter) = self.letters.iter_mut().find(|entry| entry.id == letter_id) {
+            letter.read = true;
+            self.sync_new_mail_alert();
+        }
+    }
+
     pub fn clear_selected_letter(&mut self) {
         self.selected_letter_id = None;
         if self.mode != MailMode::Error {
@@ -305,6 +312,26 @@ mod tests {
         assert_eq!(manager.mode(), MailMode::Inbox);
         assert_eq!(manager.selected_letter_id(), None);
         assert_eq!(manager.letters().len(), 1);
+        assert!(!manager.new_mail_alert());
+    }
+
+    #[test]
+    fn mail_mark_letter_read_clears_the_unread_alert() {
+        let mut manager = MailManager::new();
+        manager.upsert_letter(MailLetterEntry {
+            id: 1,
+            sender: "Astra".to_owned(),
+            subject: "Potion run".to_owned(),
+            date: "05/19/2026".to_owned(),
+            time: "10:12".to_owned(),
+            read: false,
+        });
+
+        assert!(manager.new_mail_alert());
+
+        manager.mark_letter_read(1);
+
+        assert!(manager.letters()[0].read);
         assert!(!manager.new_mail_alert());
     }
 }
