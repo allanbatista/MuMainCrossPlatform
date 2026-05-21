@@ -1314,7 +1314,7 @@ fn guild_fire_from_request(request: &HttpRequest) -> Option<(String, String)> {
 }
 
 fn guild_ban_union_from_request(request: &HttpRequest) -> Option<String> {
-    query_value(&request.query, "guild_name")
+    if let Some(guild_name) = query_value(&request.query, "guild_name")
         .or_else(|| query_value(&request.query, "guild-name"))
         .or_else(|| query_value(&request.query, "union_name"))
         .or_else(|| query_value(&request.query, "union-name"))
@@ -1324,15 +1324,16 @@ fn guild_ban_union_from_request(request: &HttpRequest) -> Option<String> {
         .or_else(|| query_value(&request.body, "union-name"))
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .or_else(|| {
-            let body = request.body.trim();
-            if body.is_empty() {
-                None
-            } else {
-                Some(body.to_string())
-            }
-        })
+    {
+        return Some(guild_name.to_string());
+    }
+
+    let body = request.body.trim();
+    if body.is_empty() || body.contains('=') {
+        None
+    } else {
+        Some(body.to_string())
+    }
 }
 
 fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
@@ -2516,6 +2517,13 @@ mod tests {
         let (head, body) = send_request(
             address,
             "POST /command?name=guild-ban-union&guild_name= HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild ban union payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-ban-union HTTP/1.1\r\nHost: localhost\r\nContent-Length: 11\r\nConnection: close\r\n\r\nguild_name=",
         );
         assert!(head.contains("400 Bad Request"));
         assert!(body.contains(r#""error":"missing guild ban union payload""#));
