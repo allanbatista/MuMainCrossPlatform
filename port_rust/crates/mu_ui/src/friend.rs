@@ -1,7 +1,7 @@
 use bevy::app::{App, Plugin};
 
 use crate::{UiRoute, UiShellLayout, UiShellWidgetSet};
-use mu_gameplay::{MailManager, MailMode};
+use mu_gameplay::{MailLetterEntry, MailManager, MailMode};
 
 const FRIEND_TITLE: &str = "Friend";
 const ROSTER_NOTICE: &str = "Manage friends and chat invites.";
@@ -175,6 +175,9 @@ pub fn friend_screen(state: FriendScreenState, mail: &MailManager) -> FriendScre
     let (tab_index, friend_sort, letter_sort, friend_count, letter_count, chat_room_count) =
         match state {
             FriendScreenState::Roster => (0, Some(FriendSort::Server), None, 3, 0, 0),
+            FriendScreenState::Inbox if mail.letters_loaded() => {
+                (1, None, Some(LetterSort::Read), 0, mail.letters().len(), 0)
+            }
             FriendScreenState::Inbox => (1, None, Some(LetterSort::Read), 0, 3, 0),
             FriendScreenState::Compose => (1, None, Some(LetterSort::Subject), 0, 0, 0),
             FriendScreenState::ChatRooms => (2, None, None, 0, 0, 2),
@@ -189,6 +192,9 @@ pub fn friend_screen(state: FriendScreenState, mail: &MailManager) -> FriendScre
         | FriendScreenState::Error => Vec::new(),
     };
     let letters = match state {
+        FriendScreenState::Inbox if mail.letters_loaded() => {
+            build_live_letter_entries(mail.letters(), mail.selected_letter_id())
+        }
         FriendScreenState::Inbox => build_letter_entries(mail.selected_letter_id()),
         FriendScreenState::Compose
         | FriendScreenState::Roster
@@ -380,6 +386,35 @@ fn build_letter_entries(selected_letter_id: Option<u32>) -> Vec<LetterEntry> {
     letters
 }
 
+fn build_live_letter_entries(
+    letters: &[MailLetterEntry],
+    selected_letter_id: Option<u32>,
+) -> Vec<LetterEntry> {
+    let mut rows = letters
+        .iter()
+        .map(|letter| LetterEntry {
+            id: letter.id,
+            sender: letter.sender.clone(),
+            subject: letter.subject.clone(),
+            date: letter.date.clone(),
+            time: letter.time.clone(),
+            read: letter.read,
+            selected: false,
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(selected_letter_id) = selected_letter_id {
+        if let Some(letter) = rows
+            .iter_mut()
+            .find(|letter| letter.id == selected_letter_id)
+        {
+            letter.selected = true;
+        }
+    }
+
+    rows
+}
+
 fn selected_letter_details(
     letters: &[LetterEntry],
     selected_letter_id: u32,
@@ -414,7 +449,7 @@ fn build_chat_room_entries() -> Vec<ChatRoomEntry> {
 #[cfg(test)]
 mod tests {
     use super::{friend_screen, FriendScreenState};
-    use mu_gameplay::MailManager;
+    use mu_gameplay::{MailLetterEntry, MailManager};
 
     #[test]
     fn friend_roster_and_inbox_snapshots() {
@@ -432,6 +467,37 @@ mod tests {
             friend_screen(FriendScreenState::Inbox, &mail).snapshot(),
             "route=friend|group=gameplay|state=inbox|title=Friend|notice=Some(\"Review letters and reply.\")|tab_index=1|chat_reject=false|new_chat_alert=false|new_mail_alert=true|mail_mode=Some(Reading)|friend_sort=None|letter_sort=Some(Read)|friend_count=0|letter_count=3|chat_room_count=0|selected_friend=None|selected_friend_server=None|selected_letter_id=Some(16909060)|selected_letter_sender=Some(\"Astra\")|selected_letter_subject=Some(\"Potion run\")|draft_recipient=None|draft_subject=None|draft_body=None|selected_chat_room_id=None|selected_chat_room_title=None|friends=[]|letters=[LetterEntry { id: 16909060, sender: \"Astra\", subject: \"Potion run\", date: \"05/19/2026\", time: \"10:12\", read: false, selected: true }, LetterEntry { id: 16909061, sender: \"Selene\", subject: \"Castle prep\", date: \"05/18/2026\", time: \"21:40\", read: true, selected: false }, LetterEntry { id: 16909062, sender: \"Marlon\", subject: \"Guild meeting\", date: \"05/17/2026\", time: \"18:05\", read: true, selected: false }]|chat_rooms=[]|actions=[WriteLetter, ReadLetter, ReplyLetter, DeleteLetter, Refresh, Close]|layout=UiShellLayout { group: Gameplay, outer_margin: 20.0, panel_gap: 16.0, sidebar_width: 320.0, content_max_width: 1200.0, footer_height: 36.0 }|widgets=[Body, Sidebar, ActionBar, Overlay]"
         );
+    }
+
+    #[test]
+    fn friend_inbox_uses_live_letter_rows() {
+        let mut mail = MailManager::new();
+        mail.upsert_letter(MailLetterEntry {
+            id: 0x0102_0304,
+            sender: "Astra".to_owned(),
+            subject: "Potion run".to_owned(),
+            date: "05/19/2026".to_owned(),
+            time: "10:12".to_owned(),
+            read: false,
+        });
+        mail.upsert_letter(MailLetterEntry {
+            id: 0x0102_0305,
+            sender: "Selene".to_owned(),
+            subject: "Castle prep".to_owned(),
+            date: "05/18/2026".to_owned(),
+            time: "21:40".to_owned(),
+            read: true,
+        });
+        mail.select_letter(0x0102_0304);
+
+        let snapshot = friend_screen(FriendScreenState::Inbox, &mail).snapshot();
+
+        assert!(snapshot.contains("letter_count=2"));
+        assert!(snapshot.contains("mail_mode=Some(Reading)"));
+        assert!(snapshot.contains("selected_letter_id=Some(16909060)"));
+        assert!(snapshot.contains(
+            "letters=[LetterEntry { id: 16909060, sender: \"Astra\", subject: \"Potion run\", date: \"05/19/2026\", time: \"10:12\", read: false, selected: true }, LetterEntry { id: 16909061, sender: \"Selene\", subject: \"Castle prep\", date: \"05/18/2026\", time: \"21:40\", read: true, selected: false }]"
+        ));
     }
 
     #[test]

@@ -59,3 +59,17 @@ guild parity is still required.
 `duel-start` and `duel-stop` are now bridged through the control plane, but
 the rest of the legacy duel lifecycle still needs a later slice if full duel
 parity is still required.
+
+# [medium] Selected-character e2e validation
+
+The selected-character world-identity slice is implemented and unit-tested,
+but the required e2e-validator handoff was not run in this turn. Next step is
+to validate the running client end to end and record the verdict in the
+feature progress doc.
+
+# [medium] Friend inbox windowed e2e handoff
+
+The friend inbox live-data slice is implemented and headless-smoke tested,
+but the windowed e2e pass was not available in this session. Next step is to
+run the running client in a visible window, exercise `friend-inbox`, and
+record the verdict in the feature progress doc.

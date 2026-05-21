@@ -3,7 +3,9 @@
 The Rust port splits the legacy social windows into two `mu_ui` routes:
 
 - `friend` covers the friend roster, letter inbox/compose surface, chat-room
-  list, and the global mail/chat alert indicators.
+  list, and the global mail/chat alert indicators. Live inbox rows come from
+  `MailManager` once the letter list has been requested and decoded; until
+  then, the shell keeps the sample rows as a fallback.
 - `guild` covers the guild summary, member management, union list, no-guild,
   and error states.
 
@@ -15,7 +17,9 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   mirrors the current `MailManager` snapshot, then overlays decoded friend
   roster data from the live session when it arrives.
 - `POST /command?name=friend-roster`, `friend-inbox`, `friend-compose`, and
-  `friend-chat-rooms` smoke the matching friend subviews.
+  `friend-chat-rooms` smoke the matching friend subviews. `friend-inbox`
+  also queues one `letter_list_request` per logged-in inbox activation before
+  the live letter rows replace the sample inbox.
 - `POST /command?name=guild` opens the guild shell in `mu_client` and mirrors
   the current guild snapshot model, then overlays decoded guild score,
   rival-name, and member-role data from the live session when it arrives.
@@ -26,7 +30,8 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   queues the matching live list request once per activation and clears that
   latch again when the route exits or the session logs out. The decoded
   friend/guild roster data stays in the shell snapshot until logout or
-  disconnect clears it.
+  disconnect clears it. `friend-inbox` also queues the live letter list once
+  per logged-in inbox activation.
 - Opening `guild-union` while logged in also queues the alliance list request
   once per activation before the union shell stays visible.
 
@@ -36,9 +41,11 @@ Use `friend_screen` with `FriendScreenState::{Roster, Inbox, Compose,
 ChatRooms, Error}`.
 
 The letter tab consumes `mu_gameplay::MailManager` for the selected letter and
-compose draft state. The roster tab keeps the friend list and friend-button
-alerts aligned with the legacy client, and the live session overlay replaces
-the placeholder roster list once the decoded friend packet arrives.
+compose draft state. When `MailManager::letters_loaded()` is true, inbox rows
+come from the live letter list; otherwise the roster tab keeps the friend list
+and friend-button alerts aligned with the legacy client, and the live session
+overlay replaces the placeholder roster list once the decoded friend packet
+arrives.
 
 ```rust
 use mu_gameplay::MailManager;

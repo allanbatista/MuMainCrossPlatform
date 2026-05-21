@@ -105,9 +105,11 @@ sessao de jogo completa.
   grafico e pode ser acionada por `friend` e `guild` no smoke local; os
   comandos `friend-roster`, `friend-inbox`, `friend-compose`,
   `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
-  `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis. Quando
-  a sessao envia as respostas de listagem, o runtime decodifica friend/guild
-  e sobrepoe o roster/score/roles live no mesmo shell. A tela de membros da
+  `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis.
+  `friend-inbox` tambem pede uma vez a letter list live por ativacao logada
+  antes de sobrepor as letters decodificadas no mesmo shell. Quando a sessao
+  envia as respostas de listagem, o runtime decodifica friend/guild e
+  sobrepoe o roster/score/roles live no mesmo shell. A tela de membros da
   guild tambem expõe as acoes Appoint, Disband e Fire, e a tela de union
   tambem expõe as acoes break/banish do fluxo legado.
 - O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
@@ -138,7 +140,9 @@ sessao de jogo completa.
   de alliance list antes de manter a shell visivel.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
   vez a requisicao de listagem correspondente antes de manter a shell
-  visivel, e limpa o snapshot decodificado no logout ou disconnect.
+  visivel, `friend-inbox` tambem pede a letter list live uma vez por
+  ativacao logada, e o runtime limpa o snapshot decodificado no logout ou
+  disconnect.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.
@@ -212,7 +216,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -221,6 +225,9 @@ O servidor expõe:
 session worker.
 `friend-add` e `friend-delete` aceitam o nome do friend no body bruto ou em
 `friend=` e enviam os pacotes de add/delete pela sessao viva.
+`friend-inbox`, `friend-compose` e `friend-chat-rooms` selecionam as
+subvisoes da janela de friend; `friend-inbox` tambem dispara uma vez a
+requisicao de letter list quando a sessao esta logada.
 `guild-join` aceita o guild master player ID no body bruto ou em
 `master_id=` e envia o pacote de join da guild pela sessao viva.
 `guild-role-assign` aceita o player no body bruto ou em `player=`, o role em

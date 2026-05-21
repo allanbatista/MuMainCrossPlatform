@@ -94,8 +94,10 @@ in the local config file instead of being typed every time.
 - The friend route now opens a visible Bevy shell that mirrors the mail
   manager snapshot and can be driven from the local control HTTP smoke path
   with `friend`, `friend-roster`, `friend-inbox`, `friend-compose`, and
-  `friend-chat-rooms`; when the live friend list arrives, the shell overlays
-  the decoded roster and server-state data from the session.
+  `friend-chat-rooms`; `friend-inbox` queues one live `letter_list_request`
+  per logged-in activation and overlays the decoded letter rows when they
+  arrive, while the live friend list still overlays the roster and
+  server-state data from the session.
 - The friend control plane also accepts `friend-add` and `friend-delete`
   commands with a friend name in the body or `friend=` so QA can drive the
   existing friend packet helpers through the live session.
@@ -125,8 +127,9 @@ in the local config file instead of being typed every time.
   request once per activation before keeping the shell visible.
 - When the friend or guild route opens while logged in, the client now sends
   the matching live list request once per activation before keeping the shell
-  on screen, and the decoded roster state stays visible until logout or
-  disconnect clears it.
+  on screen, and `friend-inbox` also requests the live letter list once per
+  logged-in inbox activation. The decoded roster state stays visible until
+  logout or disconnect clears it.
 - The duel route now opens a visible Bevy shell that mirrors the duel
   manager snapshot and can be driven from the local control HTTP smoke path
   with `duel`.
@@ -187,7 +190,9 @@ in the local config file instead of being typed every time.
   local QA smoke.
 - `POST /command?name=friend` can step into the visible friend route shell
   for local QA smoke. `friend-roster`, `friend-inbox`, `friend-compose`, and
-  `friend-chat-rooms` select the matching friend subview.
+  `friend-chat-rooms` select the matching friend subview, and
+  `friend-inbox` queues the live letter list once per logged-in activation
+  before the sample inbox is replaced.
 - `POST /command?name=friend-add` and `POST /command?name=friend-delete`
   queue the matching friend packet helpers through the live session. Pass
   the friend name in the body or as `friend=`.

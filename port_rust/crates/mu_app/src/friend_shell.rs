@@ -49,6 +49,7 @@ struct FriendShellState {
     root: Option<Entity>,
     key: Option<FriendShellKey>,
     friend_list_requested: bool,
+    letter_list_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -73,18 +74,20 @@ fn sync_friend_shell_system(
     mut commands: Commands,
     ui_shell: Res<UiShellState>,
     session_state: Res<crate::SessionState>,
-    mail: Res<MailManager>,
+    mut mail: ResMut<MailManager>,
     bootstrap: Res<BootstrapRuntime>,
     control_http: Option<Res<ControlHttpState>>,
     mut state: ResMut<FriendShellState>,
 ) {
     if session_state.phase() != SessionPhase::LoggedIn {
         state.friend_list_requested = false;
+        state.letter_list_requested = false;
     }
 
     let control_http_state = control_http
         .as_deref()
         .and_then(friend_screen_state_for_control_http);
+    let screen_state = control_http_state.unwrap_or_else(|| friend_screen_state_for_mail(&mail));
     let live_roster = bootstrap.friend_roster_snapshot();
     let current = friend_shell_key(
         ui_shell.current(),
@@ -97,6 +100,7 @@ fn sync_friend_shell_system(
     let Some(key) = current else {
         clear_friend_shell(&mut commands, &mut state);
         state.friend_list_requested = false;
+        state.letter_list_requested = false;
         return;
     };
 
@@ -105,6 +109,13 @@ fn sync_friend_shell_system(
             &bootstrap,
             session_state.phase(),
             &mut state.friend_list_requested,
+        );
+        maybe_queue_letter_list_request(
+            &bootstrap,
+            session_state.phase(),
+            screen_state,
+            &mut state.letter_list_requested,
+            &mut mail,
         );
         return;
     }
@@ -128,6 +139,13 @@ fn sync_friend_shell_system(
         &bootstrap,
         session_state.phase(),
         &mut state.friend_list_requested,
+    );
+    maybe_queue_letter_list_request(
+        &bootstrap,
+        session_state.phase(),
+        screen_state,
+        &mut state.letter_list_requested,
+        &mut mail,
     );
 }
 
@@ -166,6 +184,25 @@ fn maybe_queue_friend_list_request(
 
     if bootstrap.queue_friend_list_request() {
         *friend_list_requested = true;
+    }
+}
+
+fn maybe_queue_letter_list_request(
+    bootstrap: &BootstrapRuntime,
+    phase: SessionPhase,
+    screen_state: FriendScreenState,
+    letter_list_requested: &mut bool,
+    mail: &mut MailManager,
+) {
+    if screen_state != FriendScreenState::Inbox
+        || !friend_shell_should_queue_live_request(phase, *letter_list_requested)
+    {
+        return;
+    }
+
+    if bootstrap.queue_letter_list_request() {
+        mail.set_letters_loaded(true);
+        *letter_list_requested = true;
     }
 }
 
@@ -231,6 +268,7 @@ fn apply_live_friend_roster(screen: &mut FriendScreen, live_roster: Option<&Frie
 
 fn friend_screen_state_for_mail(mail: &MailManager) -> FriendScreenState {
     match mail.mode() {
+        MailMode::Inbox if mail.letters_loaded() => FriendScreenState::Inbox,
         MailMode::Inbox => FriendScreenState::Roster,
         MailMode::Reading => FriendScreenState::Inbox,
         MailMode::Compose => FriendScreenState::Compose,
@@ -533,8 +571,8 @@ mod tests {
     use crate::bootstrap_runtime::{BootstrapRuntime, FriendRosterSnapshot};
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
-    use mu_gameplay::MailManager;
     use mu_gameplay::MailPlugin;
+    use mu_gameplay::{MailLetterEntry, MailManager};
     use mu_ui::{FriendEntry, FriendPresence, FriendScreenState, UiRoute, UiShellState};
 
     fn friend_shell_root_count(world: &mut bevy::prelude::World) -> usize {
@@ -546,6 +584,12 @@ mod tests {
         world
             .resource::<BootstrapRuntime>()
             .friend_list_request_count()
+    }
+
+    fn letter_list_request_count(world: &bevy::prelude::World) -> usize {
+        world
+            .resource::<BootstrapRuntime>()
+            .letter_list_request_count()
     }
 
     fn live_friend_roster() -> FriendRosterSnapshot {
@@ -606,6 +650,29 @@ mod tests {
             FriendScreenState::Inbox
         );
         assert!(view.body.contains("state=inbox"));
+
+        let mut mail = MailManager::new();
+        mail.upsert_letter(MailLetterEntry {
+            id: 0x0102_0304,
+            sender: "Astra".to_owned(),
+            subject: "Potion run".to_owned(),
+            date: "05/19/2026".to_owned(),
+            time: "10:12".to_owned(),
+            read: false,
+        });
+        mail.select_letter(0x0102_0304);
+        let view = friend_shell_view(UiRoute::Friend, SessionPhase::LoggedIn, &mail, None, None)
+            .expect("friend shell view");
+        assert_eq!(
+            friend_screen_state_for_mail(&mail),
+            FriendScreenState::Inbox
+        );
+        assert!(view.body.contains("letter_count=1"));
+        assert!(view.body.contains("selected_letter_sender=Some(\"Astra\")"));
+        assert!(view
+            .body
+            .contains("selected_letter_subject=Some(\"Potion run\")"));
+        assert!(view.body.contains("id=16909060 | sender=Astra"));
 
         let mut mail = MailManager::new();
         mail.set_compose("Blade", "Re: Castle prep", "Meet at Lorencia.");
@@ -709,16 +776,16 @@ mod tests {
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 1);
         assert_eq!(friend_list_request_count(app.world()), 1);
+        assert_eq!(letter_list_request_count(app.world()), 0);
 
-        app.world_mut().resource_mut::<MailManager>().set_compose(
-            "Blade",
-            "Re: patrol",
-            "Meet at Davias.",
-        );
+        app.world_mut()
+            .resource_mut::<MailManager>()
+            .select_letter(0x0102_0304);
         app.update();
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 1);
         assert_eq!(friend_list_request_count(app.world()), 1);
+        assert_eq!(letter_list_request_count(app.world()), 1);
 
         app.world_mut()
             .resource_mut::<UiShellState>()
@@ -727,6 +794,7 @@ mod tests {
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 0);
         assert_eq!(friend_list_request_count(app.world()), 1);
+        assert_eq!(letter_list_request_count(app.world()), 1);
 
         app.world_mut()
             .resource_mut::<UiShellState>()
@@ -735,12 +803,14 @@ mod tests {
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 1);
         assert_eq!(friend_list_request_count(app.world()), 2);
+        assert_eq!(letter_list_request_count(app.world()), 2);
 
         app.world_mut().resource_mut::<SessionState>().logout();
         app.update();
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 1);
         assert_eq!(friend_list_request_count(app.world()), 2);
+        assert_eq!(letter_list_request_count(app.world()), 2);
 
         app.world_mut()
             .resource_mut::<SessionState>()
@@ -749,5 +819,6 @@ mod tests {
 
         assert_eq!(friend_shell_root_count(app.world_mut()), 1);
         assert_eq!(friend_list_request_count(app.world()), 3);
+        assert_eq!(letter_list_request_count(app.world()), 3);
     }
 }

@@ -11,7 +11,11 @@ use bevy::input::keyboard::KeyCode;
 use bevy::input::ButtonInput;
 use bevy::prelude::{Commands, IntoScheduleConfigs, Res, ResMut, Resource, Startup, Update};
 use camino::Utf8Path;
-use mu_gameplay::{CharacterClass, MovementCommand, PartyMemberInfo};
+use mu_gameplay::{
+    mail::{MAX_MAIL_DATE_LENGTH, MAX_MAIL_TIME_LENGTH},
+    CharacterClass, MailLetterEntry, MailManager, MovementCommand, PartyMemberInfo,
+    MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH,
+};
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
 use mu_protocol::events::gens_ranking_request;
@@ -26,7 +30,7 @@ use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemS
 use mu_protocol::login::{create_character, request_character_list, select_character};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::social::{
-    friend_add_request, friend_delete, friend_list_request, party_list_request,
+    friend_add_request, friend_delete, friend_list_request, letter_list_request, party_list_request,
 };
 use mu_protocol::vault::{vault_move_money_request, VaultMoneyMoveDirection};
 use mu_protocol::{decode_packet, PacketFrame};
@@ -48,6 +52,15 @@ const FRIEND_LIST_ENTRY_LEN: usize = 11;
 const GUILD_LIST_ENTRY_LEN: usize = 13;
 const PARTY_LIST_ENTRY_LEN: usize = 24;
 const PARTY_INFO_ENTRY_LEN: usize = 1;
+const LETTER_ALERT_RESERVED_LEN: usize = 30 - MAX_MAIL_DATE_LENGTH - MAX_MAIL_TIME_LENGTH - 1;
+const LETTER_ALERT_PAYLOAD_LEN: usize = 2
+    + MAX_MAIL_RECIPIENT_LENGTH
+    + MAX_MAIL_DATE_LENGTH
+    + 1
+    + MAX_MAIL_TIME_LENGTH
+    + LETTER_ALERT_RESERVED_LEN
+    + MAX_MAIL_SUBJECT_LENGTH
+    + 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FriendRosterSnapshot {
@@ -89,6 +102,8 @@ pub(crate) enum BootstrapSignal {
     Movement(MovementUpdate),
     FriendRoster(FriendRosterSnapshot),
     GuildRoster(GuildRosterSnapshot),
+    MailLetter(MailLetterEntry),
+    MailLetterDelete(u32),
     PartyList(PartyListSnapshot),
     PartyInfo(PartyInfoSnapshot),
     PartyLeave,
@@ -108,6 +123,7 @@ pub(crate) enum BootstrapCommand {
     SelectCharacter(String),
     CreateCharacter(String),
     FriendListRequest,
+    LetterListRequest,
     GensRankingRequest,
     PartyListRequest,
     FriendAdd(String),
@@ -161,6 +177,8 @@ pub struct BootstrapRuntime {
     #[cfg(test)]
     friend_list_request_count: AtomicUsize,
     #[cfg(test)]
+    letter_list_request_count: AtomicUsize,
+    #[cfg(test)]
     gens_ranking_request_count: AtomicUsize,
     #[cfg(test)]
     party_list_request_count: AtomicUsize,
@@ -191,6 +209,8 @@ impl BootstrapRuntime {
             gens_ranking_snapshot: None,
             #[cfg(test)]
             friend_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            letter_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             gens_ranking_request_count: AtomicUsize::new(0),
             #[cfg(test)]
@@ -351,6 +371,23 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::FriendListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_letter_list_request(&self) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.letter_list_request_count
+                .fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::LetterListRequest)
             .is_ok()
     }
 
@@ -575,6 +612,11 @@ impl BootstrapRuntime {
     }
 
     #[cfg(test)]
+    pub(crate) fn letter_list_request_count(&self) -> usize {
+        self.letter_list_request_count.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
     pub(crate) fn gens_ranking_request_count(&self) -> usize {
         self.gens_ranking_request_count.load(Ordering::SeqCst)
     }
@@ -669,11 +711,19 @@ pub(crate) fn poll_bootstrap_signals(
     session_state: &mut SessionState,
     ui_shell: &mut UiShellState,
     client_runtime: &mut ClientRuntime,
+    mail: &mut MailManager,
 ) {
     let signals = bootstrap.drain_signals();
 
     for signal in signals {
-        apply_bootstrap_signal(signal, bootstrap, session_state, ui_shell, client_runtime);
+        apply_bootstrap_signal_with_mail(
+            signal,
+            bootstrap,
+            session_state,
+            ui_shell,
+            client_runtime,
+            mail,
+        );
     }
 }
 
@@ -682,12 +732,14 @@ pub(crate) fn poll_bootstrap_signals_system(
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
     mut client_runtime: ResMut<ClientRuntime>,
+    mut mail: ResMut<MailManager>,
 ) {
     poll_bootstrap_signals(
         &mut bootstrap,
         &mut session_state,
         &mut ui_shell,
         &mut client_runtime,
+        &mut mail,
     );
 }
 
@@ -732,6 +784,7 @@ pub(crate) fn finish_world_bootstrap_system(
     finish_world_bootstrap(&mut bootstrap, &mut client_runtime, &config, &mut ui_shell);
 }
 
+#[cfg(test)]
 fn apply_bootstrap_signal(
     signal: BootstrapSignal,
     bootstrap: &mut BootstrapRuntime,
@@ -739,10 +792,34 @@ fn apply_bootstrap_signal(
     ui_shell: &mut UiShellState,
     client_runtime: &mut ClientRuntime,
 ) {
+    let mut mail = MailManager::new();
+    apply_bootstrap_signal_with_mail(
+        signal,
+        bootstrap,
+        session_state,
+        ui_shell,
+        client_runtime,
+        &mut mail,
+    );
+}
+
+fn apply_bootstrap_signal_with_mail(
+    signal: BootstrapSignal,
+    bootstrap: &mut BootstrapRuntime,
+    session_state: &mut SessionState,
+    ui_shell: &mut UiShellState,
+    client_runtime: &mut ClientRuntime,
+    mail: &mut MailManager,
+) {
     match signal {
-        BootstrapSignal::Session(event) => {
-            apply_session_event(event, bootstrap, session_state, ui_shell, client_runtime)
-        }
+        BootstrapSignal::Session(event) => apply_session_event(
+            event,
+            bootstrap,
+            session_state,
+            ui_shell,
+            client_runtime,
+            mail,
+        ),
         BootstrapSignal::ServerList => {
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
@@ -778,6 +855,14 @@ fn apply_bootstrap_signal(
             bootstrap.set_guild_roster_snapshot(Some(roster));
             bootstrap.last_error = None;
         }
+        BootstrapSignal::MailLetter(letter) => {
+            mail.upsert_letter(letter);
+            bootstrap.last_error = None;
+        }
+        BootstrapSignal::MailLetterDelete(letter_id) => {
+            mail.remove_letter(letter_id);
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::PartyList(roster) => {
             apply_party_list_snapshot(roster, client_runtime);
             bootstrap.last_error = None;
@@ -794,7 +879,9 @@ fn apply_bootstrap_signal(
             bootstrap.set_gens_ranking_snapshot(Some(snapshot));
             bootstrap.last_error = None;
         }
-        BootstrapSignal::Logout(kind) => apply_logout(kind, bootstrap, ui_shell, client_runtime),
+        BootstrapSignal::Logout(kind) => {
+            apply_logout(kind, bootstrap, ui_shell, client_runtime, mail)
+        }
         BootstrapSignal::JoinMap(map) => {
             bootstrap.pending_world_map = Some(map);
             bootstrap.set_character_list_ready(false);
@@ -808,6 +895,7 @@ fn apply_bootstrap_signal(
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some(message);
             bootstrap.clear_social_rosters();
+            mail.reset();
             clear_party_state(client_runtime);
             bootstrap.clear_gens_ranking_snapshot();
 
@@ -827,6 +915,7 @@ fn apply_session_event(
     session_state: &mut SessionState,
     ui_shell: &mut UiShellState,
     client_runtime: &mut ClientRuntime,
+    mail: &mut MailManager,
 ) {
     match event {
         SessionEvent::LoginSuccess => {
@@ -838,6 +927,7 @@ fn apply_session_event(
             bootstrap.last_error = None;
             bootstrap.clear_social_rosters();
             bootstrap.clear_gens_ranking_snapshot();
+            mail.reset();
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
         SessionEvent::LoginFailure => {
@@ -848,6 +938,7 @@ fn apply_session_event(
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = Some("login failed".to_string());
             bootstrap.clear_social_rosters();
+            mail.reset();
             clear_party_state(client_runtime);
             bootstrap.clear_gens_ranking_snapshot();
             ui_shell.set_route(UiRoute::Login);
@@ -858,8 +949,10 @@ fn apply_session_event(
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.clear_social_rosters();
+            mail.reset();
             clear_party_state(client_runtime);
             bootstrap.clear_gens_ranking_snapshot();
+            ui_shell.set_route(UiRoute::Login);
         }
         SessionEvent::Disconnect => {
             let pending_world_map = bootstrap.pending_world_map.is_some();
@@ -868,6 +961,7 @@ fn apply_session_event(
                 bootstrap.character_create_state() == CharacterCreateScreenState::Submitting;
             session_state.apply_event(event);
             bootstrap.clear_social_rosters();
+            mail.reset();
             clear_party_state(client_runtime);
             bootstrap.clear_gens_ranking_snapshot();
 
@@ -914,6 +1008,7 @@ fn apply_logout(
     bootstrap: &mut BootstrapRuntime,
     ui_shell: &mut UiShellState,
     client_runtime: &mut ClientRuntime,
+    mail: &mut MailManager,
 ) {
     bootstrap.pending_world_map = None;
     bootstrap.set_character_list_ready(false);
@@ -921,6 +1016,7 @@ fn apply_logout(
     bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
     bootstrap.last_error = None;
     bootstrap.clear_social_rosters();
+    mail.reset();
     clear_party_state(client_runtime);
     bootstrap.clear_gens_ranking_snapshot();
 
@@ -1090,6 +1186,15 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
             Ok(roster) => BootstrapSignal::FriendRoster(roster),
             Err(error) => BootstrapSignal::Error(error),
         }),
+        (0xC6, _) => Some(match decode_letter_alert(frame) {
+            Ok(letter) => BootstrapSignal::MailLetter(letter),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
+        (0xC8, _) => match decode_letter_delete_result(frame) {
+            Ok(Some(letter_id)) => Some(BootstrapSignal::MailLetterDelete(letter_id)),
+            Ok(None) => None,
+            Err(error) => Some(BootstrapSignal::Error(error)),
+        },
         (0x03, 0x42) => Some(match decode_party_list(frame) {
             Ok(roster) => BootstrapSignal::PartyList(roster),
             Err(error) => BootstrapSignal::Error(error),
@@ -1198,6 +1303,44 @@ fn decode_guild_roster(frame: &PacketFrame<'_>) -> Result<GuildRosterSnapshot, S
         rival_guild_name: (!rival_guild_name.is_empty()).then_some(rival_guild_name),
         members,
     })
+}
+
+fn decode_letter_alert(frame: &PacketFrame<'_>) -> Result<MailLetterEntry, String> {
+    let payload = frame.payload;
+    if payload.len() < LETTER_ALERT_PAYLOAD_LEN {
+        return Err(format!(
+            "letter alert packet truncated: expected {LETTER_ALERT_PAYLOAD_LEN} bytes, found {}",
+            payload.len()
+        ));
+    }
+
+    let index = u16::from_le_bytes([payload[0], payload[1]]) as u32;
+    let name_start = 2;
+    let date_start = name_start + MAX_MAIL_RECIPIENT_LENGTH;
+    let time_start = date_start + MAX_MAIL_DATE_LENGTH + 1;
+    let subject_start = time_start + MAX_MAIL_TIME_LENGTH + LETTER_ALERT_RESERVED_LEN;
+    let read_index = subject_start + MAX_MAIL_SUBJECT_LENGTH;
+
+    Ok(MailLetterEntry {
+        id: index,
+        sender: decode_legacy_name(&payload[name_start..date_start]),
+        subject: decode_legacy_name(&payload[subject_start..read_index]),
+        date: decode_legacy_name(&payload[date_start..date_start + MAX_MAIL_DATE_LENGTH]),
+        time: decode_legacy_name(&payload[time_start..time_start + MAX_MAIL_TIME_LENGTH]),
+        read: payload[read_index] == 0x01,
+    })
+}
+
+fn decode_letter_delete_result(frame: &PacketFrame<'_>) -> Result<Option<u32>, String> {
+    let payload = frame.payload;
+    if payload.len() < 3 {
+        return Err("letter delete result packet missing result header".to_string());
+    }
+
+    let result = payload[0];
+    let index = u16::from_le_bytes([payload[1], payload[2]]) as u32;
+
+    Ok((result == 0x01).then_some(index))
 }
 
 fn decode_party_list(frame: &PacketFrame<'_>) -> Result<PartyListSnapshot, String> {
@@ -1372,6 +1515,14 @@ async fn send_bootstrap_command(
         }
         BootstrapCommand::FriendListRequest => {
             let packet = friend_list_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::LetterListRequest => {
+            let packet = letter_list_request().map_err(|error| error.to_string())?;
 
             session
                 .send(packet)
@@ -1617,16 +1768,16 @@ fn character_is_selected(character: &CharacterSelectCharacter) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_bootstrap_signal, apply_character_select_input, classify_bootstrap_packet,
-        finish_world_bootstrap, legacy_language_byte, BootstrapCommand, BootstrapRuntime,
-        BootstrapSignal, DEFAULT_CHARACTER_CREATE_CLASS,
+        apply_bootstrap_signal, apply_bootstrap_signal_with_mail, apply_character_select_input,
+        classify_bootstrap_packet, finish_world_bootstrap, legacy_language_byte, BootstrapCommand,
+        BootstrapRuntime, BootstrapSignal, DEFAULT_CHARACTER_CREATE_CLASS,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
     use bevy::input::keyboard::KeyCode;
     use bevy::input::ButtonInput;
     use camino::Utf8PathBuf;
-    use mu_gameplay::MovementCommand;
+    use mu_gameplay::{MailLetterEntry, MailManager, MailMode, MovementCommand};
     use mu_network::Session;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
@@ -1699,6 +1850,32 @@ mod tests {
         payload.push(0xFD);
 
         encode_packet(0xC2, 0xC0, 0x02, &payload).unwrap()
+    }
+
+    fn mail_letter_alert_packet(
+        index: u16,
+        sender: &[u8],
+        date: &[u8],
+        time: &[u8],
+        subject: &[u8],
+        read: u8,
+    ) -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&index.to_le_bytes());
+        payload.extend_from_slice(&fixed_name::<10>(sender));
+        payload.extend_from_slice(&fixed_name::<10>(date));
+        payload.push(0);
+        payload.extend_from_slice(&fixed_name::<8>(time));
+        payload.extend_from_slice(&[0; super::LETTER_ALERT_RESERVED_LEN]);
+        payload.extend_from_slice(&fixed_name::<60>(subject));
+        payload.push(read);
+
+        encode_packet(0xC2, 0xC6, 0x00, &payload).unwrap()
+    }
+
+    fn mail_letter_delete_result_packet(index: u16, result: u8) -> Vec<u8> {
+        let payload = [result, index as u8, (index >> 8) as u8];
+        encode_packet(0xC2, 0xC8, 0x00, &payload).unwrap()
     }
 
     fn guild_roster_packet() -> Vec<u8> {
@@ -2634,6 +2811,167 @@ mod tests {
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn letter_list_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_letter_list_request());
+
+        match command_receiver
+            .try_recv()
+            .expect("letter list command missing")
+        {
+            BootstrapCommand::LetterListRequest => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn letter_packets_update_and_reset_mail_state() {
+        let letter_index = 0x0304;
+        let letter_packet = mail_letter_alert_packet(
+            letter_index,
+            b"Astra",
+            b"05/19/2026",
+            b"10:12",
+            b"Potion run",
+            0x02,
+        );
+        let frame = decode_packet(&letter_packet).expect("letter alert frame");
+        let letter = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::MailLetter(letter)) => letter,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(
+            letter,
+            MailLetterEntry {
+                id: u32::from(letter_index),
+                sender: "Astra".to_string(),
+                subject: "Potion run".to_string(),
+                date: "05/19/2026".to_string(),
+                time: "10:12".to_string(),
+                read: false,
+            }
+        );
+
+        let delete_packet = mail_letter_delete_result_packet(letter_index, 0x01);
+        let delete_frame = decode_packet(&delete_packet).expect("letter delete frame");
+        match classify_bootstrap_packet(&delete_frame) {
+            Some(BootstrapSignal::MailLetterDelete(letter_id)) => {
+                assert_eq!(letter_id, u32::from(letter_index));
+            }
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        }
+
+        let mut bootstrap = BootstrapRuntime::idle();
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+        let mut mail = MailManager::new();
+
+        apply_bootstrap_signal_with_mail(
+            BootstrapSignal::MailLetter(letter.clone()),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            &mut mail,
+        );
+
+        assert!(mail.letters_loaded());
+        assert_eq!(mail.letters().len(), 1);
+        assert!(mail.new_mail_alert());
+
+        mail.select_letter(letter.id);
+        assert_eq!(mail.mode(), MailMode::Reading);
+
+        apply_bootstrap_signal_with_mail(
+            BootstrapSignal::MailLetterDelete(letter.id),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            &mut mail,
+        );
+
+        assert!(mail.letters_loaded());
+        assert!(mail.letters().is_empty());
+        assert_eq!(mail.selected_letter_id(), None);
+        assert_eq!(mail.mode(), MailMode::Inbox);
+        assert!(!mail.new_mail_alert());
+
+        mail.upsert_letter(letter);
+        mail.select_letter(u32::from(letter_index));
+
+        apply_bootstrap_signal_with_mail(
+            BootstrapSignal::Session(mu_network::SessionEvent::LoginSuccess),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            &mut mail,
+        );
+
+        assert!(mail.letters().is_empty());
+        assert!(!mail.letters_loaded());
+        assert_eq!(mail.selected_letter_id(), None);
+        assert_eq!(mail.mode(), MailMode::Inbox);
+        assert!(!mail.new_mail_alert());
+
+        mail.upsert_letter(MailLetterEntry {
+            id: 0x0102_0305,
+            sender: "Selene".to_string(),
+            subject: "Castle prep".to_string(),
+            date: "05/18/2026".to_string(),
+            time: "21:40".to_string(),
+            read: true,
+        });
+        mail.select_letter(0x0102_0305);
+
+        apply_bootstrap_signal_with_mail(
+            BootstrapSignal::Logout(1),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            &mut mail,
+        );
+
+        assert!(mail.letters().is_empty());
+        assert!(!mail.letters_loaded());
+        assert_eq!(mail.selected_letter_id(), None);
+        assert_eq!(mail.mode(), MailMode::Inbox);
+        assert!(!mail.new_mail_alert());
+
+        mail.upsert_letter(MailLetterEntry {
+            id: 0x0102_0306,
+            sender: "Marlon".to_string(),
+            subject: "Guild meeting".to_string(),
+            date: "05/17/2026".to_string(),
+            time: "18:05".to_string(),
+            read: true,
+        });
+        mail.select_letter(0x0102_0306);
+
+        apply_bootstrap_signal_with_mail(
+            BootstrapSignal::Session(mu_network::SessionEvent::Disconnect),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+            &mut mail,
+        );
+
+        assert!(mail.letters().is_empty());
+        assert!(!mail.letters_loaded());
+        assert_eq!(mail.selected_letter_id(), None);
+        assert_eq!(mail.mode(), MailMode::Inbox);
+        assert!(!mail.new_mail_alert());
     }
 
     #[test]

@@ -91,8 +91,8 @@ pub use items::{
     ItemRequirements, ItemSize, MAX_ITEM_INDEX, MAX_ITEM_SOCKETS, SOCKET_EMPTY,
 };
 pub use mail::{
-    MailManager, MailMode, MailPlugin, MAX_MAIL_BODY_LENGTH, MAX_MAIL_RECIPIENT_LENGTH,
-    MAX_MAIL_SUBJECT_LENGTH,
+    MailLetterEntry, MailManager, MailMode, MailPlugin, MAX_MAIL_BODY_LENGTH,
+    MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH,
 };
 pub use master_level::{next_master_level_experience, MasterLevelState};
 pub use monsters::{
