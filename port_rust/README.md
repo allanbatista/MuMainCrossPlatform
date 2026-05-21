@@ -19,16 +19,18 @@ sessao de jogo completa.
   list. Depois de `login-success`, ele pede automaticamente a character list
   usando o byte legado do idioma
   (`en`/`eng` -> `0`, `pt`/`por` -> `1`, `es`/`spn` -> `2`). Quando o roster
-  chega, ele fica em character select ate receber um `select-character`
-  explicito com o nome do personagem; o mesmo comando pode vir pelo
-  `--control-http` usando o nome no body ou em `character=`. A rota visivel
+  chega, ele escolhe automaticamente o primeiro personagem usavel, envia
+  `select-character` e leva esse nome para o world handoff; o mesmo comando
+  continua disponivel pelo `--control-http` usando o nome no body ou em
+  `character=` quando voce quiser sobrescrever o padrao. A rota visivel
   `character-create` tambem pode ser aberta pelo comando `character-create`
   no `--control-http`, mostrando a lista base de classes, o prompt de nome e
   os botoes create/cancel; `create-character` envia o nome para o worker,
   valida o minimo de 4 chars no control plane e reage ao retorno de
   sucesso/falha da rede. Na tela de character select, use `Up`/`Down` ou
   `Left`/`Right` e `Enter` para escolher um personagem sem depender do
-  control-http. No world route, mostra uma
+  control-http; o default automatico permanece disponivel ate voce trocar a
+  selecao manualmente. No world route, mostra uma
   world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha

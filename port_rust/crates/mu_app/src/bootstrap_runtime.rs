@@ -115,10 +115,17 @@ pub(crate) struct PartyInfoSnapshot {
 }
 
 #[derive(Debug)]
+pub(crate) struct CharacterListSelection {
+    selected_index: usize,
+    selected_name: String,
+}
+
+#[derive(Debug)]
 pub(crate) enum BootstrapSignal {
     Session(SessionEvent),
     ServerList,
     CharacterList,
+    CharacterListSelection(CharacterListSelection),
     CharacterCreateSuccess,
     CharacterCreateFailure,
     Movement(MovementUpdate),
@@ -962,6 +969,11 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
+        BootstrapSignal::CharacterListSelection(selection) => {
+            bootstrap.set_character_select_index(Some(selection.selected_index));
+            bootstrap.selected_character_name = Some(selection.selected_name);
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::CharacterCreateSuccess => {
             bootstrap.set_character_list_ready(true);
             bootstrap.clear_character_select_selection();
@@ -1262,6 +1274,22 @@ fn spawn_bootstrap_worker(
                             break;
                         };
 
+                        let signal = classify_bootstrap_packet(&frame);
+                        let character_list_selection = if matches!(
+                            signal.as_ref(),
+                            Some(BootstrapSignal::CharacterList)
+                        ) {
+                            match decode_character_list_selection(&frame) {
+                                Ok(selection) => selection,
+                                Err(error) => {
+                                    let _ = sender.send(BootstrapSignal::Error(error));
+                                    break;
+                                }
+                            }
+                        } else {
+                            None
+                        };
+
                         match handle_connect_server_packet(&frame, &mut session, &sender).await {
                             Ok(true) => continue,
                             Ok(false) => {}
@@ -1271,9 +1299,27 @@ fn spawn_bootstrap_worker(
                             }
                         }
 
-                        if let Some(signal) = classify_bootstrap_packet(&frame) {
+                        if let Some(signal) = signal {
                             let should_stop = matches!(signal, BootstrapSignal::Error(_));
+                            let is_character_list = matches!(signal, BootstrapSignal::CharacterList);
                             let _ = sender.send(signal);
+
+                            if is_character_list {
+                                if let Some(selection) = character_list_selection {
+                                    let character_name = selection.selected_name.clone();
+                                    let _ = sender.send(BootstrapSignal::CharacterListSelection(
+                                        selection,
+                                    ));
+
+                                    if let Err(error) =
+                                        send_character_select_request(&mut session, character_name)
+                                            .await
+                                    {
+                                        let _ = sender.send(BootstrapSignal::Error(error));
+                                        break;
+                                    }
+                                }
+                            }
 
                             if should_stop {
                                 break;
@@ -1291,6 +1337,106 @@ fn spawn_bootstrap_worker(
 fn character_list_language_byte(config_path: impl AsRef<Utf8Path>) -> u8 {
     let config = Config::load(config_path).unwrap_or_default();
     legacy_language_byte(&config.locale.language)
+}
+
+fn decode_character_list_selection(
+    frame: &PacketFrame<'_>,
+) -> Result<Option<CharacterListSelection>, String> {
+    let entries = decode_character_list_entries(frame.payload)?;
+
+    if let Some((index, entry)) = entries
+        .into_iter()
+        .enumerate()
+        .find(|(_, entry)| !entry.item_blocked && !entry.name.is_empty())
+    {
+        return Ok(Some(CharacterListSelection {
+            selected_index: index,
+            selected_name: entry.name,
+        }));
+    }
+
+    Ok(None)
+}
+
+struct CharacterListEntrySnapshot {
+    name: String,
+    item_blocked: bool,
+}
+
+fn decode_character_list_entries(
+    payload: &[u8],
+) -> Result<Vec<CharacterListEntrySnapshot>, String> {
+    let (prefix_len, entry_len, count_index) = character_list_layout(payload)?;
+    let count = usize::from(payload[count_index]);
+    let expected_len = prefix_len
+        .checked_add(
+            count
+                .checked_mul(entry_len)
+                .ok_or_else(|| "character list packet is too large".to_string())?,
+        )
+        .ok_or_else(|| "character list packet is too large".to_string())?;
+
+    if payload.len() != expected_len {
+        return Err(format!(
+            "character list packet truncated: expected {expected_len} payload bytes, found {}",
+            payload.len()
+        ));
+    }
+
+    let mut entries = Vec::with_capacity(count);
+    for index in 0..count {
+        let start = prefix_len + index * entry_len;
+        let entry = &payload[start..start + entry_len];
+        let name = decode_legacy_name(&entry[1..11]);
+        let status = entry[13];
+
+        entries.push(CharacterListEntrySnapshot {
+            name,
+            item_blocked: status & 0x10 != 0,
+        });
+    }
+
+    Ok(entries)
+}
+
+fn character_list_layout(payload: &[u8]) -> Result<(usize, usize, usize), String> {
+    if payload.len() >= 4 {
+        let count = usize::from(payload[2]);
+        if let Some(expected_len) = count
+            .checked_mul(44)
+            .and_then(|bytes| 4usize.checked_add(bytes))
+        {
+            if payload.len() == expected_len {
+                return Ok((4, 44, 2));
+            }
+        }
+    }
+
+    if payload.len() >= 1 {
+        let count = usize::from(payload[0]);
+        if let Some(expected_len) = count
+            .checked_mul(26)
+            .and_then(|bytes| 1usize.checked_add(bytes))
+        {
+            if payload.len() == expected_len {
+                return Ok((1, 26, 0));
+            }
+        }
+
+        if let Some(expected_len) = count
+            .checked_mul(24)
+            .and_then(|bytes| 1usize.checked_add(bytes))
+        {
+            if payload.len() == expected_len {
+                return Ok((1, 24, 0));
+            }
+        }
+    }
+
+    Err(format!(
+        "unsupported character list packet shape: {} payload bytes",
+        payload.len()
+    ))
 }
 
 fn legacy_language_byte(locale: &str) -> u8 {
@@ -2191,8 +2337,9 @@ fn character_is_selected(character: &CharacterSelectCharacter) -> bool {
 mod tests {
     use super::{
         apply_bootstrap_signal, apply_bootstrap_signal_with_mail, apply_character_select_input,
-        classify_bootstrap_packet, finish_world_bootstrap, legacy_language_byte, BootstrapCommand,
-        BootstrapRuntime, BootstrapSignal, FriendRosterSnapshot, DEFAULT_CHARACTER_CREATE_CLASS,
+        classify_bootstrap_packet, decode_character_list_selection, finish_world_bootstrap,
+        legacy_language_byte, BootstrapCommand, BootstrapRuntime, BootstrapSignal,
+        FriendRosterSnapshot, DEFAULT_CHARACTER_CREATE_CLASS,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
@@ -2451,21 +2598,11 @@ mod tests {
         session_state: &mut SessionState,
         ui_shell: &mut UiShellState,
         client_runtime: &mut ClientRuntime,
-        character_name: Option<&str>,
     ) {
-        let mut selection_requested = false;
-
         for _ in 0..100 {
             let signals = bootstrap.drain_signals();
             for signal in signals {
                 apply_bootstrap_signal(signal, bootstrap, session_state, ui_shell, client_runtime);
-            }
-
-            if !selection_requested && ui_shell.current() == UiRoute::CharacterSelect {
-                if let Some(character_name) = character_name {
-                    assert!(bootstrap.queue_character_select_request(character_name));
-                }
-                selection_requested = true;
             }
 
             finish_world_bootstrap(bootstrap, client_runtime, config, ui_shell);
@@ -2506,6 +2643,66 @@ mod tests {
         assert_eq!(legacy_language_byte("por"), 1);
         assert_eq!(legacy_language_byte("es"), 2);
         assert_eq!(legacy_language_byte("spn"), 2);
+    }
+
+    #[test]
+    fn character_list_selection_prefers_the_first_usable_entry() {
+        let packet = character_list_extended(
+            1,
+            2,
+            true,
+            &[
+                CharacterListEntry {
+                    slot_index: 0,
+                    name: b"Astra",
+                    level: 255,
+                    status: 32,
+                    is_item_block_active: true,
+                    appearance: b"appearance-data",
+                    guild_position: 0,
+                },
+                CharacterListEntry {
+                    slot_index: 1,
+                    name: b"Blade",
+                    level: 255,
+                    status: 32,
+                    is_item_block_active: false,
+                    appearance: b"appearance-data",
+                    guild_position: 0,
+                },
+            ],
+        )
+        .unwrap();
+        let frame = decode_packet(&packet).unwrap();
+
+        let selection = decode_character_list_selection(&frame)
+            .unwrap()
+            .expect("usable character missing");
+
+        assert_eq!(selection.selected_index, 1);
+        assert_eq!(selection.selected_name, "Blade");
+    }
+
+    #[test]
+    fn character_list_selection_returns_none_when_every_entry_is_blocked() {
+        let packet = character_list_extended(
+            1,
+            2,
+            true,
+            &[CharacterListEntry {
+                slot_index: 0,
+                name: b"Astra",
+                level: 255,
+                status: 32,
+                is_item_block_active: true,
+                appearance: b"appearance-data",
+                guild_position: 0,
+            }],
+        )
+        .unwrap();
+        let frame = decode_packet(&packet).unwrap();
+
+        assert!(decode_character_list_selection(&frame).unwrap().is_none());
     }
 
     #[test]
@@ -4389,7 +4586,7 @@ mod tests {
                 name: b"Astra",
                 level: 255,
                 status: 32,
-                is_item_block_active: false,
+                is_item_block_active: true,
                 appearance: b"appearance-data",
                 guild_position: 0,
             }],
@@ -4606,15 +4803,26 @@ mod tests {
             1,
             2,
             true,
-            &[CharacterListEntry {
-                slot_index: 0,
-                name: b"Astra",
-                level: 255,
-                status: 32,
-                is_item_block_active: false,
-                appearance: b"appearance-data",
-                guild_position: 0,
-            }],
+            &[
+                CharacterListEntry {
+                    slot_index: 0,
+                    name: b"Astra",
+                    level: 255,
+                    status: 32,
+                    is_item_block_active: true,
+                    appearance: b"appearance-data",
+                    guild_position: 0,
+                },
+                CharacterListEntry {
+                    slot_index: 1,
+                    name: b"Blade",
+                    level: 255,
+                    status: 32,
+                    is_item_block_active: false,
+                    appearance: b"appearance-data",
+                    guild_position: 0,
+                },
+            ],
         )
         .unwrap();
         let join_map = join_map_packet(1);
@@ -4623,7 +4831,7 @@ mod tests {
                 .send_packet(login_success.clone())
                 .expect_packet(request_character_list(0).unwrap())
                 .send_packet(character_list.clone())
-                .expect_packet(select_character(b"Astra").unwrap())
+                .expect_packet(select_character(b"Blade").unwrap())
                 .send_packet(join_map.clone())
                 .close(),
         )
@@ -4645,15 +4853,15 @@ mod tests {
             &mut session_state,
             &mut ui_shell,
             &mut client_runtime,
-            Some("Astra"),
         )
         .await;
 
-        assert_eq!(client_runtime.local_player_label(), Some("Astra"));
+        assert_eq!(client_runtime.local_player_label(), Some("Blade"));
         assert!(client_runtime
             .world_entities()
             .snapshot()
-            .contains("label=Astra"));
+            .contains("label=Blade"));
+        assert_eq!(bootstrap.selected_character_name.as_deref(), Some("Blade"));
 
         wait_for_session_disconnect(
             &mut bootstrap,
@@ -4762,7 +4970,6 @@ mod tests {
             &mut session_state,
             &mut ui_shell,
             &mut client_runtime,
-            Some("Astra"),
         )
         .await;
 
@@ -4839,7 +5046,6 @@ mod tests {
             &mut session_state,
             &mut ui_shell,
             &mut client_runtime,
-            Some("Astra"),
         )
         .await;
 
@@ -4943,7 +5149,6 @@ mod tests {
             &mut session_state,
             &mut ui_shell,
             &mut client_runtime,
-            Some("Astra"),
         )
         .await;
 

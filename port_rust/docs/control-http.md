@@ -15,6 +15,10 @@ letters live quando elas chegam. `duel-start`, `duel-stop`,
 `duel-channel-join` e `duel-channel-quit` tambem alimentam o bridge de
 pacotes de duel quando a sessao viva esta disponivel. `skill-targeted`
 alimenta o bridge do pacote de targeted skill na mesma sessao viva.
+Depois do login-success, o bootstrap automaticamente puxa a character list,
+escolhe o primeiro personagem usavel e envia `select-character`; o comando
+`select-character` continua disponivel no HTTP como override manual quando
+voce quiser escolher outro nome.
 `letter-read` e `letter-delete` atuam sobre a carta selecionada do inbox
 via `letter_id=` (ou body bruto); `letter-read` marca a carta como lida no
 `MailManager` local e enfileira o pacote legacy de read, enquanto

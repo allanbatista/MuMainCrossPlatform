@@ -38,17 +38,19 @@ in the local config file instead of being typed every time.
   immediately requests the character list after the login-success packet
   using the legacy locale byte (`en`/`eng` -> `0`, `pt`/`por` -> `1`,
   `es`/`spn` -> `2`) before the loaded world handoff starts.
-- When the roster arrives, the bootstrap stays on character select until a
-  `select-character` request names a roster entry; the same request can be
-  sent through the local control HTTP API with the character name in the body
-  or a `character=` query parameter.
+- When the roster arrives, the bootstrap automatically picks the first usable
+  roster entry, sends `select-character`, and carries that character name
+  into the world handoff; the same request can still be sent through the
+  local control HTTP API with the character name in the body or a
+  `character=` query parameter when you want to override the default.
 - The character-create route opens the class picker and name prompt;
   `character-create` opens the shell and `create-character` submits the
   name, returning to character select on success or keeping the create
   error surface on failure.
 - On the visible character-select surface, use `Up`/`Down` or `Left`/`Right`
   to move the selection and `Enter` to confirm without the control HTTP API.
-  The shell shows the loading state until the roster is ready.
+  The shell shows the loading state until the roster is ready and then uses
+  the automatic roster selection unless you override it manually.
 - The world now opens a visible Bevy world shell with a camera, lighting,
   a heightfield terrain derived from the loaded world bundle, a layered
   terrain surface from the bundle's first two converted texture slots plus
