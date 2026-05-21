@@ -63,7 +63,8 @@ sessao de jogo completa.
 - A rota `Trade` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local.
 - A rota `Party` agora mostra uma shell visual propria e pode ser aberta pelo
-  `--control-http` para smoke local.
+  `--control-http` para smoke local; `party-invite` tambem enfileira o pacote
+  legado de invite quando voce passa o target player id.
 - A rota `Gate` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local.
 - A rota `Quests` agora mostra uma shell visual propria e pode ser aberta

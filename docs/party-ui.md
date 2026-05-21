@@ -29,3 +29,5 @@ Behavior notes:
   activation, decodes the legacy `0x42` list, `0x43` leave, and `0x44` info
   packets into `PartyManager`, and clears party state on logout, disconnect,
   and hard error paths.
+- The empty-state `InviteMember` action maps to `POST /command?name=party-invite`
+  and queues the legacy invite packet when you pass a target player id.

@@ -160,7 +160,8 @@ in the local config file instead of being typed every time.
   resolves the legacy rank title from the local 14-title table, and can be
   driven from the local control HTTP smoke path with `gens`.
 - The party route now opens a visible Bevy shell that can be driven from the
-  runtime or the local control HTTP smoke path.
+  runtime or the local control HTTP smoke path, and `party-invite` queues the
+  legacy invite packet when you pass a target player id.
 - The gate route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The quests route now opens a visible Bevy shell that can be driven from the

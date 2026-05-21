@@ -34,7 +34,7 @@ use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate
 use mu_protocol::skills::targeted_skill;
 use mu_protocol::social::{
     friend_add_request, friend_delete, friend_list_request, letter_delete_request,
-    letter_list_request, letter_read_request, party_list_request,
+    letter_list_request, letter_read_request, party_invite_request, party_list_request,
 };
 use mu_protocol::vault::{vault_move_money_request, VaultMoneyMoveDirection};
 use mu_protocol::{decode_packet, PacketFrame};
@@ -159,6 +159,7 @@ pub(crate) enum BootstrapCommand {
     LetterDelete(u16),
     GensRankingRequest,
     PartyListRequest,
+    PartyInvite(u16),
     FriendAdd(String),
     FriendDelete(String),
     GuildListRequest,
@@ -227,6 +228,8 @@ pub struct BootstrapRuntime {
     #[cfg(test)]
     party_list_request_count: AtomicUsize,
     #[cfg(test)]
+    party_invite_request_count: AtomicUsize,
+    #[cfg(test)]
     guild_list_request_count: AtomicUsize,
     #[cfg(test)]
     guild_alliance_list_request_count: AtomicUsize,
@@ -260,6 +263,8 @@ impl BootstrapRuntime {
             gens_ranking_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             party_list_request_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            party_invite_request_count: AtomicUsize::new(0),
             #[cfg(test)]
             guild_list_request_count: AtomicUsize::new(0),
             #[cfg(test)]
@@ -519,6 +524,23 @@ impl BootstrapRuntime {
 
         command_sender
             .send(BootstrapCommand::PartyListRequest)
+            .is_ok()
+    }
+
+    pub(crate) fn queue_party_invite_request(&self, target_player_id: u16) -> bool {
+        #[cfg(test)]
+        if self.test_request_queues {
+            self.party_invite_request_count
+                .fetch_add(1, Ordering::SeqCst);
+            return true;
+        }
+
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::PartyInvite(target_player_id))
             .is_ok()
     }
 
@@ -2059,6 +2081,15 @@ async fn send_bootstrap_command(
         }
         BootstrapCommand::PartyListRequest => {
             let packet = party_list_request().map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::PartyInvite(target_player_id) => {
+            let packet =
+                party_invite_request(target_player_id).map_err(|error| error.to_string())?;
 
             session
                 .send(packet)
@@ -3883,6 +3914,25 @@ mod tests {
     }
 
     #[test]
+    fn party_invite_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_party_invite_request(0x1234));
+
+        match command_receiver
+            .try_recv()
+            .expect("party invite command missing")
+        {
+            BootstrapCommand::PartyInvite(target_player_id) => {
+                assert_eq!(target_player_id, 0x1234);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn guild_fire_requests_queue_commands() {
         let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
         let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
@@ -3955,6 +4005,39 @@ mod tests {
             .unwrap();
 
         assert_eq!(received, super::party_list_request().unwrap());
+    }
+
+    #[tokio::test]
+    async fn party_invite_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(&mut session, BootstrapCommand::PartyInvite(0x1234))
+            .await
+            .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(received, super::party_invite_request(0x1234).unwrap());
     }
 
     #[test]

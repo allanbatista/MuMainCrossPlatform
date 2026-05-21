@@ -59,3 +59,8 @@ guild parity is still required.
 `duel-start` and `duel-stop` are now bridged through the control plane, but
 the rest of the legacy duel lifecycle still needs a later slice if full duel
 parity is still required.
+
+# [medium] Party invite follow-up
+
+`party-invite` is wired end-to-end now, but the incoming invite response and
+party-kick flows still need their own slice if full party parity is required.

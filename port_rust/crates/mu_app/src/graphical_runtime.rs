@@ -372,6 +372,11 @@ fn sync_control_http_snapshot_to_runtime(
                 let _ = bootstrap.queue_friend_delete_request(friend_name);
             }
         }
+        Some(ControlCommand::PartyInvite) => {
+            if let Some(target_player_id) = snapshot.party_target_player_id {
+                let _ = bootstrap.queue_party_invite_request(target_player_id);
+            }
+        }
         Some(ControlCommand::LetterRead) => {
             if mail_letter_action == Some(ControlCommand::LetterRead) {
                 if let Some(letter_id) = snapshot.letter_id {

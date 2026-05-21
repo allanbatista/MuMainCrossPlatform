@@ -27,6 +27,9 @@ de delete.
 `party` tambem espelha a shell visivel e pede uma vez a party list live por
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
+`party-invite` enfileira o pacote legacy de invite pela sessao viva e aceita
+o target player ID na query ou no corpo em `target_player_id=`; se o payload
+vier incompleto, a resposta sera `400`.
 Quando a sessao responde com as listas sociais, o runtime sobrepoe o
 roster/score/roles/unions decodificados no shell correspondente ate o logout
 ou disconnect.
@@ -80,6 +83,7 @@ e o servidor continua disponivel para inspeção local.
 - `guild_assignment_type`
 - `guild_security_code`
 - `guild_union_name`
+- `party_target_player_id`
 - `inventory_use_slot`
 - `inventory_use_target`
 - `inventory_use_add_points`
@@ -96,7 +100,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -121,6 +125,7 @@ Exemplo:
 - `marketplace`
 - `trade`
 - `party`
+- `party-invite`
 - `gate`
 - `siege`
 - `siege-inactive`
@@ -172,7 +177,7 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `character-create`,
 `create-character`, `loading`, `world`, `chat`, `npc`, `select-character`,
-`shop`, `game-shop`, `marketplace`, `trade`, `party`, `gate`, `siege`, `siege-inactive`,
+`shop`, `game-shop`, `marketplace`, `trade`, `party`, `party-invite`, `gate`, `siege`, `siege-inactive`,
 `siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `letter-read`, `letter-delete`,

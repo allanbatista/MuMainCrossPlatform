@@ -31,6 +31,7 @@ pub enum ControlCommand {
     Trade,
     Marketplace,
     Party,
+    PartyInvite,
     Gate,
     Siege,
     SiegeInactive,
@@ -102,6 +103,7 @@ impl ControlCommand {
             Self::Trade => "trade",
             Self::Marketplace => "marketplace",
             Self::Party => "party",
+            Self::PartyInvite => "party-invite",
             Self::Gate => "gate",
             Self::Siege => "siege",
             Self::SiegeInactive => "siege-inactive",
@@ -177,6 +179,7 @@ impl ControlCommand {
             "trade" => Some(Self::Trade),
             "marketplace" | "player-shop" | "player_shop" => Some(Self::Marketplace),
             "party" => Some(Self::Party),
+            "party-invite" | "party_invite" => Some(Self::PartyInvite),
             "gate" => Some(Self::Gate),
             "siege" => Some(Self::Siege),
             "siege-inactive" | "siege_inactive" => Some(Self::SiegeInactive),
@@ -272,6 +275,7 @@ pub struct ControlSnapshot {
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
     pub guild_union_name: Option<String>,
+    pub party_target_player_id: Option<u16>,
     pub siege_screen_state: Option<SiegeScreenState>,
     pub inventory_use_slot: Option<u8>,
     pub inventory_use_target: Option<u8>,
@@ -309,6 +313,7 @@ impl ControlSnapshot {
             guild_assignment_type: None,
             guild_security_code: None,
             guild_union_name: None,
+            party_target_player_id: None,
             siege_screen_state: None,
             inventory_use_slot: None,
             inventory_use_target: None,
@@ -432,6 +437,12 @@ impl ControlSnapshot {
                 false
             }
             ControlCommand::Party => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Party;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::PartyInvite => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Party;
                 self.session_phase = SessionPhase::LoggedIn;
@@ -782,6 +793,10 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let party_target_player_id = self
+            .party_target_player_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let inventory_use_slot = self
             .inventory_use_slot
             .map(|value| value.to_string())
@@ -828,7 +843,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"party_target_player_id\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -849,6 +864,7 @@ impl ControlSnapshot {
             guild_assignment_type,
             guild_security_code,
             guild_union_name,
+            party_target_player_id,
             inventory_use_slot,
             inventory_use_target,
             inventory_use_add_points,
@@ -1200,6 +1216,18 @@ fn route_request(
                     snapshot.guild_union_name = Some(guild_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::PartyInvite => {
+                    let Some(target_player_id) = party_invite_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing party invite payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.party_target_player_id = Some(target_player_id);
+                    snapshot.apply_command(command)
+                }
                 ControlCommand::DuelStart => {
                     let Some((player_id, player_name)) = duel_start_from_request(&request) else {
                         return HttpResponse::json(
@@ -1536,6 +1564,29 @@ fn guild_join_from_request(request: &HttpRequest) -> Option<u16> {
         .or_else(|| {
             let body = request.body.trim();
             if body.is_empty() {
+                None
+            } else {
+                Some(body)
+            }
+        })?
+        .parse::<u16>()
+        .ok()
+}
+
+fn party_invite_from_request(request: &HttpRequest) -> Option<u16> {
+    query_value(&request.query, "target_player_id")
+        .or_else(|| query_value(&request.query, "target-player-id"))
+        .or_else(|| query_value(&request.query, "player_id"))
+        .or_else(|| query_value(&request.query, "player-id"))
+        .or_else(|| query_value(&request.body, "target_player_id"))
+        .or_else(|| query_value(&request.body, "target-player-id"))
+        .or_else(|| query_value(&request.body, "player_id"))
+        .or_else(|| query_value(&request.body, "player-id"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() || body.contains('=') {
                 None
             } else {
                 Some(body)
@@ -1911,7 +1962,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2389,6 +2440,21 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_tracks_party_invite_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.party_target_player_id = Some(0x1234);
+        snapshot.apply_command(ControlCommand::PartyInvite);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Party);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.party_target_player_id, Some(0x1234));
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""party_target_player_id":4660"#));
+    }
+
+    #[test]
     fn snapshot_tracks_inventory_item_action_payloads() {
         let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
 
@@ -2504,6 +2570,29 @@ mod tests {
         assert_eq!(snapshot.last_command, Some(ControlCommand::DuelChannelJoin));
         assert_eq!(snapshot.duel_channel_id, Some(7));
         assert_eq!(snapshot.ui_route, UiRoute::Duel);
+    }
+
+    #[test]
+    fn control_http_route_accepts_party_invite_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=party-invite&target_player_id=4660".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::PartyInvite));
+        assert_eq!(snapshot.party_target_player_id, Some(4660));
+        assert_eq!(snapshot.ui_route, UiRoute::Party);
     }
 
     #[test]
