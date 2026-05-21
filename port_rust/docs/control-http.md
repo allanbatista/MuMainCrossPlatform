@@ -34,7 +34,10 @@ Quando a sessao responde com as listas sociais, o runtime sobrepoe o
 roster/score/roles/unions decodificados no shell correspondente ate o logout
 ou disconnect.
 `character-create` abre a shell visivel de criacao, e `create-character`
-submete o nome informado para o worker de bootstrap.
+submete o nome informado para o worker de bootstrap. `character-delete`
+abre a shell visivel de confirmacao do personagem selecionado, e
+`delete-character` submete o pacote legacy de delete com `security_code=`
+para o worker de bootstrap.
 `inventory-use`, `inventory-equip` e `inventory-unequip` tambem espelham o
 fluxo visivel de inventory: `inventory-use` so dispara o consume packet,
 enquanto `inventory-equip` e `inventory-unequip` movem localmente entre
@@ -82,6 +85,7 @@ e o servidor continua disponivel para inspeção local.
 - `guild_role`
 - `guild_assignment_type`
 - `guild_security_code`
+- `character_delete_security_code`
 - `guild_union_name`
 - `party_target_player_id`
 - `inventory_use_slot`
@@ -100,7 +104,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"character_delete_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -114,7 +118,9 @@ Exemplo:
 - `options`
 - `character-select`
 - `character-create`
+- `character-delete`
 - `create-character`
+- `delete-character`
 - `select-character`
 - `loading`
 - `world`
@@ -194,10 +200,14 @@ prompt de nome e botoes create/cancel. `create-character` envia o nome
 recebido para o session worker e continua o bootstrap apenas quando o
 servidor confirma a criacao; o nome pode vir no body bruto, em `character=`
 ou como texto puro. Nomes com menos de 4 caracteres ou ausentes retornam
-`400` no control plane. `select-character` envia o nome recebido para o
-session worker e continua o bootstrap apenas quando o personagem for
-nomeado. Se o nome vier vazio, a resposta sera `400` e o cliente continua em
-character select.
+`400` no control plane. `character-delete` abre a shell visivel de
+confirmacao do personagem selecionado e `delete-character` envia o pacote
+legacy de delete para o session worker com `security_code=`/`security-code=`
+ou `authority_code=`/`authority-code=`; o nome do personagem continua vindo
+da selecao atual. `select-character` envia o nome recebido para o session
+worker e continua o bootstrap apenas quando o personagem for nomeado. Se o
+nome vier vazio, a resposta sera `400` e o cliente continua em character
+select.
 `chat` abre a shell visivel de chat, que agora aceita texto digitado e Enter
 para enviar mensagem publica quando a sessao esta logada. `mu-helper` abre a
 shell visivel do MU Helper com o snapshot existente do runtime. `duel` abre
@@ -285,7 +295,9 @@ curl -X POST 'http://127.0.0.1:12345/command?name=server-select'
 curl -X POST 'http://127.0.0.1:12345/command?name=options'
 curl -X POST 'http://127.0.0.1:12345/command?name=login-success'
 curl -X POST 'http://127.0.0.1:12345/command?name=character-create'
+curl -X POST 'http://127.0.0.1:12345/command?name=character-delete'
 curl -X POST 'http://127.0.0.1:12345/command?name=create-character&character=Astra'
+curl -X POST 'http://127.0.0.1:12345/command?name=delete-character&security_code=1234'
 curl -X POST 'http://127.0.0.1:12345/command?name=chat'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character' -d 'Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=select-character&character=Astra'

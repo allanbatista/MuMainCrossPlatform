@@ -27,10 +27,12 @@ sessao de jogo completa.
   no `--control-http`, mostrando a lista base de classes, o prompt de nome e
   os botoes create/cancel; `create-character` envia o nome para o worker,
   valida o minimo de 4 chars no control plane e reage ao retorno de
-  sucesso/falha da rede. Na tela de character select, use `Up`/`Down` ou
-  `Left`/`Right` e `Enter` para escolher um personagem sem depender do
-  control-http; o default automatico permanece disponivel ate voce trocar a
-  selecao manualmente. No world route, mostra uma
+  sucesso/falha da rede. A rota visivel `character-delete` confirma o
+  roster selecionado e `delete-character` envia o pacote legacy com
+  `security_code=` no `--control-http`. Na tela de character select, use
+  `Up`/`Down` ou `Left`/`Right` e `Enter` para escolher um personagem sem
+  depender do control-http; o default automatico permanece disponivel ate
+  voce trocar a selecao manualmente. No world route, mostra uma
   world shell 3D
   visivel com terreno heightfield derivado dos dados do bundle, uma superficie
   em camadas vinda dos dois primeiros slots convertidos do bundle mais o alpha
@@ -135,6 +137,9 @@ sessao de jogo completa.
 - O control-http tambem aceita `guild-create` com `guild_name=` e
   `guild_emblem=` hex de 64 caracteres para enviar o pacote de create da
   guild pela sessao viva; o nome segue o limite legado de 4-8 caracteres.
+- O control-http tambem aceita `character-delete` e `delete-character` com o
+  roster selecionado e `security_code=` para enviar o pacote de delete do
+  character pela sessao viva.
 - O control-http tambem aceita `guild-role-assign` com `player=`, `role=` e
   `type=` para enviar o pacote de role assignment da guild pela sessao viva.
 - O control-http tambem aceita `guild-fire` com `player=` e
@@ -242,7 +247,7 @@ O servidor expõe:
 
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
-  character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
+  character-select|character-create|character-delete|create-character|delete-character|select-character|loading|world|chat|npc|shop|game-shop|
   marketplace|trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|letter-read|letter-delete|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|skill-targeted|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.

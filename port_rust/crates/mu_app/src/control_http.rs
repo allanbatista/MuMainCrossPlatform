@@ -21,7 +21,9 @@ pub enum ControlCommand {
     Options,
     CharacterSelect,
     CharacterCreate,
+    CharacterDelete,
     CreateCharacter,
+    DeleteCharacter,
     Loading,
     World,
     Chat,
@@ -93,7 +95,9 @@ impl ControlCommand {
             Self::Options => "options",
             Self::CharacterSelect => "character-select",
             Self::CharacterCreate => "character-create",
+            Self::CharacterDelete => "character-delete",
             Self::CreateCharacter => "create-character",
+            Self::DeleteCharacter => "delete-character",
             Self::Loading => "loading",
             Self::World => "world",
             Self::Chat => "chat",
@@ -169,7 +173,9 @@ impl ControlCommand {
                 Some(Self::CharacterSelect)
             }
             "character-create" | "character_create" => Some(Self::CharacterCreate),
+            "character-delete" | "character_delete" => Some(Self::CharacterDelete),
             "create-character" | "create_character" => Some(Self::CreateCharacter),
+            "delete-character" | "delete_character" => Some(Self::DeleteCharacter),
             "loading" => Some(Self::Loading),
             "world" => Some(Self::World),
             "chat" => Some(Self::Chat),
@@ -274,6 +280,7 @@ pub struct ControlSnapshot {
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
+    pub character_delete_security_code: Option<String>,
     pub guild_union_name: Option<String>,
     pub party_target_player_id: Option<u16>,
     pub siege_screen_state: Option<SiegeScreenState>,
@@ -312,6 +319,7 @@ impl ControlSnapshot {
             guild_role: None,
             guild_assignment_type: None,
             guild_security_code: None,
+            character_delete_security_code: None,
             guild_union_name: None,
             party_target_player_id: None,
             siege_screen_state: None,
@@ -382,11 +390,25 @@ impl ControlSnapshot {
                 self.ui_route = UiRoute::CharacterCreate;
                 self.session_phase = SessionPhase::LoggedIn;
                 self.selected_character_name = None;
+                self.character_delete_security_code = None;
+                false
+            }
+            ControlCommand::CharacterDelete => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterDelete;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.character_delete_security_code = None;
                 false
             }
             ControlCommand::CreateCharacter => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::CharacterCreate;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::DeleteCharacter => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::CharacterDelete;
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
@@ -788,6 +810,11 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let character_delete_security_code = self
+            .character_delete_security_code
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
         let guild_union_name = self
             .guild_union_name
             .as_ref()
@@ -843,7 +870,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"party_target_player_id\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"character_delete_security_code\":{},\"guild_union_name\":{},\"party_target_player_id\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -863,6 +890,7 @@ impl ControlSnapshot {
             guild_role,
             guild_assignment_type,
             guild_security_code,
+            character_delete_security_code,
             guild_union_name,
             party_target_player_id,
             inventory_use_slot,
@@ -1364,6 +1392,18 @@ fn route_request(
                     snapshot.selected_character_name = Some(character_name);
                     snapshot.apply_command(command)
                 }
+                ControlCommand::DeleteCharacter => {
+                    let Some(security_code) = security_code_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing security code"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.character_delete_security_code = Some(security_code);
+                    snapshot.apply_command(command)
+                }
                 _ => snapshot.apply_command(command),
             };
             let response = HttpResponse::json(200, "OK", snapshot.to_json());
@@ -1691,6 +1731,20 @@ fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, 
     Some((player_name, role, assignment_type))
 }
 
+fn security_code_from_request(request: &HttpRequest) -> Option<String> {
+    query_value(&request.query, "security_code")
+        .or_else(|| query_value(&request.query, "security-code"))
+        .or_else(|| query_value(&request.query, "authority_code"))
+        .or_else(|| query_value(&request.query, "authority-code"))
+        .or_else(|| query_value(&request.body, "security_code"))
+        .or_else(|| query_value(&request.body, "security-code"))
+        .or_else(|| query_value(&request.body, "authority_code"))
+        .or_else(|| query_value(&request.body, "authority-code"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 fn guild_fire_from_request(request: &HttpRequest) -> Option<(String, String)> {
     let player_name = query_value(&request.query, "player")
         .or_else(|| query_value(&request.body, "player"))?
@@ -1701,17 +1755,7 @@ fn guild_fire_from_request(request: &HttpRequest) -> Option<(String, String)> {
         return None;
     }
 
-    let security_code = query_value(&request.query, "security_code")
-        .or_else(|| query_value(&request.query, "security-code"))
-        .or_else(|| query_value(&request.query, "authority_code"))
-        .or_else(|| query_value(&request.query, "authority-code"))
-        .or_else(|| query_value(&request.body, "security_code"))
-        .or_else(|| query_value(&request.body, "security-code"))
-        .or_else(|| query_value(&request.body, "authority_code"))
-        .or_else(|| query_value(&request.body, "authority-code"))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?
-        .to_string();
+    let security_code = security_code_from_request(request)?;
 
     Some((player_name, security_code))
 }
@@ -1962,7 +2006,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"character_delete_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2019,6 +2063,15 @@ mod tests {
         );
         assert_eq!(ControlCommand::CharacterCreate.as_str(), "character-create");
         assert_eq!(
+            ControlCommand::parse("character-delete"),
+            Some(ControlCommand::CharacterDelete)
+        );
+        assert_eq!(
+            ControlCommand::parse("character_delete"),
+            Some(ControlCommand::CharacterDelete)
+        );
+        assert_eq!(ControlCommand::CharacterDelete.as_str(), "character-delete");
+        assert_eq!(
             ControlCommand::parse("create-character"),
             Some(ControlCommand::CreateCharacter)
         );
@@ -2027,6 +2080,15 @@ mod tests {
             Some(ControlCommand::CreateCharacter)
         );
         assert_eq!(ControlCommand::CreateCharacter.as_str(), "create-character");
+        assert_eq!(
+            ControlCommand::parse("delete-character"),
+            Some(ControlCommand::DeleteCharacter)
+        );
+        assert_eq!(
+            ControlCommand::parse("delete_character"),
+            Some(ControlCommand::DeleteCharacter)
+        );
+        assert_eq!(ControlCommand::DeleteCharacter.as_str(), "delete-character");
         assert_eq!(
             ControlCommand::parse("guild-join"),
             Some(ControlCommand::GuildJoin)
@@ -2550,6 +2612,50 @@ mod tests {
     }
 
     #[test]
+    fn control_http_route_accepts_character_delete_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.selected_character_name = Some("Astra".to_string());
+        }
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=character-delete".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=delete-character&security_code=1234".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::DeleteCharacter));
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterDelete);
+        assert_eq!(
+            snapshot.character_delete_security_code.as_deref(),
+            Some("1234")
+        );
+    }
+
+    #[test]
     fn control_http_route_accepts_duel_channel_join_payload() {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -2772,6 +2878,25 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_tracks_character_delete_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.selected_character_name = Some("Astra".to_string());
+        snapshot.character_delete_security_code = Some("1234".to_string());
+        snapshot.apply_command(ControlCommand::DeleteCharacter);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterDelete);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(
+            snapshot.character_delete_security_code.as_deref(),
+            Some("1234")
+        );
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""character_delete_security_code":"1234""#));
+    }
+
+    #[test]
     fn snapshot_tracks_guild_ban_union_payload() {
         let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
 
@@ -2822,6 +2947,24 @@ mod tests {
         assert_eq!(snapshot.ui_route, UiRoute::CharacterCreate);
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.selected_character_name, None);
+
+        snapshot.selected_character_name = Some("Astra".to_string());
+        snapshot.apply_command(ControlCommand::CharacterDelete);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterDelete);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.selected_character_name.as_deref(), Some("Astra"));
+        assert_eq!(snapshot.character_delete_security_code, None);
+
+        snapshot.character_delete_security_code = Some("1234".to_string());
+        snapshot.apply_command(ControlCommand::DeleteCharacter);
+
+        assert_eq!(snapshot.ui_route, UiRoute::CharacterDelete);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(
+            snapshot.character_delete_security_code.as_deref(),
+            Some("1234")
+        );
 
         snapshot.apply_command(ControlCommand::Chat);
 

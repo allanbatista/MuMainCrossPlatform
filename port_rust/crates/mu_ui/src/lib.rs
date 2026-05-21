@@ -3,6 +3,7 @@ pub mod admin_core;
 pub mod admin_item_editor;
 pub mod admin_skill_editor;
 pub mod character_create;
+pub mod character_delete;
 pub mod character_select;
 pub mod chat;
 pub mod duel;
@@ -51,6 +52,10 @@ pub use character_create::{
     character_create_screen, CharacterCreateAction, CharacterCreateButton,
     CharacterCreateClassEntry, CharacterCreateScreen, CharacterCreateScreenState,
     CHARACTER_CREATE_NAME_MIN_LENGTH,
+};
+pub use character_delete::{
+    character_delete_screen, CharacterDeleteAction, CharacterDeleteButton, CharacterDeleteScreen,
+    CharacterDeleteScreenState,
 };
 pub use character_select::{
     character_select_screen, CharacterSelectAction, CharacterSelectButton,

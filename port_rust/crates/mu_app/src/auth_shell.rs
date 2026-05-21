@@ -4,14 +4,15 @@ use bevy::prelude::{
     UiRect, Val,
 };
 use mu_ui::{
-    character_create_screen, character_select_screen, login_screen, options_screen,
-    server_select_screen, CharacterCreateAction, CharacterCreateButton, CharacterCreateClassEntry,
-    CharacterCreateScreen, CharacterCreateScreenState, CharacterSelectAction,
-    CharacterSelectButton, CharacterSelectCharacter, CharacterSelectScreen,
-    CharacterSelectScreenState, LoginAction, LoginField, LoginScreen, LoginScreenState,
-    OptionsScreen, OptionsScreenState, OptionsSection, OptionsToggle, ServerEntry,
-    ServerSelectAction, ServerSelectScreen, ServerSelectScreenState, UiRoute, UiRouteGroup,
-    UiShellState,
+    character_create_screen, character_delete_screen, character_select_screen, login_screen,
+    options_screen, server_select_screen, CharacterCreateAction, CharacterCreateButton,
+    CharacterCreateClassEntry, CharacterCreateScreen, CharacterCreateScreenState,
+    CharacterDeleteAction, CharacterDeleteButton, CharacterDeleteScreen,
+    CharacterDeleteScreenState, CharacterSelectAction, CharacterSelectButton,
+    CharacterSelectCharacter, CharacterSelectScreen, CharacterSelectScreenState, LoginAction,
+    LoginField, LoginScreen, LoginScreenState, OptionsScreen, OptionsScreenState, OptionsSection,
+    OptionsToggle, ServerEntry, ServerSelectAction, ServerSelectScreen, ServerSelectScreenState,
+    UiRoute, UiRouteGroup, UiShellState,
 };
 
 use crate::bootstrap_runtime::BootstrapRuntime;
@@ -116,6 +117,7 @@ fn auth_shell_visible(route: UiRoute) -> bool {
             | UiRoute::Options
             | UiRoute::CharacterSelect
             | UiRoute::CharacterCreate
+            | UiRoute::CharacterDelete
             | UiRoute::Error
     )
 }
@@ -133,6 +135,7 @@ fn auth_shell_view(
         UiRoute::Options => Some(options_view(phase)),
         UiRoute::CharacterSelect => Some(character_select_view(phase, bootstrap)),
         UiRoute::CharacterCreate => Some(character_create_view(phase, bootstrap)),
+        UiRoute::CharacterDelete => Some(character_delete_view(phase, bootstrap)),
         UiRoute::Error => Some(error_view(phase)),
         _ => None,
     }
@@ -253,6 +256,31 @@ fn character_create_view(
         title: screen.title,
         status: status_line(screen.route, phase),
         body: character_create_body(&screen),
+        accent: accent_for_route(screen.route),
+    }
+}
+
+fn character_delete_view(
+    phase: SessionPhase,
+    bootstrap: Option<&BootstrapRuntime>,
+) -> AuthShellView {
+    let target_name = bootstrap.and_then(BootstrapRuntime::selected_character_name);
+    let screen_state = bootstrap.map_or(CharacterDeleteScreenState::MissingTarget, |bootstrap| {
+        bootstrap.character_delete_state()
+    });
+    let screen_state = if phase == SessionPhase::Disconnected {
+        CharacterDeleteScreenState::Error
+    } else if target_name.is_none() && screen_state == CharacterDeleteScreenState::Ready {
+        CharacterDeleteScreenState::MissingTarget
+    } else {
+        screen_state
+    };
+    let screen = character_delete_screen(screen_state);
+
+    AuthShellView {
+        title: screen.title,
+        status: status_line(screen.route, phase),
+        body: character_delete_body(&screen, target_name),
         accent: accent_for_route(screen.route),
     }
 }
@@ -457,6 +485,35 @@ fn character_create_body(screen: &CharacterCreateScreen) -> String {
         &mut body,
         "Actions",
         screen.buttons.iter().map(character_create_button_label),
+        None,
+    );
+
+    body
+}
+
+fn character_delete_body(screen: &CharacterDeleteScreen, target_name: Option<&str>) -> String {
+    let mut body = String::new();
+
+    push_paragraph(&mut body, "Prompt", screen.prompt);
+
+    if let Some(notice) = screen.notice {
+        push_paragraph(&mut body, "Notice", notice);
+    }
+
+    push_paragraph(
+        &mut body,
+        "Target",
+        target_name.unwrap_or("<no character selected>"),
+    );
+    push_paragraph(
+        &mut body,
+        "Security Code",
+        "Provided locally via control HTTP.",
+    );
+    push_lines(
+        &mut body,
+        "Actions",
+        screen.buttons.iter().map(character_delete_button_label),
         None,
     );
 
@@ -702,6 +759,23 @@ fn character_create_button_label(button: &CharacterCreateButton) -> String {
     format!("{} ({state})", character_create_action_label(button.action))
 }
 
+fn character_delete_action_label(action: CharacterDeleteAction) -> &'static str {
+    match action {
+        CharacterDeleteAction::Delete => "Delete",
+        CharacterDeleteAction::Cancel => "Cancel",
+    }
+}
+
+fn character_delete_button_label(button: &CharacterDeleteButton) -> String {
+    let state = if button.enabled {
+        "enabled"
+    } else {
+        "disabled"
+    };
+
+    format!("{} ({state})", character_delete_action_label(button.action))
+}
+
 fn status_line(route: UiRoute, phase: SessionPhase) -> String {
     format!(
         "route={} | group={} | session={}",
@@ -832,10 +906,11 @@ mod tests {
     use crate::{SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_ui::{
-        login_screen, CharacterCreateScreenState, CharacterSelectAction, CharacterSelectButton,
-        CharacterSelectCharacter, LoginField, LoginScreenState, ServerEntry, ServerSelectAction,
-        UiRoute, UiShellState,
+        login_screen, CharacterCreateScreenState, CharacterDeleteScreenState,
+        CharacterSelectAction, CharacterSelectButton, CharacterSelectCharacter, LoginField,
+        LoginScreenState, ServerEntry, ServerSelectAction, UiRoute, UiShellState,
     };
+    use tokio::sync::mpsc as tokio_mpsc;
 
     #[test]
     fn login_shell_uses_the_server_unavailable_state_when_disconnected() {
@@ -982,6 +1057,70 @@ mod tests {
 
         assert!(view.status.contains("session=disconnected"));
         assert!(view.body.contains("Character creation is unavailable."));
+    }
+
+    #[test]
+    fn character_delete_shell_renders_target_and_actions() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, _command_receiver) = tokio_mpsc::unbounded_channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+        assert!(bootstrap.queue_character_select_request("Astra"));
+        bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
+
+        let view = auth_shell_view(
+            UiRoute::CharacterDelete,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character delete shell missing");
+
+        assert_eq!(view.title, "Character Delete");
+        assert!(view.status.contains("route=character-delete"));
+        assert!(view
+            .body
+            .contains("Confirm the selected character for deletion."));
+        assert!(view.body.contains("Target"));
+        assert!(view.body.contains("Astra"));
+        assert!(view.body.contains("Provided locally via control HTTP."));
+        assert!(view.body.contains("Delete"));
+        assert!(view.body.contains("Cancel"));
+    }
+
+    #[test]
+    fn character_delete_shell_uses_missing_target_state_when_selection_is_missing() {
+        let view = auth_shell_view(UiRoute::CharacterDelete, SessionPhase::LoggedIn, None)
+            .expect("character delete shell missing");
+
+        assert!(view.body.contains("Select a character before deleting it."));
+        assert!(view.body.contains("<no character selected>"));
+        assert!(view.body.contains("Delete (disabled)"));
+        assert!(view.body.contains("Cancel"));
+    }
+
+    #[test]
+    fn character_delete_shell_uses_the_submitting_state_when_pending() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_delete_state(CharacterDeleteScreenState::Submitting);
+
+        let view = auth_shell_view(
+            UiRoute::CharacterDelete,
+            SessionPhase::LoggedIn,
+            Some(&bootstrap),
+        )
+        .expect("character delete shell missing");
+
+        assert!(view.body.contains("Deleting character..."));
+        assert!(view.body.contains("Delete (disabled)"));
+        assert!(view.body.contains("Cancel (disabled)"));
+    }
+
+    #[test]
+    fn character_delete_shell_uses_error_state_when_disconnected() {
+        let view = auth_shell_view(UiRoute::CharacterDelete, SessionPhase::Disconnected, None)
+            .expect("character delete shell missing");
+
+        assert!(view.status.contains("session=disconnected"));
+        assert!(view.body.contains("Character deletion is unavailable."));
     }
 
     #[test]

@@ -29,7 +29,9 @@ use mu_protocol::guild::{
     guild_role_assign_request, remove_alliance_guild_request, request_alliance_list,
 };
 use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemStorageKind};
-use mu_protocol::login::{create_character, request_character_list, select_character};
+use mu_protocol::login::{
+    create_character, delete_character, request_character_list, select_character,
+};
 use mu_protocol::movement::{decode_movement_update, walk_request, MovementUpdate};
 use mu_protocol::skills::targeted_skill;
 use mu_protocol::social::{
@@ -39,9 +41,9 @@ use mu_protocol::social::{
 use mu_protocol::vault::{vault_move_money_request, VaultMoneyMoveDirection};
 use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
-    character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
-    CharacterSelectScreenState, FriendEntry, FriendPresence, GuildMemberEntry, GuildMemberRole,
-    GuildUnionEntry, UiRoute, UiShellState,
+    character_select_screen, CharacterCreateScreenState, CharacterDeleteScreenState,
+    CharacterSelectCharacter, CharacterSelectScreenState, FriendEntry, FriendPresence,
+    GuildMemberEntry, GuildMemberRole, GuildUnionEntry, UiRoute, UiShellState,
 };
 use tokio::sync::mpsc as tokio_mpsc;
 
@@ -51,6 +53,7 @@ const SESSION_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 const SESSION_READ_TIMEOUT: Duration = Duration::from_millis(250);
 const DEFAULT_CHARACTER_CREATE_CLASS: u8 = CharacterClass::Knight as u8;
 const CHARACTER_CREATE_FAILURE_MESSAGE: &str = "character creation failed";
+const CHARACTER_DELETE_FAILURE_MESSAGE: &str = "character deletion failed";
 const INVENTORY_STORAGE_KIND: ItemStorageKind = 0;
 const FRIEND_LIST_ENTRY_LEN: usize = 11;
 const GUILD_LIST_ENTRY_LEN: usize = 13;
@@ -128,6 +131,8 @@ pub(crate) enum BootstrapSignal {
     CharacterListSelection(CharacterListSelection),
     CharacterCreateSuccess,
     CharacterCreateFailure,
+    CharacterDeleteSuccess,
+    CharacterDeleteFailure,
     Movement(MovementUpdate),
     FriendRoster(FriendRosterSnapshot),
     FriendStateChange(FriendStateChangeSnapshot),
@@ -153,6 +158,10 @@ pub(crate) enum BootstrapCommand {
     },
     SelectCharacter(String),
     CreateCharacter(String),
+    DeleteCharacter {
+        character_name: String,
+        security_code: String,
+    },
     FriendListRequest,
     LetterListRequest,
     LetterRead(u16),
@@ -214,6 +223,7 @@ pub struct BootstrapRuntime {
     character_select_index: Option<usize>,
     selected_character_name: Option<String>,
     character_create_state: CharacterCreateScreenState,
+    character_delete_state: CharacterDeleteScreenState,
     last_error: Option<String>,
     friend_roster: Option<FriendRosterSnapshot>,
     guild_roster: Option<GuildRosterSnapshot>,
@@ -250,6 +260,7 @@ impl BootstrapRuntime {
             character_select_index: None,
             selected_character_name: None,
             character_create_state: CharacterCreateScreenState::Ready,
+            character_delete_state: CharacterDeleteScreenState::Ready,
             last_error: None,
             friend_roster: None,
             guild_roster: None,
@@ -427,6 +438,32 @@ impl BootstrapRuntime {
 
         if sent {
             self.character_create_state = CharacterCreateScreenState::Submitting;
+        }
+
+        sent
+    }
+
+    pub(crate) fn queue_character_delete_request(
+        &mut self,
+        character_name: impl Into<String>,
+        security_code: impl Into<String>,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        let character_name = character_name.into();
+        let security_code = security_code.into();
+        let sent = command_sender
+            .send(BootstrapCommand::DeleteCharacter {
+                character_name: character_name.clone(),
+                security_code,
+            })
+            .is_ok();
+
+        if sent {
+            self.selected_character_name = Some(character_name);
+            self.character_delete_state = CharacterDeleteScreenState::Submitting;
         }
 
         sent
@@ -802,6 +839,10 @@ impl BootstrapRuntime {
         self.selected_character_name = None;
     }
 
+    pub(crate) fn selected_character_name(&self) -> Option<&str> {
+        self.selected_character_name.as_deref()
+    }
+
     pub(crate) fn character_select_index(&self) -> Option<usize> {
         self.character_select_index
     }
@@ -816,6 +857,14 @@ impl BootstrapRuntime {
 
     pub(crate) fn set_character_create_state(&mut self, state: CharacterCreateScreenState) {
         self.character_create_state = state;
+    }
+
+    pub(crate) fn character_delete_state(&self) -> CharacterDeleteScreenState {
+        self.character_delete_state
+    }
+
+    pub(crate) fn set_character_delete_state(&mut self, state: CharacterDeleteScreenState) {
+        self.character_delete_state = state;
     }
 }
 
@@ -981,6 +1030,7 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::ServerSelect);
         }
@@ -988,6 +1038,7 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_character_list_ready(true);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
@@ -1000,6 +1051,7 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_character_list_ready(true);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::CharacterSelect);
         }
@@ -1007,6 +1059,18 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
             bootstrap.last_error = Some(CHARACTER_CREATE_FAILURE_MESSAGE.to_string());
             ui_shell.set_route(UiRoute::CharacterCreate);
+        }
+        BootstrapSignal::CharacterDeleteSuccess => {
+            bootstrap.set_character_list_ready(true);
+            bootstrap.clear_character_select_selection();
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
+            bootstrap.last_error = None;
+            ui_shell.set_route(UiRoute::CharacterSelect);
+        }
+        BootstrapSignal::CharacterDeleteFailure => {
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Error);
+            bootstrap.last_error = Some(CHARACTER_DELETE_FAILURE_MESSAGE.to_string());
+            ui_shell.set_route(UiRoute::CharacterDelete);
         }
         BootstrapSignal::Movement(update) => apply_movement_update(update, client_runtime),
         BootstrapSignal::FriendRoster(roster) => {
@@ -1056,6 +1120,7 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.pending_world_map = Some(map);
             bootstrap.set_character_list_ready(false);
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::Loading);
         }
@@ -1069,7 +1134,10 @@ fn apply_bootstrap_signal_with_mail(
             clear_party_state(client_runtime);
             bootstrap.clear_gens_ranking_snapshot();
 
-            if bootstrap.character_create_state() == CharacterCreateScreenState::Submitting {
+            if bootstrap.character_delete_state() == CharacterDeleteScreenState::Submitting {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::Error);
+                ui_shell.set_route(UiRoute::CharacterDelete);
+            } else if bootstrap.character_create_state() == CharacterCreateScreenState::Submitting {
                 bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
                 ui_shell.set_route(UiRoute::CharacterCreate);
             } else {
@@ -1094,6 +1162,7 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = None;
             bootstrap.clear_social_rosters();
             bootstrap.clear_gens_ranking_snapshot();
@@ -1106,6 +1175,7 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.last_error = Some("login failed".to_string());
             bootstrap.clear_social_rosters();
             mail.reset();
@@ -1118,6 +1188,7 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
+            bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
             bootstrap.clear_social_rosters();
             mail.reset();
             clear_party_state(client_runtime);
@@ -1143,6 +1214,15 @@ fn apply_session_event(
             bootstrap.set_character_list_ready(false);
             bootstrap.clear_character_select_selection();
             bootstrap.last_error = Some("connection lost".to_string());
+
+            let delete_pending =
+                bootstrap.character_delete_state() == CharacterDeleteScreenState::Submitting;
+
+            if delete_pending {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::Error);
+                ui_shell.set_route(UiRoute::CharacterDelete);
+                return;
+            }
 
             if create_pending {
                 bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
@@ -1636,6 +1716,11 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
             Some(_) => Some(BootstrapSignal::CharacterCreateFailure),
             _ => None,
         },
+        (0xF3, 0x02) => match frame.payload.first().copied() {
+            Some(1) => Some(BootstrapSignal::CharacterDeleteSuccess),
+            Some(_) => Some(BootstrapSignal::CharacterDeleteFailure),
+            _ => None,
+        },
         (0xF3, 0x03) => frame.payload.get(2).copied().map(BootstrapSignal::JoinMap),
         (0xF1, 0x02) => frame.payload.first().copied().map(BootstrapSignal::Logout),
         (0xF8, 0x07) => Some(match decode_gens_ranking_info(frame) {
@@ -2047,6 +2132,18 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::DeleteCharacter {
+            character_name,
+            security_code,
+        } => {
+            let packet = delete_character(character_name, security_code)
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::FriendListRequest => {
             let packet = friend_list_request().map_err(|error| error.to_string())?;
 
@@ -2398,11 +2495,13 @@ mod tests {
     use mu_protocol::guild::guild_role_assign_request;
     use mu_protocol::guild::remove_alliance_guild_request;
     use mu_protocol::guild::request_alliance_list;
-    use mu_protocol::login::{create_character, request_character_list, select_character};
+    use mu_protocol::login::{
+        create_character, delete_character, request_character_list, select_character,
+    };
     use mu_protocol::movement::{encode_move_position_update, walk_request};
     use mu_protocol::session::{
-        character_creation_failed, character_creation_successful, character_list_extended,
-        game_server_entered, CharacterListEntry,
+        character_creation_failed, character_creation_successful, character_delete_response,
+        character_list_extended, game_server_entered, CharacterListEntry,
     };
     use mu_protocol::skills::targeted_skill;
     use mu_protocol::social::{
@@ -2411,8 +2510,8 @@ mod tests {
     };
     use mu_protocol::vault::vault_move_money_request;
     use mu_ui::{
-        CharacterCreateScreenState, FriendEntry, FriendPresence, GuildMemberRole, UiRoute,
-        UiShellState,
+        CharacterCreateScreenState, CharacterDeleteScreenState, FriendEntry, FriendPresence,
+        GuildMemberRole, UiRoute, UiShellState,
     };
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
@@ -4633,6 +4732,34 @@ mod tests {
     }
 
     #[test]
+    fn character_delete_request_marks_the_state_submitting_and_queues_the_name_and_code() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_character_delete_request("Astra", "1234"));
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Submitting
+        );
+        assert_eq!(bootstrap.selected_character_name(), Some("Astra"));
+
+        match command_receiver
+            .try_recv()
+            .expect("delete character command missing")
+        {
+            BootstrapCommand::DeleteCharacter {
+                character_name,
+                security_code,
+            } => {
+                assert_eq!(character_name, "Astra");
+                assert_eq!(security_code, "1234");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn character_create_packets_classify_success_and_failure() {
         let success = character_creation_successful(b"Astra", 0, 255, 1, 32, b"preview")
             .expect("success packet");
@@ -4654,6 +4781,30 @@ mod tests {
         assert!(matches!(
             classify_bootstrap_packet(&failure_two_frame),
             Some(BootstrapSignal::CharacterCreateFailure)
+        ));
+    }
+
+    #[test]
+    fn character_delete_packets_classify_success_and_failure() {
+        let success = character_delete_response(1).expect("success packet");
+        let success_frame = decode_packet(&success).expect("success packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&success_frame),
+            Some(BootstrapSignal::CharacterDeleteSuccess)
+        ));
+
+        let failure = character_delete_response(0).expect("failure packet");
+        let failure_frame = decode_packet(&failure).expect("failure packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&failure_frame),
+            Some(BootstrapSignal::CharacterDeleteFailure)
+        ));
+
+        let failure_two = encode_packet(0xC1, 0xF3, 0x02, &[2]).expect("failure2 packet");
+        let failure_two_frame = decode_packet(&failure_two).expect("failure2 packet frame");
+        assert!(matches!(
+            classify_bootstrap_packet(&failure_two_frame),
+            Some(BootstrapSignal::CharacterDeleteFailure)
         ));
     }
 
@@ -4758,6 +4909,106 @@ mod tests {
         assert!(bootstrap.last_error().is_none());
     }
 
+    #[tokio::test]
+    async fn fake_server_packets_drive_the_character_delete_request_worker() {
+        let login_success = game_server_entered(true, 7, b"1.0.0").unwrap();
+        let character_list = character_list_extended(
+            1,
+            2,
+            true,
+            &[CharacterListEntry {
+                slot_index: 0,
+                name: b"Astra",
+                level: 255,
+                status: 32,
+                is_item_block_active: true,
+                appearance: b"appearance-data",
+                guild_position: 0,
+            }],
+        )
+        .unwrap();
+        let delete_character_request = delete_character(b"Astra", b"1234").unwrap();
+        let delete_character_success = character_delete_response(1).unwrap();
+        let (server, game_server) = spawn_bootstrap_handshake_servers(
+            ConnectionScript::new()
+                .send_packet(login_success.clone())
+                .expect_packet(request_character_list(0).unwrap())
+                .send_packet(character_list.clone())
+                .expect_packet(delete_character_request.clone())
+                .send_packet(delete_character_success.clone())
+                .delay(Duration::from_millis(50))
+                .close(),
+        )
+        .await;
+
+        let mut bootstrap = {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let command_sender = spawn_bootstrap_worker(server.address(), sender, 0);
+            BootstrapRuntime::new(receiver, Some(command_sender))
+        };
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            if ui_shell.current() == UiRoute::CharacterSelect && bootstrap.character_list_ready() {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        ui_shell.set_route(UiRoute::CharacterDelete);
+        assert!(bootstrap.queue_character_delete_request("Astra", "1234"));
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Submitting
+        );
+
+        for _ in 0..100 {
+            let signals = bootstrap.drain_signals();
+            for signal in signals {
+                apply_bootstrap_signal(
+                    signal,
+                    &mut bootstrap,
+                    &mut session_state,
+                    &mut ui_shell,
+                    &mut client_runtime,
+                );
+            }
+
+            if ui_shell.current() == UiRoute::CharacterSelect
+                && bootstrap.character_delete_state() == CharacterDeleteScreenState::Ready
+            {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        server.finish().await.unwrap();
+        game_server.finish().await.unwrap();
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Ready
+        );
+        assert!(bootstrap.last_error().is_none());
+        assert!(bootstrap.selected_character_name().is_none());
+    }
+
     #[test]
     fn character_create_signal_updates_the_visible_route_state() {
         let mut bootstrap = BootstrapRuntime::idle();
@@ -4783,6 +5034,32 @@ mod tests {
     }
 
     #[test]
+    fn character_delete_signal_updates_the_visible_route_state() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_delete_state(CharacterDeleteScreenState::Submitting);
+        bootstrap.selected_character_name = Some("Astra".to_string());
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::CharacterDeleteSuccess,
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterSelect);
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Ready
+        );
+        assert!(bootstrap.character_list_ready());
+        assert!(bootstrap.selected_character_name().is_none());
+    }
+
+    #[test]
     fn character_create_failure_keeps_the_create_route_in_error() {
         let mut bootstrap = BootstrapRuntime::idle();
         bootstrap.set_character_create_state(CharacterCreateScreenState::Submitting);
@@ -4803,6 +5080,31 @@ mod tests {
         assert_eq!(
             bootstrap.character_create_state(),
             CharacterCreateScreenState::Error
+        );
+    }
+
+    #[test]
+    fn character_delete_failure_keeps_the_delete_route_in_error() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_delete_state(CharacterDeleteScreenState::Submitting);
+        bootstrap.selected_character_name = Some("Astra".to_string());
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::CharacterDelete);
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::CharacterDeleteFailure,
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(ui_shell.current(), UiRoute::CharacterDelete);
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Error
         );
     }
 
@@ -4831,6 +5133,35 @@ mod tests {
         assert_eq!(
             bootstrap.character_create_state(),
             CharacterCreateScreenState::Error
+        );
+    }
+
+    #[test]
+    fn character_delete_disconnect_keeps_the_delete_route_in_error() {
+        let mut bootstrap = BootstrapRuntime::idle();
+        bootstrap.set_character_delete_state(CharacterDeleteScreenState::Submitting);
+        bootstrap.selected_character_name = Some("Astra".to_string());
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        ui_shell.set_route(UiRoute::CharacterDelete);
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::Session(mu_network::SessionEvent::Disconnect),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        assert_eq!(
+            session_state.phase(),
+            mu_network::SessionPhase::Disconnected
+        );
+        assert_eq!(ui_shell.current(), UiRoute::CharacterDelete);
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Error
         );
     }
 

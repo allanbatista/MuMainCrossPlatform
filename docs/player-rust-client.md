@@ -33,7 +33,7 @@ in the local config file instead of being typed every time.
   original client.
 - The shared Options window is also available as a visible Bevy route and
   through the local control HTTP API with `options`.
-- Character selection and the visible character-create route.
+- Character selection and the visible character-create and character-delete routes.
 - The Bevy bootstrap now carries the client from login to character select and
   immediately requests the character list after the login-success packet
   using the legacy locale byte (`en`/`eng` -> `0`, `pt`/`por` -> `1`,
@@ -47,6 +47,9 @@ in the local config file instead of being typed every time.
   `character-create` opens the shell and `create-character` submits the
   name, returning to character select on success or keeping the create
   error surface on failure.
+- The character-delete route confirms the selected roster entry;
+  `character-delete` opens the shell and `delete-character` submits the
+  legacy delete packet with the local security code.
 - On the visible character-select surface, use `Up`/`Down` or `Left`/`Right`
   to move the selection and `Enter` to confirm without the control HTTP API.
   The shell shows the loading state until the roster is ready and then uses
@@ -187,7 +190,7 @@ in the local config file instead of being typed every time.
   local HTTP automation surface while the Bevy window is running.
 - `GET /state` reports `state`, `ui_route`, `session_phase`, `last_command`,
   `letter_id`, `skill_id`, `skill_target_id`, and `command_count`.
-- `POST /command?name=ready-for-login|server-select|character-select|character-create|create-character|loading|world|login-success|login-failure|mu-helper|exit|ping`
+- `POST /command?name=ready-for-login|server-select|character-select|character-create|character-delete|create-character|delete-character|loading|world|login-success|login-failure|mu-helper|exit|ping`
   can step the auth/bootstrap flow for local QA and smoke tests.
 - `POST /command?name=select-character` can continue from character select
   once the roster is visible. Pass the character name in the body or as
@@ -197,6 +200,11 @@ in the local config file instead of being typed every time.
 - `POST /command?name=create-character` submits the visible character-create
   form. Pass the name in the body or as `character=`; names shorter than 4
   characters are rejected by the control plane.
+- `POST /command?name=character-delete` can open the visible character-delete
+  shell for local QA smoke.
+- `POST /command?name=delete-character` submits the visible character-delete
+  form. Pass the security code in `security_code=`; empty codes are rejected
+  by the control plane.
 - `POST /command?name=chat` can step into the visible chat route shell for
   local QA smoke; once open, the shell accepts typed chat and Enter sends the
   draft.

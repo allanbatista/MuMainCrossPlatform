@@ -25,7 +25,9 @@ use mu_render::{
     RenderAssetsPlugin, RenderEntitiesPlugin, SkillParticlePlugin, SkillParticleQueue,
     TerrainPlugin,
 };
-use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellPlugin, UiShellState};
+use mu_ui::{
+    CharacterCreateScreenState, CharacterDeleteScreenState, UiRoute, UiShellPlugin, UiShellState,
+};
 
 use crate::auth_shell::AuthShellPlugin;
 use crate::bootstrap_runtime::BootstrapRuntimePlugin;
@@ -350,6 +352,13 @@ fn sync_control_http_snapshot_to_runtime(
         Some(ControlCommand::CharacterCreate) => {
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
         }
+        Some(ControlCommand::CharacterDelete) => {
+            if snapshot.selected_character_name.as_deref().is_some() {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::Ready);
+            } else {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::MissingTarget);
+            }
+        }
         Some(ControlCommand::SelectCharacter) => {
             if let Some(character_name) = snapshot.selected_character_name.as_deref() {
                 let _ = bootstrap.queue_character_select_request(character_name);
@@ -360,6 +369,23 @@ fn sync_control_http_snapshot_to_runtime(
                 if !bootstrap.queue_character_create_request(character_name) {
                     bootstrap.set_character_create_state(CharacterCreateScreenState::Error);
                 }
+            }
+        }
+        Some(ControlCommand::DeleteCharacter) => {
+            let Some(character_name) = snapshot.selected_character_name.as_deref() else {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::MissingTarget);
+                control_http.mark_applied(snapshot.command_count);
+                return;
+            };
+
+            let Some(security_code) = snapshot.character_delete_security_code.as_deref() else {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::Error);
+                control_http.mark_applied(snapshot.command_count);
+                return;
+            };
+
+            if !bootstrap.queue_character_delete_request(character_name, security_code) {
+                bootstrap.set_character_delete_state(CharacterDeleteScreenState::Error);
             }
         }
         Some(ControlCommand::FriendAdd) => {
@@ -772,7 +798,7 @@ mod tests {
         VaultManager, AT_SKILL_TELEPORT,
     };
     use mu_render::{SkillParticlePlugin, SkillParticleQueue};
-    use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
+    use mu_ui::{CharacterCreateScreenState, CharacterDeleteScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc as tokio_mpsc;
 
@@ -906,6 +932,59 @@ mod tests {
         assert_eq!(
             bootstrap.character_create_state(),
             CharacterCreateScreenState::Submitting
+        );
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_character_delete_submit() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.apply_command(ControlCommand::CharacterDelete);
+            snapshot.selected_character_name = Some("Astra".to_string());
+            snapshot.character_delete_security_code = Some("1234".to_string());
+            snapshot.apply_command(ControlCommand::DeleteCharacter);
+        }
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(DuelPlugin);
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("delete character command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::DeleteCharacter {
+                character_name,
+                security_code,
+            } => {
+                assert_eq!(character_name, "Astra");
+                assert_eq!(security_code, "1234");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+
+        let bootstrap = app.world().resource::<BootstrapRuntime>();
+        assert_eq!(
+            bootstrap.character_delete_state(),
+            CharacterDeleteScreenState::Submitting
         );
     }
 
