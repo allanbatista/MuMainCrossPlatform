@@ -107,7 +107,9 @@ sessao de jogo completa.
   `friend-chat-rooms`, `guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, e `guild-error` selecionam as subvisoes visiveis. Quando
   a sessao envia as respostas de listagem, o runtime decodifica friend/guild
-  e sobrepoe o roster/score/roles live no mesmo shell.
+  e sobrepoe o roster/score/roles live no mesmo shell. A tela de membros da
+  guild tambem expõe as acoes Appoint, Disband e Fire, e a tela de union
+  tambem expõe as acoes break/banish do fluxo legado.
 - O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
   friend no body ou em `friend=` para enviar os pacotes de add/delete pela
   sessao viva.
@@ -115,6 +117,11 @@ sessao de jogo completa.
   pacote de join da guild pela sessao viva.
 - O control-http tambem aceita `guild-role-assign` com `player=`, `role=` e
   `type=` para enviar o pacote de role assignment da guild pela sessao viva.
+- O control-http tambem aceita `guild-fire` com `player=` e
+  `security_code=` para enviar o pacote de kick do membro da guild pela
+  sessao viva.
+- O control-http tambem aceita `guild-ban-union` com `guild_name=` ou
+  `union_name=` para enviar o pacote de alliance removal pela sessao viva.
 - O control-http tambem aceita `vault-deposit` e `vault-withdraw` com
   `amount=` para enviar o pacote de transferencia de vault pela sessao viva.
 - O control-http tambem aceita `inventory-move` com `from_slot=` e
@@ -197,7 +204,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|guild|guild-join|guild-role-assign|guild-fire|guild-ban-union|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 
@@ -210,6 +217,10 @@ session worker.
 `master_id=` e envia o pacote de join da guild pela sessao viva.
 `guild-role-assign` aceita o player no body bruto ou em `player=`, o role em
 `role=` e o type em `type=` para enviar o pacote de role assignment da guild.
+`guild-fire` aceita o player na query ou no corpo em `player=` e o security
+code em `security_code=` para enviar o pacote de kick do membro da guild.
+`guild-ban-union` aceita o nome da guild no body bruto ou em `guild_name=`/
+`union_name=` para enviar o pacote de alliance removal da guild.
 `vault-deposit` e `vault-withdraw` aceitam o amount no body bruto ou em
 `amount=` para enviar o pacote de transferencia de vault pela sessao viva.
 `inventory-use` aceita `slot=` ou `item_slot=` e tambem `target=` e

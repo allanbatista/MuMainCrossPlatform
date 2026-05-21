@@ -52,6 +52,8 @@ e o servidor continua disponivel para inspeção local.
 - `guild_player_name`
 - `guild_role`
 - `guild_assignment_type`
+- `guild_security_code`
+- `guild_union_name`
 - `inventory_use_slot`
 - `inventory_use_target`
 - `inventory_use_add_points`
@@ -67,7 +69,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -109,6 +111,8 @@ Exemplo:
 - `guild-error`
 - `guild-join`
 - `guild-role-assign`
+- `guild-fire`
+- `guild-ban-union`
 - `inventory-use`
 - `inventory-equip`
 - `inventory-unequip`
@@ -131,7 +135,8 @@ Exemplo:
 `shop`, `game-shop`, `trade`, `party`, `gate`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
-`guild-error`, `guild-role-assign`, `duel`, `quests`, `mu-helper`,
+`guild-error`, `guild-role-assign`, `guild-fire`, `guild-ban-union`, `duel`, `quests`,
+`mu-helper`,
 `login-success` e `login-failure` alteram a rota/session state do runtime
 grafico. `options` abre a janela compartilhada de options no auth shell.
 `character-create` abre a shell visivel de criacao com lista base de classes,
@@ -160,11 +165,19 @@ a resposta sera `400`.
 `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild` e
 `guild-error` selecionam as subvisoes da janela de guild. `guild-join` envia
 o pacote de join da guild atraves da sessao viva e aceita o guild master
-player ID no body ou em `master_id=`; se o payload vier incompleto, a
-resposta sera `400`. `guild-role-assign` envia o pacote de role assignment
-da guild atraves da sessao viva e aceita o player no body ou em `player=`,
-o role em `role=` e o tipo em `type=`; se o payload vier incompleto, a
-resposta sera `400`. `inventory-use` atualiza a rota visivel para inventory,
+player ID na query ou no corpo em `master_id=`; se o payload vier
+incompleto, a resposta sera `400`. `guild-role-assign` envia o pacote de
+role assignment da guild atraves da sessao viva e aceita o player na query
+ou no corpo em `player=`, o role em `role=` e o tipo em `type=`; se o
+payload vier incompleto, a resposta sera `400`. `guild-fire` envia o pacote
+de kick do membro da guild atraves da sessao viva e aceita o player na
+query ou no corpo em `player=` e o codigo de seguranca em
+`security_code=`/`security-code=`/`authority_code=`/`authority-code=`; se o
+payload vier incompleto, a resposta sera `400`. `guild-ban-union` envia o
+pacote de alliance removal pela sessao viva e aceita o nome da guild na
+query ou no corpo em `guild_name=`/`union_name=`; se o payload vier
+incompleto, a resposta sera `400`.
+`inventory-use` atualiza a rota visivel para inventory,
 aceita `slot=` ou `item_slot=` com o slot linear do inventory, aceita
 `target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e envia o
 pacote `consume_item_request`; se o payload vier incompleto, a resposta sera
@@ -204,6 +217,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=friend-add&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=friend-delete&friend=Astra'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-join&master_id=4660'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-role-assign&player=Astra&role=64&type=2'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-ban-union&guild_name=Alliance'
 curl -X POST 'http://127.0.0.1:12345/command?name=vault-deposit&amount=250'
 curl -X POST 'http://127.0.0.1:12345/command?name=vault-withdraw&amount=125'
 curl -X POST 'http://127.0.0.1:12345/command?name=inventory-use&item_slot=7&target=3&fruit=false'
@@ -224,6 +239,8 @@ curl -X POST 'http://127.0.0.1:12345/command?name=friend-chat-rooms'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-members'
 curl -X POST 'http://127.0.0.1:12345/command?name=guild-union'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-fire&player=Blade&security_code=1234'
+curl -X POST 'http://127.0.0.1:12345/command?name=guild-ban-union&guild_name=Alliance'
 curl -X POST 'http://127.0.0.1:12345/command?name=duel'
 curl -X POST 'http://127.0.0.1:12345/command?name=quests'
 curl -X POST 'http://127.0.0.1:12345/command?name=mu-helper'

@@ -17,7 +17,8 @@ use mu_protocol::chat::public_chat_message;
 use mu_protocol::events::gens_ranking_request;
 use mu_protocol::events::{decode_gens_ranking_info, GensRankingInfo};
 use mu_protocol::guild::{
-    guild_join_request, guild_list_request, guild_role_assign_request, request_alliance_list,
+    guild_join_request, guild_kick_player_request, guild_list_request, guild_role_assign_request,
+    remove_alliance_guild_request, request_alliance_list,
 };
 use mu_protocol::items::{consume_item_request, item_move_request_extended, ItemStorageKind};
 use mu_protocol::login::{create_character, request_character_list, select_character};
@@ -97,6 +98,11 @@ pub(crate) enum BootstrapCommand {
         role: u8,
         assignment_type: u8,
     },
+    GuildKickPlayer {
+        player_name: String,
+        security_code: String,
+    },
+    GuildBanUnion(String),
     InventoryUse {
         slot: u8,
         target: u8,
@@ -401,6 +407,33 @@ impl BootstrapRuntime {
                 role,
                 assignment_type,
             })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_guild_kick_player_request(
+        &self,
+        player_name: impl Into<String>,
+        security_code: impl Into<String>,
+    ) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildKickPlayer {
+                player_name: player_name.into(),
+                security_code: security_code.into(),
+            })
+            .is_ok()
+    }
+
+    pub(crate) fn queue_guild_ban_union_request(&self, guild_name: impl Into<String>) -> bool {
+        let Some(command_sender) = self.command_sender.as_ref() else {
+            return false;
+        };
+
+        command_sender
+            .send(BootstrapCommand::GuildBanUnion(guild_name.into()))
             .is_ok()
     }
 
@@ -1193,6 +1226,27 @@ async fn send_bootstrap_command(
                 .await
                 .map_err(|error| error.to_string())
         }
+        BootstrapCommand::GuildKickPlayer {
+            player_name,
+            security_code,
+        } => {
+            let packet = guild_kick_player_request(player_name, security_code)
+                .map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
+        BootstrapCommand::GuildBanUnion(guild_name) => {
+            let packet =
+                remove_alliance_guild_request(guild_name).map_err(|error| error.to_string())?;
+
+            session
+                .send(packet)
+                .await
+                .map_err(|error| error.to_string())
+        }
         BootstrapCommand::InventoryUse {
             slot,
             target,
@@ -1338,8 +1392,10 @@ mod tests {
     use mu_protocol::encode_packet;
     use mu_protocol::events::{gens_ranking_request, GensRankingInfo};
     use mu_protocol::guild::guild_join_request;
+    use mu_protocol::guild::guild_kick_player_request;
     use mu_protocol::guild::guild_list_request;
     use mu_protocol::guild::guild_role_assign_request;
+    use mu_protocol::guild::remove_alliance_guild_request;
     use mu_protocol::guild::request_alliance_list;
     use mu_protocol::login::{create_character, request_character_list, select_character};
     use mu_protocol::movement::{encode_move_position_update, walk_request};
@@ -2028,6 +2084,87 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn guild_fire_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::GuildKickPlayer {
+                player_name: "Blade".to_string(),
+                security_code: "1234".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            received,
+            guild_kick_player_request(b"Blade", b"1234").unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn guild_ban_union_packets_send_the_expected_bytes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        let mut session = Session::connect(
+            address,
+            super::SESSION_CONNECT_TIMEOUT,
+            super::SESSION_READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+
+        super::send_bootstrap_command(
+            &mut session,
+            BootstrapCommand::GuildBanUnion("Alliance".to_string()),
+        )
+        .await
+        .unwrap();
+
+        drop(session);
+        let received = tokio::time::timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            received,
+            remove_alliance_guild_request(b"Alliance").unwrap()
+        );
+    }
+
     #[test]
     fn gens_ranking_packets_classify_and_store_runtime_state() {
         let packet = gens_ranking_packet();
@@ -2137,6 +2274,48 @@ mod tests {
         {
             BootstrapCommand::FriendDelete(friend_name) => {
                 assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guild_fire_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_guild_kick_player_request("Blade", "1234"));
+
+        match command_receiver
+            .try_recv()
+            .expect("guild fire command missing")
+        {
+            BootstrapCommand::GuildKickPlayer {
+                player_name,
+                security_code,
+            } => {
+                assert_eq!(player_name, "Blade");
+                assert_eq!(security_code, "1234");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guild_ban_union_requests_queue_commands() {
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_guild_ban_union_request("Alliance"));
+
+        match command_receiver
+            .try_recv()
+            .expect("guild ban-union command missing")
+        {
+            BootstrapCommand::GuildBanUnion(guild_name) => {
+                assert_eq!(guild_name, "Alliance");
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }

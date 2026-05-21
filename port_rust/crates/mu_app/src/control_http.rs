@@ -44,6 +44,8 @@ pub enum ControlCommand {
     GuildNoGuild,
     GuildError,
     GuildRoleAssign,
+    GuildFire,
+    GuildBanUnion,
     InventoryUse,
     InventoryEquip,
     InventoryUnequip,
@@ -100,6 +102,8 @@ impl ControlCommand {
             Self::GuildNoGuild => "guild-no-guild",
             Self::GuildError => "guild-error",
             Self::GuildRoleAssign => "guild-role-assign",
+            Self::GuildFire => "guild-fire",
+            Self::GuildBanUnion => "guild-ban-union",
             Self::InventoryUse => "inventory-use",
             Self::InventoryEquip => "inventory-equip",
             Self::InventoryUnequip => "inventory-unequip",
@@ -162,6 +166,13 @@ impl ControlCommand {
             "guild-no-guild" | "guild_no_guild" => Some(Self::GuildNoGuild),
             "guild-error" | "guild_error" => Some(Self::GuildError),
             "guild-role-assign" | "guild_role_assign" => Some(Self::GuildRoleAssign),
+            "guild-fire" | "guild_fire" | "guild-kick-player" | "guild_kick_player" => {
+                Some(Self::GuildFire)
+            }
+            "guild-ban-union"
+            | "guild_ban_union"
+            | "guild-remove-alliance"
+            | "guild_remove_alliance" => Some(Self::GuildBanUnion),
             "inventory-use" | "inventory_use" | "item-use" | "item_use" => Some(Self::InventoryUse),
             "inventory-equip" | "inventory_equip" | "item-equip" | "item_equip" => {
                 Some(Self::InventoryEquip)
@@ -202,6 +213,8 @@ pub struct ControlSnapshot {
     pub guild_player_name: Option<String>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
+    pub guild_security_code: Option<String>,
+    pub guild_union_name: Option<String>,
     pub inventory_use_slot: Option<u8>,
     pub inventory_use_target: Option<u8>,
     pub inventory_use_add_points: Option<bool>,
@@ -228,6 +241,8 @@ impl ControlSnapshot {
             guild_player_name: None,
             guild_role: None,
             guild_assignment_type: None,
+            guild_security_code: None,
+            guild_union_name: None,
             inventory_use_slot: None,
             inventory_use_target: None,
             inventory_use_add_points: None,
@@ -455,6 +470,20 @@ impl ControlSnapshot {
                 self.guild_screen_state = Some(GuildScreenState::Members);
                 false
             }
+            ControlCommand::GuildFire => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Members);
+                false
+            }
+            ControlCommand::GuildBanUnion => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Guild;
+                self.session_phase = SessionPhase::LoggedIn;
+                self.guild_screen_state = Some(GuildScreenState::Union);
+                false
+            }
             ControlCommand::InventoryUse
             | ControlCommand::InventoryEquip
             | ControlCommand::InventoryUnequip
@@ -566,6 +595,16 @@ impl ControlSnapshot {
             .guild_assignment_type
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let guild_security_code = self
+            .guild_security_code
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
+        let guild_union_name = self
+            .guild_union_name
+            .as_ref()
+            .map(|name| format!("\"{}\"", name))
+            .unwrap_or_else(|| "null".to_string());
         let inventory_use_slot = self
             .inventory_use_slot
             .map(|value| value.to_string())
@@ -608,7 +647,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -619,6 +658,8 @@ impl ControlSnapshot {
             guild_player_name,
             guild_role,
             guild_assignment_type,
+            guild_security_code,
+            guild_union_name,
             inventory_use_slot,
             inventory_use_target,
             inventory_use_add_points,
@@ -915,6 +956,32 @@ fn route_request(
                     snapshot.guild_player_name = Some(player_name);
                     snapshot.guild_role = Some(role);
                     snapshot.guild_assignment_type = Some(assignment_type);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::GuildFire => {
+                    let Some((player_name, security_code)) = guild_fire_from_request(&request)
+                    else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing guild fire payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.guild_player_name = Some(player_name);
+                    snapshot.guild_security_code = Some(security_code);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::GuildBanUnion => {
+                    let Some(guild_name) = guild_ban_union_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing guild ban union payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.guild_union_name = Some(guild_name);
                     snapshot.apply_command(command)
                 }
                 ControlCommand::InventoryUse => {
@@ -1221,6 +1288,53 @@ fn guild_role_assign_from_request(request: &HttpRequest) -> Option<(String, u8, 
     Some((player_name, role, assignment_type))
 }
 
+fn guild_fire_from_request(request: &HttpRequest) -> Option<(String, String)> {
+    let player_name = query_value(&request.query, "player")
+        .or_else(|| query_value(&request.body, "player"))?
+        .trim()
+        .to_string();
+
+    if player_name.is_empty() {
+        return None;
+    }
+
+    let security_code = query_value(&request.query, "security_code")
+        .or_else(|| query_value(&request.query, "security-code"))
+        .or_else(|| query_value(&request.query, "authority_code"))
+        .or_else(|| query_value(&request.query, "authority-code"))
+        .or_else(|| query_value(&request.body, "security_code"))
+        .or_else(|| query_value(&request.body, "security-code"))
+        .or_else(|| query_value(&request.body, "authority_code"))
+        .or_else(|| query_value(&request.body, "authority-code"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+
+    Some((player_name, security_code))
+}
+
+fn guild_ban_union_from_request(request: &HttpRequest) -> Option<String> {
+    query_value(&request.query, "guild_name")
+        .or_else(|| query_value(&request.query, "guild-name"))
+        .or_else(|| query_value(&request.query, "union_name"))
+        .or_else(|| query_value(&request.query, "union-name"))
+        .or_else(|| query_value(&request.body, "guild_name"))
+        .or_else(|| query_value(&request.body, "guild-name"))
+        .or_else(|| query_value(&request.body, "union_name"))
+        .or_else(|| query_value(&request.body, "union-name"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() {
+                None
+            } else {
+                Some(body.to_string())
+            }
+        })
+}
+
 fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
     let from_slot = query_value(&request.query, "from_slot")
         .or_else(|| query_value(&request.body, "from_slot"))?
@@ -1377,7 +1491,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -1450,6 +1564,36 @@ mod tests {
             ControlCommand::GuildRoleAssign.as_str(),
             "guild-role-assign"
         );
+        assert_eq!(
+            ControlCommand::parse("guild-fire"),
+            Some(ControlCommand::GuildFire)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_fire"),
+            Some(ControlCommand::GuildFire)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-kick-player"),
+            Some(ControlCommand::GuildFire)
+        );
+        assert_eq!(ControlCommand::GuildFire.as_str(), "guild-fire");
+        assert_eq!(
+            ControlCommand::parse("guild-ban-union"),
+            Some(ControlCommand::GuildBanUnion)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_ban_union"),
+            Some(ControlCommand::GuildBanUnion)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild-remove-alliance"),
+            Some(ControlCommand::GuildBanUnion)
+        );
+        assert_eq!(
+            ControlCommand::parse("guild_remove_alliance"),
+            Some(ControlCommand::GuildBanUnion)
+        );
+        assert_eq!(ControlCommand::GuildBanUnion.as_str(), "guild-ban-union");
         assert_eq!(
             ControlCommand::parse("inventory-use"),
             Some(ControlCommand::InventoryUse)
@@ -1698,6 +1842,34 @@ mod tests {
         assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
         assert_eq!(snapshot.guild_master_player_id, Some(0x1234));
         assert_eq!(snapshot.guild_screen_state, None);
+    }
+
+    #[test]
+    fn snapshot_tracks_guild_fire_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.guild_player_name = Some("Blade".to_string());
+        snapshot.guild_security_code = Some("1234".to_string());
+        snapshot.apply_command(ControlCommand::GuildFire);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.guild_player_name.as_deref(), Some("Blade"));
+        assert_eq!(snapshot.guild_security_code.as_deref(), Some("1234"));
+        assert_eq!(snapshot.guild_screen_state, Some(GuildScreenState::Members));
+    }
+
+    #[test]
+    fn snapshot_tracks_guild_ban_union_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.guild_union_name = Some("Alliance".to_string());
+        snapshot.apply_command(ControlCommand::GuildBanUnion);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Guild);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.guild_union_name.as_deref(), Some("Alliance"));
+        assert_eq!(snapshot.guild_screen_state, Some(GuildScreenState::Union));
     }
 
     #[test]
@@ -2283,6 +2455,84 @@ mod tests {
         assert!(state_body.contains(r#""guild_player_name":"Astra""#));
         assert!(state_body.contains(r#""guild_role":64"#));
         assert!(state_body.contains(r#""guild_assignment_type":2"#));
+        assert!(state_body.contains(r#""command_count":1"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn guild_fire_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-fire HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild fire payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-fire&player=Blade&security_code= HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild fire payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-fire&player=Blade&security_code=1234 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""guild_player_name":"Blade""#));
+        assert!(body.contains(r#""guild_security_code":"1234""#));
+        assert!(body.contains(r#""guild_screen_state":"members""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""guild_player_name":"Blade""#));
+        assert!(state_body.contains(r#""guild_security_code":"1234""#));
+        assert!(state_body.contains(r#""command_count":1"#));
+
+        handle.request_shutdown();
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn guild_ban_union_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-ban-union HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild ban union payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-ban-union&guild_name= HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing guild ban union payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=guild-ban-union&guild_name=Alliance HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""guild_union_name":"Alliance""#));
+        assert!(body.contains(r#""guild_screen_state":"union""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""guild_union_name":"Alliance""#));
         assert!(state_body.contains(r#""command_count":1"#));
 
         handle.request_shutdown();

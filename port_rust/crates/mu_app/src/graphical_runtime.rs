@@ -319,6 +319,19 @@ fn sync_control_http_snapshot_to_runtime(
                     bootstrap.queue_guild_role_assign_request(player_name, role, assignment_type);
             }
         }
+        Some(ControlCommand::GuildFire) => {
+            if let (Some(player_name), Some(security_code)) = (
+                snapshot.guild_player_name.as_deref(),
+                snapshot.guild_security_code.as_deref(),
+            ) {
+                let _ = bootstrap.queue_guild_kick_player_request(player_name, security_code);
+            }
+        }
+        Some(ControlCommand::GuildBanUnion) => {
+            if let Some(guild_name) = snapshot.guild_union_name.as_deref() {
+                let _ = bootstrap.queue_guild_ban_union_request(guild_name);
+            }
+        }
         Some(ControlCommand::InventoryMove) => {
             apply_inventory_move_command(
                 &mut bootstrap,
@@ -1229,6 +1242,93 @@ mod tests {
                 assert_eq!(player_name, "Astra");
                 assert_eq!(role, 64);
                 assert_eq!(assignment_type, 2);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_guild_fire() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.guild_player_name = Some("Blade".to_string());
+            snapshot.guild_security_code = Some("1234".to_string());
+            snapshot.apply_command(ControlCommand::GuildFire);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("guild fire command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::GuildKickPlayer {
+                player_name,
+                security_code,
+            } => {
+                assert_eq!(player_name, "Blade");
+                assert_eq!(security_code, "1234");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_guild_ban_union() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot.clone()));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.guild_union_name = Some("Alliance".to_string());
+            snapshot.apply_command(ControlCommand::GuildBanUnion);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("guild ban-union command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::GuildBanUnion(guild_name) => {
+                assert_eq!(guild_name, "Alliance");
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }

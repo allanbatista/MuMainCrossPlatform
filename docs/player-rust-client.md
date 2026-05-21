@@ -104,6 +104,12 @@ in the local config file instead of being typed every time.
 - The guild control plane also accepts `guild-join` commands with a guild
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
+- The guild control plane also accepts `guild-fire` commands with a target
+  player and security code so QA can drive the existing guild kick packet
+  helper through the live session.
+- The guild control plane also accepts `guild-ban-union` commands with a
+  target guild name so QA can drive the existing alliance-removal packet
+  helper through the live session.
 - The inventory control plane also accepts `vault-deposit`,
   `vault-withdraw`, `inventory-use`, `inventory-equip`, `inventory-unequip`,
   and `inventory-move` commands with the matching slot or amount payloads so
@@ -186,6 +192,12 @@ in the local config file instead of being typed every time.
 - `POST /command?name=guild-role-assign` queues the guild role-assignment
   packet through the live session. Pass the target player in `player=`, the
   role in `role=`, and the assignment type in `type=`.
+- `POST /command?name=guild-fire` queues the guild member-kick packet
+  through the live session. Pass the target player in `player=` and the
+  security code in `security_code=`.
+- `POST /command?name=guild-ban-union` queues the guild alliance-removal
+  packet through the live session. Pass the target guild name in the body or
+  as `guild_name=`/`union_name=`.
 - `POST /command?name=vault-deposit` and `POST /command?name=vault-withdraw`
   queue the matching vault money transfer packet through the live session.
   Pass the amount in the body or as `amount=`.

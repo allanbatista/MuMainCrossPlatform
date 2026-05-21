@@ -59,9 +59,11 @@ Error}`.
 The summary tab shows the guild score, rival guild, and notices. The members
 tab exposes the master-only appoint, disband, and fire actions. The union tab
 shows allied guilds and the break/banish actions used by the legacy guild
-window. When the live guild list arrives, the summary and members data are
-overlaid with the decoded score, rival name, and member roles from the
-session.
+window. `guild-fire` queues the existing member-kick packet when a target
+player and security code are provided, and `guild-ban-union` queues the
+existing alliance-removal packet when a target guild name is provided. When
+the live guild list arrives, the summary and members data are overlaid with
+the decoded score, rival name, and member roles from the session.
 
 ```rust
 use mu_ui::{guild_screen, GuildScreenState};
