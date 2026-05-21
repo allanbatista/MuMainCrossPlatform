@@ -26,9 +26,9 @@ separate gameplay resources plus UI snapshot modules.
 - `mu_ui::duel::duel_screen()` mirrors the challenge, channel list, watching
   and error views.
 - The Rust client also exposes the duel route as a visible Bevy shell and
-  the local control HTTP smoke path can open it with `duel`; `duel-start`
-  and `duel-stop` queue the matching duel packet helpers through the live
-  session bridge.
+  the local control HTTP smoke path can open it with `duel`; `duel-start`,
+  `duel-stop`, `duel-channel-join`, and `duel-channel-quit` queue the
+  matching duel packet helpers through the live session bridge.
 
 ## Gens
 

@@ -14,8 +14,8 @@ use bevy::window::{Window, WindowPlugin, WindowResolution};
 use camino::{Utf8Path, Utf8PathBuf};
 use mu_audio::AudioRuntimePlugin;
 use mu_gameplay::{
-    DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin, GameShopPlugin,
-    GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
+    DuelManager, DuelPlugin, EquipmentManager, EquipmentPlugin, EquipmentSlot, EventPlugin,
+    GameShopPlugin, GensPlugin, GuildCachePlugin, InventoryPlugin, MailPlugin, MovementPlugin,
     MuHelperRuntimePlugin, NpcPlugin, PartyPlugin, QuestPlugin, TradePlugin, VaultManager,
     VaultPlugin, WorldEntitiesPlugin, WorldMonsterPlugin, WorldNpcPlugin, WorldPlugin,
 };
@@ -288,6 +288,7 @@ fn sync_control_http_snapshot_to_runtime(
     mut inventory: ResMut<InventoryManager>,
     mut equipment: ResMut<EquipmentManager>,
     mut vault: ResMut<VaultManager>,
+    mut duel_manager: Option<ResMut<DuelManager>>,
     mut session_state: ResMut<SessionState>,
     mut ui_shell: ResMut<UiShellState>,
 ) {
@@ -383,6 +384,22 @@ fn sync_control_http_snapshot_to_runtime(
             ) {
                 let _ = bootstrap.queue_duel_start_request(player_id, player_name);
             }
+        }
+        Some(ControlCommand::DuelChannelJoin) => {
+            if let Some(channel_id) = snapshot.duel_channel_id {
+                if let Some(duel_manager) = duel_manager.as_deref_mut() {
+                    duel_manager.remove_all_duel_watch_user();
+                    duel_manager.set_current_channel(i32::from(channel_id));
+                }
+                let _ = bootstrap.queue_duel_channel_join_request(channel_id);
+            }
+        }
+        Some(ControlCommand::DuelChannelQuit) => {
+            if let Some(duel_manager) = duel_manager.as_deref_mut() {
+                duel_manager.remove_all_duel_watch_user();
+                duel_manager.set_current_channel(-1);
+            }
+            let _ = bootstrap.queue_duel_channel_quit_request();
         }
         Some(ControlCommand::DuelStop) => {
             let _ = bootstrap.queue_duel_stop_request();
@@ -646,8 +663,8 @@ mod tests {
     use crate::{AppState, Cli, ClientRuntime, Config, SessionPhase, SessionState};
     use bevy::prelude::App;
     use mu_gameplay::{
-        EquipmentManager, EquipmentSlot, InventoryManager, InventorySlot, Item, ItemPacketData,
-        ItemRequirements, ItemSize, VaultManager,
+        DuelManager, DuelPlugin, EquipmentManager, EquipmentSlot, InventoryManager, InventorySlot,
+        Item, ItemPacketData, ItemRequirements, ItemSize, VaultManager,
     };
     use mu_ui::{CharacterCreateScreenState, UiRoute, UiShellState};
     use std::sync::{Arc, Mutex};
@@ -752,6 +769,7 @@ mod tests {
         let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
 
         let mut app = App::new();
+        app.add_plugins(DuelPlugin);
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
@@ -792,6 +810,7 @@ mod tests {
         let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
 
         let mut app = App::new();
+        app.add_plugins(DuelPlugin);
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
@@ -851,6 +870,7 @@ mod tests {
         let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
 
         let mut app = App::new();
+        app.add_plugins(DuelPlugin);
         app.add_plugins(mu_ui::UiShellPlugin);
         app.init_resource::<SessionState>();
         app.insert_resource(InventoryManager::new());
@@ -886,6 +906,41 @@ mod tests {
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.duel_channel_id = Some(7);
+            snapshot.apply_command(ControlCommand::DuelChannelJoin);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("duel channel join command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::DuelChannelJoin(channel_id) => {
+                assert_eq!(channel_id, 7);
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+        assert_eq!(app.world().resource::<DuelManager>().current_channel(), 7);
+
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.apply_command(ControlCommand::DuelChannelQuit);
+        }
+
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("duel channel quit command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::DuelChannelQuit => {}
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+        assert_eq!(app.world().resource::<DuelManager>().current_channel(), -1);
 
         {
             let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");

@@ -64,6 +64,8 @@ pub enum ControlCommand {
     Duel,
     DuelStart,
     DuelStop,
+    DuelChannelJoin,
+    DuelChannelQuit,
     Quests,
     MuHelper,
     LoginSuccess,
@@ -129,6 +131,8 @@ impl ControlCommand {
             Self::Duel => "duel",
             Self::DuelStart => "duel-start",
             Self::DuelStop => "duel-stop",
+            Self::DuelChannelJoin => "duel-channel-join",
+            Self::DuelChannelQuit => "duel-channel-quit",
             Self::Quests => "quests",
             Self::MuHelper => "mu-helper",
             Self::LoginSuccess => "login-success",
@@ -211,6 +215,12 @@ impl ControlCommand {
             "duel" => Some(Self::Duel),
             "duel-start" | "duel_start" => Some(Self::DuelStart),
             "duel-stop" | "duel_stop" => Some(Self::DuelStop),
+            "duel-channel-join" | "duel_channel_join" | "duel-join-channel" => {
+                Some(Self::DuelChannelJoin)
+            }
+            "duel-channel-quit" | "duel_channel_quit" | "duel-quit-channel" => {
+                Some(Self::DuelChannelQuit)
+            }
             "quests" => Some(Self::Quests),
             "mu-helper" | "mu_helper" => Some(Self::MuHelper),
             "login-success" | "login_success" => Some(Self::LoginSuccess),
@@ -240,6 +250,7 @@ pub struct ControlSnapshot {
     pub guild_create_emblem: Option<[u8; 32]>,
     pub duel_player_id: Option<u16>,
     pub duel_player_name: Option<String>,
+    pub duel_channel_id: Option<u8>,
     pub guild_role: Option<u8>,
     pub guild_assignment_type: Option<u8>,
     pub guild_security_code: Option<String>,
@@ -273,6 +284,7 @@ impl ControlSnapshot {
             guild_create_emblem: None,
             duel_player_id: None,
             duel_player_name: None,
+            duel_channel_id: None,
             guild_role: None,
             guild_assignment_type: None,
             guild_security_code: None,
@@ -585,10 +597,16 @@ impl ControlSnapshot {
                 self.session_phase = SessionPhase::LoggedIn;
                 false
             }
-            ControlCommand::DuelStart | ControlCommand::DuelStop => {
+            ControlCommand::DuelStart
+            | ControlCommand::DuelStop
+            | ControlCommand::DuelChannelJoin
+            | ControlCommand::DuelChannelQuit => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Duel;
                 self.session_phase = SessionPhase::LoggedIn;
+                if matches!(command, ControlCommand::DuelChannelQuit) {
+                    self.duel_channel_id = None;
+                }
                 false
             }
             ControlCommand::Quests => {
@@ -692,6 +710,10 @@ impl ControlSnapshot {
             .as_ref()
             .map(|name| format!("\"{}\"", name))
             .unwrap_or_else(|| "null".to_string());
+        let duel_channel_id = self
+            .duel_channel_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let guild_role = self
             .guild_role
             .map(|value| value.to_string())
@@ -756,7 +778,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"guild_union_name\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -769,6 +791,7 @@ impl ControlSnapshot {
             guild_create_emblem,
             duel_player_id,
             duel_player_name,
+            duel_channel_id,
             guild_role,
             guild_assignment_type,
             guild_security_code,
@@ -1123,6 +1146,22 @@ fn route_request(
 
                     snapshot.duel_player_id = Some(player_id);
                     snapshot.duel_player_name = Some(player_name);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::DuelChannelJoin => {
+                    let Some(channel_id) = duel_channel_join_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing duel channel payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.duel_channel_id = Some(channel_id);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::DuelChannelQuit => {
+                    snapshot.duel_channel_id = None;
                     snapshot.apply_command(command)
                 }
                 ControlCommand::DuelStop => snapshot.apply_command(command),
@@ -1573,6 +1612,26 @@ fn duel_start_from_request(request: &HttpRequest) -> Option<(u16, String)> {
     Some((player_id, player_name))
 }
 
+fn duel_channel_join_from_request(request: &HttpRequest) -> Option<u8> {
+    if let Some(channel_id) = query_value(&request.query, "channel_id")
+        .or_else(|| query_value(&request.query, "channel-id"))
+        .or_else(|| query_value(&request.query, "channel"))
+        .or_else(|| query_value(&request.body, "channel_id"))
+        .or_else(|| query_value(&request.body, "channel-id"))
+        .or_else(|| query_value(&request.body, "channel"))
+        .and_then(|value| value.trim().parse::<u8>().ok())
+    {
+        return Some(channel_id);
+    }
+
+    let body = request.body.trim();
+    if body.is_empty() || body.contains('=') {
+        None
+    } else {
+        body.parse::<u8>().ok()
+    }
+}
+
 fn inventory_move_from_request(request: &HttpRequest) -> Option<(u8, u8)> {
     let from_slot = query_value(&request.query, "from_slot")
         .or_else(|| query_value(&request.body, "from_slot"))?
@@ -1731,7 +1790,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2037,6 +2096,30 @@ mod tests {
         );
         assert_eq!(ControlCommand::DuelStop.as_str(), "duel-stop");
         assert_eq!(
+            ControlCommand::parse("duel-channel-join"),
+            Some(ControlCommand::DuelChannelJoin)
+        );
+        assert_eq!(
+            ControlCommand::parse("duel_channel_join"),
+            Some(ControlCommand::DuelChannelJoin)
+        );
+        assert_eq!(
+            ControlCommand::DuelChannelJoin.as_str(),
+            "duel-channel-join"
+        );
+        assert_eq!(
+            ControlCommand::parse("duel-channel-quit"),
+            Some(ControlCommand::DuelChannelQuit)
+        );
+        assert_eq!(
+            ControlCommand::parse("duel_channel_quit"),
+            Some(ControlCommand::DuelChannelQuit)
+        );
+        assert_eq!(
+            ControlCommand::DuelChannelQuit.as_str(),
+            "duel-channel-quit"
+        );
+        assert_eq!(
             ControlCommand::parse("vault-deposit"),
             Some(ControlCommand::VaultDeposit)
         );
@@ -2233,6 +2316,64 @@ mod tests {
         assert_eq!(snapshot.duel_player_id, Some(4660));
         assert_eq!(snapshot.duel_player_name.as_deref(), Some("Astra"));
         assert_eq!(snapshot.ui_route, UiRoute::Duel);
+    }
+
+    #[test]
+    fn control_http_route_accepts_duel_channel_join_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=duel-channel-join&channel_id=7".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::DuelChannelJoin));
+        assert_eq!(snapshot.duel_channel_id, Some(7));
+        assert_eq!(snapshot.ui_route, UiRoute::Duel);
+    }
+
+    #[test]
+    fn duel_channel_join_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=duel-channel-join HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing duel channel payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=duel-channel-join&channel_id=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing duel channel payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=duel-channel-join&channel_id=7 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""duel_channel_id":7"#));
+        assert!(body.contains(r#""ui_route":"duel""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""duel_channel_id":7"#));
+        assert!(state_body.contains(r#""command_count":1"#));
     }
 
     #[test]

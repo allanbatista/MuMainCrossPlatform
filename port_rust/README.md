@@ -150,8 +150,9 @@ sessao de jogo completa.
 - A camada de duel esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `duel` no smoke local.
-- `duel-start` e `duel-stop` enfileiram os pacotes de challenge/stop do duel
-  atraves do bridge de control-http quando a sessao esta conectada.
+- `duel-start`, `duel-stop`, `duel-channel-join` e `duel-channel-quit`
+  enfileiram os pacotes de challenge/stop/join/quit do duel atraves do
+  bridge de control-http quando a sessao esta conectada.
 - A camada de events esta documentada em `docs/quests-events-duel-gens.md` e
   agora tambem abre uma shell visivel no runtime grafico, acionavel por
   `events` no smoke local.
@@ -220,7 +221,7 @@ O servidor expõe:
 - `GET /state` para consultar o estado atual;
 - `POST /command?name=boot|asset-check-failed|ready-for-login|server-select|
   character-select|character-create|create-character|select-character|loading|world|chat|npc|shop|game-shop|
-  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
+  trade|mu-helper|login-success|login-failure|party|gate|friend|friend-add|friend-delete|friend-inbox|friend-compose|friend-chat-rooms|guild|guild-join|guild-create|guild-role-assign|guild-fire|guild-ban-union|duel-start|duel-stop|duel-channel-join|duel-channel-quit|vault-deposit|vault-withdraw|inventory-use|inventory-equip|inventory-unequip|inventory-move|duel|events|gens|quests|logout-login|
   logout-character|disconnect|exit|ping` para
   mudar o estado ou encerrar o processo/runtime grafico.
 

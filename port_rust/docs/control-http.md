@@ -11,8 +11,9 @@ modo `--headless`, continua sendo um smoke server deterministico. As rotas
 shells visiveis, e `friend` e `guild` aceitam comandos de subview para testar
 as telas internas. `friend-inbox` tambem dispara uma requisicao de letter list
 uma vez por ativacao logada antes de sobrepor as letters live quando elas
-chegam. `duel-start` e `duel-stop` tambem alimentam o bridge de pacotes de
-duel quando a sessao viva esta disponivel.
+chegam. `duel-start`, `duel-stop`, `duel-channel-join` e `duel-channel-quit`
+tambem alimentam o bridge de pacotes de duel quando a sessao viva esta
+disponivel.
 `party` tambem espelha a shell visivel e pede uma vez a party list live por
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
@@ -59,6 +60,7 @@ e o servidor continua disponivel para inspeção local.
 - `guild_player_name`
 - `duel_player_id`
 - `duel_player_name`
+- `duel_channel_id`
 - `guild_role`
 - `guild_assignment_type`
 - `guild_security_code`
@@ -79,7 +81,7 @@ e o servidor continua disponivel para inspeção local.
 Exemplo:
 
 ```json
-{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"duel_player_id":null,"duel_player_name":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
+{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":null,"selected_character_name":null,"friend_name":null,"guild_master_player_id":null,"guild_player_name":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"guild_union_name":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":0}
 ```
 
 ## Enviar comandos
@@ -130,6 +132,8 @@ Exemplo:
 - `guild-ban-union`
 - `duel-start`
 - `duel-stop`
+- `duel-channel-join`
+- `duel-channel-quit`
 - `inventory-use`
 - `inventory-equip`
 - `inventory-unequip`
@@ -155,7 +159,8 @@ Exemplo:
 `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
 `guild-error`, `guild-join`, `guild-create`, `guild-role-assign`,
 `guild-fire`, `guild-ban-union`,
-`duel-start`, `duel-stop`, `duel`, `quests`,
+`duel-start`, `duel-stop`, `duel-channel-join`, `duel-channel-quit`,
+`duel`, `quests`,
 `mu-helper`,
 `login-success` e `login-failure` alteram a rota/session state do runtime
 grafico. `options` abre a janela compartilhada de options no auth shell.
@@ -210,7 +215,11 @@ pela sessao viva e aceita o nome da guild na query ou no corpo em
 challenge pela sessao viva e aceita o player alvo na query ou no corpo em
 `player_id=` e `player_name=`; se o payload vier incompleto, a resposta sera
 `400`. `duel-stop` envia o pacote de duel stop pela sessao viva sem payload
-extra.
+extra. `duel-channel-join` envia o pacote de join de channel pela sessao
+viva e aceita o channel em `channel_id=`/`channel-id=`/`channel=` ou como
+body bruto; se o payload vier incompleto, a resposta sera `400`.
+`duel-channel-quit` envia o pacote de quit de channel pela sessao viva sem
+payload extra.
 `inventory-use` atualiza a rota visivel para inventory,
 aceita `slot=` ou `item_slot=` com o slot linear do inventory, aceita
 `target=` opcional e `add_points=`/`add-points=`/`fruit=` opcional, e envia o
