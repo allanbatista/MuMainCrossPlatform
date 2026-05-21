@@ -22,7 +22,8 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   the live letter rows replace the sample inbox.
 - `POST /command?name=guild` opens the guild shell in `mu_client` and mirrors
   the current guild snapshot model, then overlays decoded guild score,
-  rival-name, and member-role data from the live session when it arrives.
+  rival-name, member-role, and union data from the live session when it
+  arrives.
 - `POST /command?name=guild-summary`, `guild-members`, `guild-union`,
   `guild-no-guild`, and `guild-error` smoke the matching guild subviews.
 - `POST /command?name=guild-create` queues the guild creation packet when a
@@ -36,7 +37,8 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
   disconnect clears it. `friend-inbox` also queues the live letter list once
   per logged-in inbox activation.
 - Opening `guild-union` while logged in also queues the alliance list request
-  once per activation before the union shell stays visible.
+  once per activation before the union shell stays visible, and the decoded
+  alliance list replaces the placeholder unions when it arrives.
 
 ## Friend
 
@@ -73,7 +75,9 @@ window. `guild-fire` queues the existing member-kick packet when a target
 player and security code are provided, and `guild-ban-union` queues the
 existing alliance-removal packet when a target guild name is provided. When
 the live guild list arrives, the summary and members data are overlaid with
-the decoded score, rival name, and member roles from the session.
+the decoded score, rival name, and member roles from the session. When the
+live alliance list arrives, the union tab replaces the placeholder unions
+with the decoded allied guilds and member counts.
 `guild-create` queues the existing guild create packet when a guild name and
 hex-encoded 32-byte emblem payload are provided; the name follows the legacy
 4-8 character limit.

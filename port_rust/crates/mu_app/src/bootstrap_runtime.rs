@@ -14,7 +14,7 @@ use camino::Utf8Path;
 use mu_gameplay::{
     mail::{MAX_MAIL_DATE_LENGTH, MAX_MAIL_TIME_LENGTH},
     CharacterClass, MailLetterEntry, MailManager, MovementCommand, PartyMemberInfo,
-    MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH,
+    MAX_GUILD_NAME_LENGTH, MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH,
 };
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
@@ -38,7 +38,7 @@ use mu_protocol::{decode_packet, PacketFrame};
 use mu_ui::{
     character_select_screen, CharacterCreateScreenState, CharacterSelectCharacter,
     CharacterSelectScreenState, FriendEntry, FriendPresence, GuildMemberEntry, GuildMemberRole,
-    UiRoute, UiShellState,
+    GuildUnionEntry, UiRoute, UiShellState,
 };
 use tokio::sync::mpsc as tokio_mpsc;
 
@@ -51,6 +51,9 @@ const CHARACTER_CREATE_FAILURE_MESSAGE: &str = "character creation failed";
 const INVENTORY_STORAGE_KIND: ItemStorageKind = 0;
 const FRIEND_LIST_ENTRY_LEN: usize = 11;
 const GUILD_LIST_ENTRY_LEN: usize = 13;
+const GUILD_UNION_MARK_LEN: usize = 32;
+const GUILD_UNION_ENTRY_NAME_OFFSET: usize = 1 + GUILD_UNION_MARK_LEN;
+const GUILD_UNION_LIST_ENTRY_LEN: usize = GUILD_UNION_ENTRY_NAME_OFFSET + MAX_GUILD_NAME_LENGTH;
 const PARTY_LIST_ENTRY_LEN: usize = 24;
 const PARTY_INFO_ENTRY_LEN: usize = 1;
 const LETTER_ALERT_RESERVED_LEN: usize = 30 - MAX_MAIL_DATE_LENGTH - MAX_MAIL_TIME_LENGTH - 1;
@@ -82,6 +85,15 @@ pub(crate) struct GuildRosterSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GuildUnionRosterSnapshot {
+    pub(crate) result: u8,
+    pub(crate) count: u8,
+    pub(crate) rival_count: u8,
+    pub(crate) union_count: u8,
+    pub(crate) unions: Vec<GuildUnionEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PartyListSnapshot {
     pub(crate) count: u8,
     pub(crate) members: Vec<PartyMemberInfo>,
@@ -103,6 +115,7 @@ pub(crate) enum BootstrapSignal {
     Movement(MovementUpdate),
     FriendRoster(FriendRosterSnapshot),
     GuildRoster(GuildRosterSnapshot),
+    GuildUnionRoster(GuildUnionRosterSnapshot),
     MailLetter(MailLetterEntry),
     MailLetterDelete(u32),
     PartyList(PartyListSnapshot),
@@ -180,6 +193,7 @@ pub struct BootstrapRuntime {
     last_error: Option<String>,
     friend_roster: Option<FriendRosterSnapshot>,
     guild_roster: Option<GuildRosterSnapshot>,
+    guild_union_roster: Option<GuildUnionRosterSnapshot>,
     gens_ranking_snapshot: Option<GensRankingInfo>,
     #[cfg(test)]
     friend_list_request_count: AtomicUsize,
@@ -213,6 +227,7 @@ impl BootstrapRuntime {
             last_error: None,
             friend_roster: None,
             guild_roster: None,
+            guild_union_roster: None,
             gens_ranking_snapshot: None,
             #[cfg(test)]
             friend_list_request_count: AtomicUsize::new(0),
@@ -262,9 +277,14 @@ impl BootstrapRuntime {
         self.guild_roster.clone()
     }
 
+    pub(crate) fn guild_union_roster_snapshot(&self) -> Option<GuildUnionRosterSnapshot> {
+        self.guild_union_roster.clone()
+    }
+
     pub(crate) fn clear_social_rosters(&mut self) {
         self.friend_roster = None;
         self.guild_roster = None;
+        self.guild_union_roster = None;
     }
 
     pub(crate) fn gens_ranking_snapshot(&self) -> Option<GensRankingInfo> {
@@ -285,6 +305,13 @@ impl BootstrapRuntime {
 
     pub(crate) fn set_guild_roster_snapshot(&mut self, roster: Option<GuildRosterSnapshot>) {
         self.guild_roster = roster;
+    }
+
+    pub(crate) fn set_guild_union_roster_snapshot(
+        &mut self,
+        roster: Option<GuildUnionRosterSnapshot>,
+    ) {
+        self.guild_union_roster = roster;
     }
 
     pub(crate) fn drain_signals(&self) -> Vec<BootstrapSignal> {
@@ -899,6 +926,10 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_guild_roster_snapshot(Some(roster));
             bootstrap.last_error = None;
         }
+        BootstrapSignal::GuildUnionRoster(roster) => {
+            bootstrap.set_guild_union_roster_snapshot(Some(roster));
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::MailLetter(letter) => {
             mail.upsert_letter(letter);
             bootstrap.last_error = None;
@@ -1266,6 +1297,10 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
             Ok(roster) => BootstrapSignal::GuildRoster(roster),
             Err(error) => BootstrapSignal::Error(error),
         }),
+        (0xE9, _) => Some(match decode_guild_union_roster(frame) {
+            Ok(roster) => BootstrapSignal::GuildUnionRoster(roster),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
         _ => None,
     }
 }
@@ -1346,6 +1381,58 @@ fn decode_guild_roster(frame: &PacketFrame<'_>) -> Result<GuildRosterSnapshot, S
         score,
         rival_guild_name: (!rival_guild_name.is_empty()).then_some(rival_guild_name),
         members,
+    })
+}
+
+fn decode_guild_union_roster(frame: &PacketFrame<'_>) -> Result<GuildUnionRosterSnapshot, String> {
+    let payload = frame.payload;
+    if payload.len() < 4 {
+        return Err("guild union list packet missing roster header".to_string());
+    }
+
+    let count = payload[0];
+    let result = payload[1];
+    let rival_count = payload[2];
+    let union_count = payload[3];
+    let entries = &payload[4..];
+
+    if result != 0x01 {
+        return Ok(GuildUnionRosterSnapshot {
+            result,
+            count,
+            rival_count,
+            union_count,
+            unions: Vec::new(),
+        });
+    }
+
+    let expected_len = usize::from(count) * GUILD_UNION_LIST_ENTRY_LEN;
+    if entries.len() < expected_len {
+        return Err(format!(
+            "guild union list packet truncated: expected {expected_len} roster bytes, found {}",
+            entries.len()
+        ));
+    }
+
+    let unions = entries
+        .chunks_exact(GUILD_UNION_LIST_ENTRY_LEN)
+        .take(usize::from(count))
+        .map(|entry| GuildUnionEntry {
+            member_count: u16::from(entry[0]),
+            name: decode_legacy_name(
+                &entry[GUILD_UNION_ENTRY_NAME_OFFSET
+                    ..GUILD_UNION_ENTRY_NAME_OFFSET + MAX_GUILD_NAME_LENGTH],
+            ),
+            selected: false,
+        })
+        .collect();
+
+    Ok(GuildUnionRosterSnapshot {
+        result,
+        count,
+        rival_count,
+        union_count,
+        unions,
     })
 }
 
@@ -1969,6 +2056,24 @@ mod tests {
         payload.push(64);
 
         encode_packet(0xC2, 0xD1, 0x52, &payload).unwrap()
+    }
+
+    fn guild_union_roster_packet() -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.push(2);
+        payload.push(1);
+        payload.push(1);
+        payload.push(2);
+
+        payload.push(14);
+        payload.extend_from_slice(&[0x12; super::GUILD_UNION_MARK_LEN]);
+        payload.extend_from_slice(&fixed_name::<8>(b"Alliance"));
+
+        payload.push(18);
+        payload.extend_from_slice(&[0x34; super::GUILD_UNION_MARK_LEN]);
+        payload.extend_from_slice(&fixed_name::<8>(b"Wardens"));
+
+        encode_packet(0xC2, 0xE9, 0x00, &payload).unwrap()
     }
 
     fn party_member_bytes(
@@ -3385,6 +3490,45 @@ mod tests {
     }
 
     #[test]
+    fn guild_union_roster_packets_classify_and_update_runtime_state() {
+        let packet = guild_union_roster_packet();
+        let frame = decode_packet(&packet).expect("guild union roster frame");
+        let roster = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::GuildUnionRoster(roster)) => roster,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(roster.result, 1);
+        assert_eq!(roster.count, 2);
+        assert_eq!(roster.rival_count, 1);
+        assert_eq!(roster.union_count, 2);
+        assert_eq!(roster.unions.len(), 2);
+        assert_eq!(roster.unions[0].name, "Alliance");
+        assert_eq!(roster.unions[0].member_count, 14);
+        assert_eq!(roster.unions[1].name, "Wardens");
+        assert_eq!(roster.unions[1].member_count, 18);
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::GuildUnionRoster(roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        let live_roster = bootstrap
+            .guild_union_roster_snapshot()
+            .expect("guild union roster snapshot");
+        assert_eq!(live_roster.unions[0].name, "Alliance");
+    }
+
+    #[test]
     fn party_roster_packets_classify_and_update_runtime_state() {
         let packet = party_roster_packet();
         let frame = decode_packet(&packet).expect("party roster frame");
@@ -3516,6 +3660,20 @@ mod tests {
             &mut client_runtime,
         );
         apply_bootstrap_signal(
+            BootstrapSignal::GuildUnionRoster(
+                match classify_bootstrap_packet(
+                    &decode_packet(&guild_union_roster_packet()).expect("guild union roster frame"),
+                ) {
+                    Some(BootstrapSignal::GuildUnionRoster(roster)) => roster,
+                    other => panic!("unexpected bootstrap signal: {other:?}"),
+                },
+            ),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        apply_bootstrap_signal(
             BootstrapSignal::PartyList(party_roster.clone()),
             &mut bootstrap,
             &mut session_state,
@@ -3532,6 +3690,7 @@ mod tests {
 
         assert!(bootstrap.friend_roster_snapshot().is_some());
         assert!(bootstrap.guild_roster_snapshot().is_some());
+        assert!(bootstrap.guild_union_roster_snapshot().is_some());
         assert_eq!(client_runtime.party().party_number(), 2);
 
         apply_bootstrap_signal(
@@ -3544,6 +3703,7 @@ mod tests {
 
         assert!(bootstrap.friend_roster_snapshot().is_none());
         assert!(bootstrap.guild_roster_snapshot().is_none());
+        assert!(bootstrap.guild_union_roster_snapshot().is_none());
         assert_eq!(client_runtime.party().party_number(), 0);
 
         apply_bootstrap_signal(
@@ -3555,6 +3715,20 @@ mod tests {
         );
         apply_bootstrap_signal(
             BootstrapSignal::GuildRoster(guild_roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        apply_bootstrap_signal(
+            BootstrapSignal::GuildUnionRoster(
+                match classify_bootstrap_packet(
+                    &decode_packet(&guild_union_roster_packet()).expect("guild union roster frame"),
+                ) {
+                    Some(BootstrapSignal::GuildUnionRoster(roster)) => roster,
+                    other => panic!("unexpected bootstrap signal: {other:?}"),
+                },
+            ),
             &mut bootstrap,
             &mut session_state,
             &mut ui_shell,
@@ -3585,6 +3759,7 @@ mod tests {
 
         assert!(bootstrap.friend_roster_snapshot().is_none());
         assert!(bootstrap.guild_roster_snapshot().is_none());
+        assert!(bootstrap.guild_union_roster_snapshot().is_none());
         assert_eq!(client_runtime.party().party_number(), 0);
     }
 

@@ -110,9 +110,11 @@ sessao de jogo completa.
   `friend-inbox` tambem pede uma vez a letter list live por ativacao logada
   antes de sobrepor as letters decodificadas no mesmo shell. Quando a sessao
   envia as respostas de listagem, o runtime decodifica friend/guild e
-  sobrepoe o roster/score/roles live no mesmo shell. A tela de membros da
-  guild tambem expõe as acoes Appoint, Disband e Fire, e a tela de union
-  tambem expõe as acoes break/banish do fluxo legado.
+  sobrepoe o roster/score/roles/unions live no mesmo shell. A tela de
+  membros da guild tambem expõe as acoes Appoint, Disband e Fire, e a tela
+  de union tambem expõe as acoes break/banish do fluxo legado e troca as
+  unions placeholder pelos allies decodificados quando o alliance list
+  chega.
 - O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
   friend no body ou em `friend=` para enviar os pacotes de add/delete pela
   sessao viva.
@@ -141,7 +143,8 @@ sessao de jogo completa.
   label do avatar local e o remetente do chat; sem nome selecionado, o
   cliente continua usando o placeholder `Player`.
 - Abrir `guild-union` com a sessao logada tambem envia uma vez a requisicao
-  de alliance list antes de manter a shell visivel.
+  de alliance list antes de manter a shell visivel e substitui as unions
+  placeholder quando a resposta chega.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma
   vez a requisicao de listagem correspondente antes de manter a shell
   visivel, `friend-inbox` tambem pede a letter list live uma vez por

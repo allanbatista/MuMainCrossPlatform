@@ -105,7 +105,7 @@ in the local config file instead of being typed every time.
   snapshot and can be driven from the local control HTTP smoke path with
   `guild`, `guild-summary`, `guild-members`, `guild-union`, `guild-no-guild`,
   and `guild-error`; when the live guild list arrives, the shell overlays the
-  decoded score, rival name, and member roles from the session.
+  decoded score, rival name, member roles, and union data from the session.
 - The guild control plane also accepts `guild-join` commands with a guild
   master player ID in the body or `master_id=` so QA can drive the existing
   guild join packet helper through the live session.
@@ -127,7 +127,8 @@ in the local config file instead of being typed every time.
   QA can drive the existing vault money transfer, item consume, and item move
   packet helpers through the live session.
 - Opening `guild-union` in a logged-in session also sends the alliance list
-  request once per activation before keeping the shell visible.
+  request once per activation before keeping the shell visible, and the live
+  alliance list replaces the placeholder unions when it arrives.
 - When the friend or guild route opens while logged in, the client now sends
   the matching live list request once per activation before keeping the shell
   on screen, and `friend-inbox` also requests the live letter list once per

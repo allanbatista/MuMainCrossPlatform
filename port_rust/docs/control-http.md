@@ -18,8 +18,8 @@ disponivel.
 ativacao logada, decodificando list/info/leave no `PartyManager` quando a
 resposta chega.
 Quando a sessao responde com as listas sociais, o runtime sobrepoe o
-roster/score/roles decodificados no shell correspondente ate o logout ou
-disconnect.
+roster/score/roles/unions decodificados no shell correspondente ate o logout
+ou disconnect.
 `character-create` abre a shell visivel de criacao, e `create-character`
 submete o nome informado para o worker de bootstrap.
 `inventory-use`, `inventory-equip` e `inventory-unequip` tambem espelham o
@@ -236,9 +236,9 @@ inventory, aceita `from_slot=` e `to_slot=` com os slots lineares do
 inventory e envia o pacote de movimento de item pela sessao viva; se o
 payload vier incompleto, a resposta sera `400`. Ao abrir `guild-union` com a
 sessao logada, o runtime tambem envia uma vez a requisicao de alliance list
-antes de manter a shell visivel. `exit` atualiza o estado para `exit`,
-encerra o servidor e solicita saida do runtime grafico. Os demais apenas
-atualizam o snapshot.
+antes de manter a shell visivel e substitui as unions placeholder quando a
+resposta chega. `exit` atualiza o estado para `exit`, encerra o servidor e
+solicita saida do runtime grafico. Os demais apenas atualizam o snapshot.
 
 O comando tambem pode vir no corpo da requisicao como `name=...` ou como texto
 puro.

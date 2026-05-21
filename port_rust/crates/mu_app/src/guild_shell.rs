@@ -8,7 +8,7 @@ use mu_ui::{
     GuildUnionEntry, UiRoute, UiShellState,
 };
 
-use crate::bootstrap_runtime::{BootstrapRuntime, GuildRosterSnapshot};
+use crate::bootstrap_runtime::{BootstrapRuntime, GuildRosterSnapshot, GuildUnionRosterSnapshot};
 use crate::{control_http::ControlHttpState, SessionPhase};
 
 const SCREEN_PADDING: f32 = 28.0;
@@ -38,6 +38,7 @@ struct GuildShellKey {
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
     live_roster: Option<GuildRosterSnapshot>,
+    live_union_roster: Option<GuildUnionRosterSnapshot>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -83,11 +84,13 @@ fn sync_guild_shell_system(
         .as_deref()
         .and_then(guild_screen_state_for_control_http);
     let live_roster = bootstrap.guild_roster_snapshot();
+    let live_union_roster = bootstrap.guild_union_roster_snapshot();
     let current = guild_shell_key(
         ui_shell.current(),
         session_state.phase(),
         control_http_state,
         live_roster.clone(),
+        live_union_roster.clone(),
     );
 
     let Some(key) = current else {
@@ -120,6 +123,7 @@ fn sync_guild_shell_system(
         key.phase,
         control_http_state,
         key.live_roster.clone(),
+        key.live_union_roster.clone(),
     ) else {
         return;
     };
@@ -145,6 +149,7 @@ fn guild_shell_key(
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
     live_roster: Option<GuildRosterSnapshot>,
+    live_union_roster: Option<GuildUnionRosterSnapshot>,
 ) -> Option<GuildShellKey> {
     if !guild_shell_visible(route, phase) {
         return None;
@@ -155,6 +160,7 @@ fn guild_shell_key(
         phase,
         control_http_state,
         live_roster,
+        live_union_roster,
     })
 }
 
@@ -205,6 +211,7 @@ fn guild_shell_view(
     phase: SessionPhase,
     control_http_state: Option<GuildScreenState>,
     live_roster: Option<GuildRosterSnapshot>,
+    live_union_roster: Option<GuildUnionRosterSnapshot>,
 ) -> Option<GuildShellView> {
     if !guild_shell_visible(route, phase) {
         return None;
@@ -213,6 +220,7 @@ fn guild_shell_view(
     let state = control_http_state.unwrap_or_else(|| guild_screen_state_for_phase(phase));
     let mut screen = guild_screen(state);
     apply_live_guild_roster(&mut screen, live_roster.as_ref());
+    apply_live_guild_union_roster(&mut screen, live_union_roster.as_ref());
 
     Some(GuildShellView {
         title: screen.title,
@@ -267,6 +275,38 @@ fn apply_live_guild_roster(screen: &mut GuildScreen, live_roster: Option<&GuildR
     screen.selected_member_name = selected_member.as_ref().map(|member| member.name.clone());
     screen.selected_member_role = selected_member.as_ref().map(|member| member.role);
     screen.selected_member_server = selected_member.and_then(|member| member.server);
+}
+
+fn apply_live_guild_union_roster(
+    screen: &mut GuildScreen,
+    live_union_roster: Option<&GuildUnionRosterSnapshot>,
+) {
+    let Some(live_union_roster) = live_union_roster else {
+        return;
+    };
+
+    if screen.state != GuildScreenState::Union {
+        return;
+    }
+
+    let selected_union_name = screen.selected_union_name.as_deref();
+    let mut unions = live_union_roster.unions.clone();
+
+    for union in &mut unions {
+        union.selected = selected_union_name == Some(union.name.as_str());
+    }
+
+    if !unions.iter().any(|union| union.selected) {
+        if let Some(first) = unions.first_mut() {
+            first.selected = true;
+        }
+    }
+
+    let selected_union = unions.iter().find(|union| union.selected).cloned();
+
+    screen.unions = unions;
+    screen.selected_union_name = selected_union.as_ref().map(|union| union.name.clone());
+    screen.selected_union_member_count = selected_union.map(|union| union.member_count);
 }
 
 fn guild_screen_state_for_phase(phase: SessionPhase) -> GuildScreenState {
@@ -552,11 +592,15 @@ mod tests {
         guild_screen_state_for_phase, guild_shell_key, guild_shell_view, guild_shell_visible,
         GuildShellPlugin, GuildShellRoot,
     };
-    use crate::bootstrap_runtime::{BootstrapRuntime, GuildRosterSnapshot};
+    use crate::bootstrap_runtime::{
+        BootstrapRuntime, GuildRosterSnapshot, GuildUnionRosterSnapshot,
+    };
     use crate::control_http::{ControlHttpState, ControlSnapshot};
     use crate::{AppState, SessionPhase, SessionState};
     use bevy::prelude::App;
-    use mu_ui::{GuildMemberEntry, GuildMemberRole, GuildScreenState, UiRoute, UiShellState};
+    use mu_ui::{
+        GuildMemberEntry, GuildMemberRole, GuildScreenState, GuildUnionEntry, UiRoute, UiShellState,
+    };
     use std::sync::{Arc, Mutex};
 
     fn guild_shell_root_count(world: &mut bevy::prelude::World) -> usize {
@@ -604,6 +648,27 @@ mod tests {
         }
     }
 
+    fn live_guild_union_roster() -> GuildUnionRosterSnapshot {
+        GuildUnionRosterSnapshot {
+            result: 1,
+            count: 2,
+            rival_count: 1,
+            union_count: 2,
+            unions: vec![
+                GuildUnionEntry {
+                    name: "Alliance".to_owned(),
+                    member_count: 14,
+                    selected: false,
+                },
+                GuildUnionEntry {
+                    name: "Wardens".to_owned(),
+                    member_count: 18,
+                    selected: false,
+                },
+            ],
+        }
+    }
+
     fn control_http_state(guild_screen_state: GuildScreenState) -> ControlHttpState {
         let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
         snapshot
@@ -637,12 +702,18 @@ mod tests {
             GuildScreenState::NoGuild
         );
 
-        let view = guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn, None, None)
+        let view = guild_shell_view(UiRoute::Guild, SessionPhase::LoggedIn, None, None, None)
             .expect("guild view");
         assert!(view.body.contains("state=summary"));
 
-        let view = guild_shell_view(UiRoute::Guild, SessionPhase::ReadyForLogin, None, None)
-            .expect("guild view");
+        let view = guild_shell_view(
+            UiRoute::Guild,
+            SessionPhase::ReadyForLogin,
+            None,
+            None,
+            None,
+        )
+        .expect("guild view");
         assert!(view.body.contains("state=no-guild"));
     }
 
@@ -652,6 +723,7 @@ mod tests {
             UiRoute::Guild,
             SessionPhase::LoggedIn,
             Some(GuildScreenState::Union),
+            None,
             None,
         )
         .expect("guild view");
@@ -666,6 +738,7 @@ mod tests {
             SessionPhase::LoggedIn,
             None,
             Some(live_guild_roster()),
+            None,
         )
         .expect("guild view");
 
@@ -686,10 +759,63 @@ mod tests {
         let mut roster_b = live_guild_roster();
         roster_b.members[1].role = GuildMemberRole::BattleMaster;
 
-        let key_a = guild_shell_key(UiRoute::Guild, SessionPhase::LoggedIn, None, roster_a)
+        let key_a = guild_shell_key(UiRoute::Guild, SessionPhase::LoggedIn, None, roster_a, None)
             .expect("guild key");
-        let key_b = guild_shell_key(UiRoute::Guild, SessionPhase::LoggedIn, None, Some(roster_b))
-            .expect("guild key");
+        let key_b = guild_shell_key(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            None,
+            Some(roster_b),
+            None,
+        )
+        .expect("guild key");
+
+        assert_ne!(key_a, key_b);
+    }
+
+    #[test]
+    fn guild_shell_overlays_live_union_roster_snapshot() {
+        let view = guild_shell_view(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            Some(GuildScreenState::Union),
+            None,
+            Some(live_guild_union_roster()),
+        )
+        .expect("guild view");
+
+        assert!(view.body.contains("state=union"));
+        assert!(view.body.contains("name=Alliance"));
+        assert!(view.body.contains("member_count=14"));
+        assert!(view.body.contains("name=Wardens"));
+        assert!(view.body.contains("member_count=18"));
+        assert!(view.body.contains("selected_union_name=Some(\"Alliance\")"));
+        assert!(view.body.contains("selected_union_member_count=Some(14)"));
+        assert!(!view.body.contains("Vanert Vanguard"));
+    }
+
+    #[test]
+    fn guild_shell_key_changes_with_live_union_roster_snapshot() {
+        let roster_a = Some(live_guild_union_roster());
+        let mut roster_b = live_guild_union_roster();
+        roster_b.unions[1].member_count = 19;
+
+        let key_a = guild_shell_key(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            Some(GuildScreenState::Union),
+            None,
+            roster_a,
+        )
+        .expect("guild key");
+        let key_b = guild_shell_key(
+            UiRoute::Guild,
+            SessionPhase::LoggedIn,
+            Some(GuildScreenState::Union),
+            None,
+            Some(roster_b),
+        )
+        .expect("guild key");
 
         assert_ne!(key_a, key_b);
     }
