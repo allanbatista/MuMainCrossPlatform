@@ -399,9 +399,10 @@ fn sync_control_http_snapshot_to_runtime(
             }
         }
         Some(ControlCommand::PartyInvite) => {
-            if let Some(target_player_id) = snapshot.party_target_player_id {
-                let _ = bootstrap.queue_party_invite_request(target_player_id);
-            }
+            apply_party_invite_command(&mut bootstrap, snapshot.party_target_player_id);
+        }
+        Some(ControlCommand::PartyLeave) => {
+            apply_party_leave_command(&mut bootstrap, snapshot.party_member_number);
         }
         Some(ControlCommand::LetterRead) => {
             if mail_letter_action == Some(ControlCommand::LetterRead) {
@@ -562,6 +563,18 @@ fn queue_skill_targeted_feedback(
 
     if let Some(audio_runtime) = audio_runtime {
         let _ = audio_runtime.queue_skill_audio(skill_id, presentation, false);
+    }
+}
+
+fn apply_party_invite_command(bootstrap: &mut BootstrapRuntime, target_player_id: Option<u16>) {
+    if let Some(target_player_id) = target_player_id {
+        let _ = bootstrap.queue_party_invite_request(target_player_id);
+    }
+}
+
+fn apply_party_leave_command(bootstrap: &mut BootstrapRuntime, member_number: Option<u8>) {
+    if let Some(member_number) = member_number {
+        let _ = bootstrap.queue_party_leave_request(member_number);
     }
 }
 
@@ -1044,6 +1057,47 @@ mod tests {
         {
             crate::bootstrap_runtime::BootstrapCommand::FriendDelete(friend_name) => {
                 assert_eq!(friend_name, "Astra");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn control_http_snapshot_queues_party_leave_submit() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        {
+            let mut snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+            snapshot.party_member_number = Some(0x07);
+            snapshot.apply_command(ControlCommand::PartyLeave);
+        }
+
+        let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        let mut app = App::new();
+        app.add_plugins(DuelPlugin);
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.init_resource::<SessionState>();
+        app.insert_resource(InventoryManager::new());
+        app.insert_resource(EquipmentManager::new());
+        app.insert_resource(VaultManager::new());
+        app.insert_resource(MailManager::new());
+        app.insert_resource(bootstrap);
+        app.insert_resource(ControlHttpState::new(snapshot));
+        app.add_systems(
+            bevy::prelude::PreUpdate,
+            sync_control_http_snapshot_to_runtime,
+        );
+        drop(signal_sender);
+        app.update();
+
+        match command_receiver
+            .try_recv()
+            .expect("party leave command missing")
+        {
+            crate::bootstrap_runtime::BootstrapCommand::PartyLeave(member_number) => {
+                assert_eq!(member_number, 0x07);
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }

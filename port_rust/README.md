@@ -66,7 +66,8 @@ sessao de jogo completa.
   `--control-http` para smoke local.
 - A rota `Party` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local; `party-invite` tambem enfileira o pacote
-  legado de invite quando voce passa o target player id.
+  legado de invite quando voce passa o target player id e `party-leave`
+  enfileira o pacote legado de leave/kick quando voce passa o member number.
 - A rota `Gate` agora mostra uma shell visual propria e pode ser aberta pelo
   `--control-http` para smoke local.
 - A rota `Quests` agora mostra uma shell visual propria e pode ser aberta

@@ -164,7 +164,9 @@ in the local config file instead of being typed every time.
   driven from the local control HTTP smoke path with `gens`.
 - The party route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path, and `party-invite` queues the
-  legacy invite packet when you pass a target player id.
+  legacy invite packet when you pass a target player id while
+  `party-leave` queues the legacy leave/kick packet for the chosen party row
+  number.
 - The gate route now opens a visible Bevy shell that can be driven from the
   runtime or the local control HTTP smoke path.
 - The quests route now opens a visible Bevy shell that can be driven from the

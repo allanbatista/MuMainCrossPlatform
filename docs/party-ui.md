@@ -31,3 +31,6 @@ Behavior notes:
   and hard error paths.
 - The empty-state `InviteMember` action maps to `POST /command?name=party-invite`
   and queues the legacy invite packet when you pass a target player id.
+- The info/list leave controls map to
+  `POST /command?name=party-leave&member_number=<u8>` and queue the legacy
+  party leave/kick packet for the chosen party row number.

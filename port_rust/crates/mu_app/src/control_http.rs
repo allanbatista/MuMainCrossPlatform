@@ -34,6 +34,7 @@ pub enum ControlCommand {
     Marketplace,
     Party,
     PartyInvite,
+    PartyLeave,
     Gate,
     Siege,
     SiegeInactive,
@@ -108,6 +109,7 @@ impl ControlCommand {
             Self::Marketplace => "marketplace",
             Self::Party => "party",
             Self::PartyInvite => "party-invite",
+            Self::PartyLeave => "party-leave",
             Self::Gate => "gate",
             Self::Siege => "siege",
             Self::SiegeInactive => "siege-inactive",
@@ -186,6 +188,7 @@ impl ControlCommand {
             "marketplace" | "player-shop" | "player_shop" => Some(Self::Marketplace),
             "party" => Some(Self::Party),
             "party-invite" | "party_invite" => Some(Self::PartyInvite),
+            "party-leave" | "party_leave" | "party-kick" | "party_kick" => Some(Self::PartyLeave),
             "gate" => Some(Self::Gate),
             "siege" => Some(Self::Siege),
             "siege-inactive" | "siege_inactive" => Some(Self::SiegeInactive),
@@ -283,6 +286,7 @@ pub struct ControlSnapshot {
     pub character_delete_security_code: Option<String>,
     pub guild_union_name: Option<String>,
     pub party_target_player_id: Option<u16>,
+    pub party_member_number: Option<u8>,
     pub siege_screen_state: Option<SiegeScreenState>,
     pub inventory_use_slot: Option<u8>,
     pub inventory_use_target: Option<u8>,
@@ -322,6 +326,7 @@ impl ControlSnapshot {
             character_delete_security_code: None,
             guild_union_name: None,
             party_target_player_id: None,
+            party_member_number: None,
             siege_screen_state: None,
             inventory_use_slot: None,
             inventory_use_target: None,
@@ -465,6 +470,12 @@ impl ControlSnapshot {
                 false
             }
             ControlCommand::PartyInvite => {
+                self.state = AppState::ReadyForLogin;
+                self.ui_route = UiRoute::Party;
+                self.session_phase = SessionPhase::LoggedIn;
+                false
+            }
+            ControlCommand::PartyLeave => {
                 self.state = AppState::ReadyForLogin;
                 self.ui_route = UiRoute::Party;
                 self.session_phase = SessionPhase::LoggedIn;
@@ -824,6 +835,10 @@ impl ControlSnapshot {
             .party_target_player_id
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let party_member_number = self
+            .party_member_number
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string());
         let inventory_use_slot = self
             .inventory_use_slot
             .map(|value| value.to_string())
@@ -870,7 +885,7 @@ impl ControlSnapshot {
             .unwrap_or_else(|| "null".to_string());
 
         format!(
-            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"character_delete_security_code\":{},\"guild_union_name\":{},\"party_target_player_id\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
+            "{{\"state\":\"{}\",\"ui_route\":\"{}\",\"session_phase\":\"{}\",\"last_command\":{},\"selected_character_name\":{},\"friend_name\":{},\"letter_id\":{},\"guild_master_player_id\":{},\"guild_player_name\":{},\"guild_create_name\":{},\"guild_create_emblem\":{},\"duel_player_id\":{},\"duel_player_name\":{},\"duel_channel_id\":{},\"skill_id\":{},\"skill_target_id\":{},\"guild_role\":{},\"guild_assignment_type\":{},\"guild_security_code\":{},\"character_delete_security_code\":{},\"guild_union_name\":{},\"party_target_player_id\":{},\"party_member_number\":{},\"inventory_use_slot\":{},\"inventory_use_target\":{},\"inventory_use_add_points\":{},\"inventory_equip_slot\":{},\"inventory_unequip_slot\":{},\"friend_screen_state\":{},\"guild_screen_state\":{},\"siege_screen_state\":{},\"vault_money_amount\":{},\"inventory_move_from_slot\":{},\"inventory_move_to_slot\":{},\"command_count\":{}}}",
             self.state.as_str(),
             self.ui_route.slug(),
             self.session_phase.as_str(),
@@ -893,6 +908,7 @@ impl ControlSnapshot {
             character_delete_security_code,
             guild_union_name,
             party_target_player_id,
+            party_member_number,
             inventory_use_slot,
             inventory_use_target,
             inventory_use_add_points,
@@ -1254,6 +1270,18 @@ fn route_request(
                     };
 
                     snapshot.party_target_player_id = Some(target_player_id);
+                    snapshot.apply_command(command)
+                }
+                ControlCommand::PartyLeave => {
+                    let Some(member_number) = party_leave_from_request(&request) else {
+                        return HttpResponse::json(
+                            400,
+                            "Bad Request",
+                            r#"{"error":"missing party leave payload"}"#.to_string(),
+                        );
+                    };
+
+                    snapshot.party_member_number = Some(member_number);
                     snapshot.apply_command(command)
                 }
                 ControlCommand::DuelStart => {
@@ -1636,6 +1664,29 @@ fn party_invite_from_request(request: &HttpRequest) -> Option<u16> {
         .ok()
 }
 
+fn party_leave_from_request(request: &HttpRequest) -> Option<u8> {
+    query_value(&request.query, "member_number")
+        .or_else(|| query_value(&request.query, "member-number"))
+        .or_else(|| query_value(&request.query, "player_index"))
+        .or_else(|| query_value(&request.query, "player-index"))
+        .or_else(|| query_value(&request.body, "member_number"))
+        .or_else(|| query_value(&request.body, "member-number"))
+        .or_else(|| query_value(&request.body, "player_index"))
+        .or_else(|| query_value(&request.body, "player-index"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let body = request.body.trim();
+            if body.is_empty() || body.contains('=') {
+                None
+            } else {
+                Some(body)
+            }
+        })?
+        .parse::<u8>()
+        .ok()
+}
+
 fn guild_create_from_request(request: &HttpRequest) -> Option<(String, [u8; 32])> {
     let guild_name = query_value(&request.query, "guild_name")
         .or_else(|| query_value(&request.query, "guild-name"))
@@ -2006,7 +2057,7 @@ mod tests {
 
         assert_eq!(
             snapshot.to_json(),
-            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"character_delete_security_code":null,"guild_union_name":null,"party_target_player_id":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
+            r#"{"state":"ready-for-login","ui_route":"login","session_phase":"ready-for-login","last_command":"ping","selected_character_name":null,"friend_name":null,"letter_id":null,"guild_master_player_id":null,"guild_player_name":null,"guild_create_name":null,"guild_create_emblem":null,"duel_player_id":null,"duel_player_name":null,"duel_channel_id":null,"skill_id":null,"skill_target_id":null,"guild_role":null,"guild_assignment_type":null,"guild_security_code":null,"character_delete_security_code":null,"guild_union_name":null,"party_target_player_id":null,"party_member_number":null,"inventory_use_slot":null,"inventory_use_target":null,"inventory_use_add_points":null,"inventory_equip_slot":null,"inventory_unequip_slot":null,"friend_screen_state":null,"guild_screen_state":null,"siege_screen_state":null,"vault_money_amount":null,"inventory_move_from_slot":null,"inventory_move_to_slot":null,"command_count":1}"#
         );
     }
 
@@ -2089,6 +2140,19 @@ mod tests {
             Some(ControlCommand::DeleteCharacter)
         );
         assert_eq!(ControlCommand::DeleteCharacter.as_str(), "delete-character");
+        assert_eq!(
+            ControlCommand::parse("party-leave"),
+            Some(ControlCommand::PartyLeave)
+        );
+        assert_eq!(
+            ControlCommand::parse("party_leave"),
+            Some(ControlCommand::PartyLeave)
+        );
+        assert_eq!(
+            ControlCommand::parse("party-kick"),
+            Some(ControlCommand::PartyLeave)
+        );
+        assert_eq!(ControlCommand::PartyLeave.as_str(), "party-leave");
         assert_eq!(
             ControlCommand::parse("guild-join"),
             Some(ControlCommand::GuildJoin)
@@ -2517,6 +2581,21 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_tracks_party_leave_payload() {
+        let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
+
+        snapshot.party_member_number = Some(0x07);
+        snapshot.apply_command(ControlCommand::PartyLeave);
+
+        assert_eq!(snapshot.ui_route, UiRoute::Party);
+        assert_eq!(snapshot.session_phase, SessionPhase::LoggedIn);
+        assert_eq!(snapshot.party_member_number, Some(0x07));
+
+        let body = snapshot.to_json();
+        assert!(body.contains(r#""party_member_number":7"#));
+    }
+
+    #[test]
     fn snapshot_tracks_inventory_item_action_payloads() {
         let mut snapshot = ControlSnapshot::new(AppState::ReadyForLogin);
 
@@ -2699,6 +2778,64 @@ mod tests {
         assert_eq!(snapshot.last_command, Some(ControlCommand::PartyInvite));
         assert_eq!(snapshot.party_target_player_id, Some(4660));
         assert_eq!(snapshot.ui_route, UiRoute::Party);
+    }
+
+    #[test]
+    fn control_http_route_accepts_party_leave_payload() {
+        let snapshot = Arc::new(Mutex::new(ControlSnapshot::new(AppState::ReadyForLogin)));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        let response = route_request(
+            HttpRequest {
+                method: "POST".to_string(),
+                path: "/command".to_string(),
+                query: "name=party-leave&member_number=7".to_string(),
+                body: String::new(),
+            },
+            &snapshot,
+            &shutdown,
+        );
+
+        assert_eq!(response.status, 200);
+        let snapshot = snapshot.lock().expect("control snapshot mutex poisoned");
+        assert_eq!(snapshot.last_command, Some(ControlCommand::PartyLeave));
+        assert_eq!(snapshot.party_member_number, Some(7));
+        assert_eq!(snapshot.ui_route, UiRoute::Party);
+    }
+
+    #[test]
+    fn party_leave_requests_require_a_payload() {
+        let handle = spawn("127.0.0.1:0".parse().unwrap(), AppState::ReadyForLogin).unwrap();
+        let address = handle.address();
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=party-leave HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing party leave payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=party-leave&member_number=bad HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("400 Bad Request"));
+        assert!(body.contains(r#""error":"missing party leave payload""#));
+
+        let (head, body) = send_request(
+            address,
+            "POST /command?name=party-leave&member_number=7 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        assert!(head.contains("200 OK"));
+        assert!(body.contains(r#""party_member_number":7"#));
+        assert!(body.contains(r#""ui_route":"party""#));
+
+        let (_, state_body) = send_request(
+            address,
+            "GET /state HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        );
+        assert!(state_body.contains(r#""party_member_number":7"#));
+        assert!(state_body.contains(r#""command_count":1"#));
     }
 
     #[test]

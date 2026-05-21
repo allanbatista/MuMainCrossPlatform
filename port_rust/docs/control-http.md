@@ -30,6 +30,9 @@ resposta chega.
 `party-invite` enfileira o pacote legacy de invite pela sessao viva e aceita
 o target player ID na query ou no corpo em `target_player_id=`; se o payload
 vier incompleto, a resposta sera `400`.
+`party-leave` enfileira o pacote legacy de leave/kick pela sessao viva e
+aceita o numero da party row em `member_number=` (ou `player_index=`); se o
+payload vier incompleto, a resposta sera `400`.
 Quando a sessao responde com as listas sociais, o runtime sobrepoe o
 roster/score/roles/unions decodificados no shell correspondente ate o logout
 ou disconnect.
@@ -132,6 +135,7 @@ Exemplo:
 - `trade`
 - `party`
 - `party-invite`
+- `party-leave`
 - `gate`
 - `siege`
 - `siege-inactive`
@@ -183,7 +187,8 @@ Exemplo:
 
 `server-select`, `options`, `character-select`, `character-create`,
 `create-character`, `loading`, `world`, `chat`, `npc`, `select-character`,
-`shop`, `game-shop`, `marketplace`, `trade`, `party`, `party-invite`, `gate`, `siege`, `siege-inactive`,
+`shop`, `game-shop`, `marketplace`, `trade`, `party`, `party-invite`,
+`party-leave`, `gate`, `siege`, `siege-inactive`,
 `siege-soldier`, `siege-commander`, `events`, `gens`, `friend`,
 `friend-roster`, `friend-inbox`, `friend-compose`, `friend-chat-rooms`,
 `letter-read`, `letter-delete`,
