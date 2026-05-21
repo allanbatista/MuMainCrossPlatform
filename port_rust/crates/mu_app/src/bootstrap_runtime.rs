@@ -14,7 +14,7 @@ use camino::Utf8Path;
 use mu_gameplay::{
     mail::{MAX_MAIL_DATE_LENGTH, MAX_MAIL_TIME_LENGTH},
     CharacterClass, MailLetterEntry, MailManager, MovementCommand, PartyMemberInfo,
-    MAX_GUILD_NAME_LENGTH, MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH,
+    MAX_GUILD_NAME_LENGTH, MAX_MAIL_RECIPIENT_LENGTH, MAX_MAIL_SUBJECT_LENGTH, MAX_USERNAME_SIZE,
 };
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
@@ -76,6 +76,12 @@ pub(crate) struct FriendRosterSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FriendStateChangeSnapshot {
+    pub(crate) name: String,
+    pub(crate) server: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GuildRosterSnapshot {
     pub(crate) result: u8,
     pub(crate) count: u8,
@@ -115,6 +121,7 @@ pub(crate) enum BootstrapSignal {
     CharacterCreateFailure,
     Movement(MovementUpdate),
     FriendRoster(FriendRosterSnapshot),
+    FriendStateChange(FriendStateChangeSnapshot),
     GuildRoster(GuildRosterSnapshot),
     GuildUnionRoster(GuildUnionRosterSnapshot),
     MailLetter(MailLetterEntry),
@@ -940,6 +947,10 @@ fn apply_bootstrap_signal_with_mail(
             bootstrap.set_friend_roster_snapshot(Some(roster));
             bootstrap.last_error = None;
         }
+        BootstrapSignal::FriendStateChange(snapshot) => {
+            apply_friend_state_change_snapshot(snapshot, bootstrap);
+            bootstrap.last_error = None;
+        }
         BootstrapSignal::GuildRoster(roster) => {
             bootstrap.set_guild_roster_snapshot(Some(roster));
             bootstrap.last_error = None;
@@ -1279,6 +1290,10 @@ fn classify_bootstrap_packet(frame: &PacketFrame<'_>) -> Option<BootstrapSignal>
             Ok(roster) => BootstrapSignal::FriendRoster(roster),
             Err(error) => BootstrapSignal::Error(error),
         }),
+        (0xC4, _) => Some(match decode_friend_state_change(frame) {
+            Ok(snapshot) => BootstrapSignal::FriendStateChange(snapshot),
+            Err(error) => BootstrapSignal::Error(error),
+        }),
         (0xC6, _) => Some(match decode_letter_alert(frame) {
             Ok(letter) => BootstrapSignal::MailLetter(letter),
             Err(error) => BootstrapSignal::Error(error),
@@ -1357,6 +1372,34 @@ fn decode_friend_roster(frame: &PacketFrame<'_>) -> Result<FriendRosterSnapshot,
         count,
         friends,
     })
+}
+
+fn decode_friend_state_change(
+    frame: &PacketFrame<'_>,
+) -> Result<FriendStateChangeSnapshot, String> {
+    let payload = frame.payload;
+    if payload.len() >= MAX_USERNAME_SIZE + 1 {
+        return Ok(FriendStateChangeSnapshot {
+            name: decode_legacy_name(&payload[..MAX_USERNAME_SIZE]),
+            server: payload[MAX_USERNAME_SIZE],
+        });
+    }
+
+    if payload.len() == MAX_USERNAME_SIZE {
+        let mut name = [0u8; MAX_USERNAME_SIZE];
+        name[0] = frame.subcode;
+        name[1..].copy_from_slice(&payload[..MAX_USERNAME_SIZE - 1]);
+        return Ok(FriendStateChangeSnapshot {
+            name: decode_legacy_name(&name),
+            server: payload[MAX_USERNAME_SIZE - 1],
+        });
+    }
+
+    Err(format!(
+        "friend state change packet truncated: expected at least {} data bytes, found {}",
+        MAX_USERNAME_SIZE + 1,
+        payload.len()
+    ))
 }
 
 fn decode_guild_roster(frame: &PacketFrame<'_>) -> Result<GuildRosterSnapshot, String> {
@@ -1575,6 +1618,32 @@ fn apply_party_info_snapshot(snapshot: PartyInfoSnapshot, client_runtime: &mut C
 
     for (index, step_hp) in snapshot.step_hp_values.into_iter().enumerate().take(limit) {
         party.member_mut(index).step_hp = step_hp.min(10);
+    }
+}
+
+fn apply_friend_state_change_snapshot(
+    snapshot: FriendStateChangeSnapshot,
+    bootstrap: &mut BootstrapRuntime,
+) {
+    let Some(roster) = bootstrap.friend_roster.as_mut() else {
+        return;
+    };
+
+    if snapshot.server == 0xFC {
+        for friend in &mut roster.friends {
+            friend.server = friend_entry_server(snapshot.server);
+            friend.presence = friend_presence_from_server(snapshot.server);
+        }
+        return;
+    }
+
+    if let Some(friend) = roster
+        .friends
+        .iter_mut()
+        .find(|friend| friend.name == snapshot.name)
+    {
+        friend.server = friend_entry_server(snapshot.server);
+        friend.presence = friend_presence_from_server(snapshot.server);
     }
 }
 
@@ -1959,7 +2028,7 @@ mod tests {
     use super::{
         apply_bootstrap_signal, apply_bootstrap_signal_with_mail, apply_character_select_input,
         classify_bootstrap_packet, finish_world_bootstrap, legacy_language_byte, BootstrapCommand,
-        BootstrapRuntime, BootstrapSignal, DEFAULT_CHARACTER_CREATE_CLASS,
+        BootstrapRuntime, BootstrapSignal, FriendRosterSnapshot, DEFAULT_CHARACTER_CREATE_CLASS,
     };
     use crate::bootstrap_runtime::spawn_bootstrap_worker;
     use crate::{ClientRuntime, GraphicalRuntimeConfig, SessionState};
@@ -1993,7 +2062,8 @@ mod tests {
     use mu_protocol::social::{friend_add_request, friend_delete, friend_list_request};
     use mu_protocol::vault::vault_move_money_request;
     use mu_ui::{
-        CharacterCreateScreenState, FriendPresence, GuildMemberRole, UiRoute, UiShellState,
+        CharacterCreateScreenState, FriendEntry, FriendPresence, GuildMemberRole, UiRoute,
+        UiShellState,
     };
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
@@ -2042,6 +2112,16 @@ mod tests {
         payload.push(0xFD);
 
         encode_packet(0xC2, 0xC0, 0x02, &payload).unwrap()
+    }
+
+    fn friend_state_change_packet(name: &[u8], server: u8) -> Vec<u8> {
+        let mut packet = Vec::with_capacity(3 + super::MAX_USERNAME_SIZE + 1);
+        packet.push(0xC1);
+        packet.push((4 + super::MAX_USERNAME_SIZE) as u8);
+        packet.push(0xC4);
+        packet.extend_from_slice(&fixed_name::<10>(name));
+        packet.push(server);
+        packet
     }
 
     fn mail_letter_alert_packet(
@@ -3536,6 +3616,96 @@ mod tests {
             .friend_roster_snapshot()
             .expect("friend roster snapshot");
         assert_eq!(live_roster.friends[0].name, "Astra");
+    }
+
+    #[test]
+    fn friend_state_change_packets_update_live_roster_presence() {
+        let packet = friend_state_change_packet(b"Astra", 0xFD);
+        let frame = decode_packet(&packet).expect("friend state change frame");
+        let change = match classify_bootstrap_packet(&frame) {
+            Some(BootstrapSignal::FriendStateChange(change)) => change,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        assert_eq!(change.name, "Astra");
+        assert_eq!(change.server, 0xFD);
+
+        let roster = FriendRosterSnapshot {
+            memo_count: 2,
+            max_memo: 8,
+            count: 2,
+            friends: vec![
+                FriendEntry {
+                    name: "Astra".to_string(),
+                    server: Some(3),
+                    presence: FriendPresence::Online,
+                    selected: true,
+                },
+                FriendEntry {
+                    name: "Blade".to_string(),
+                    server: None,
+                    presence: FriendPresence::Offline,
+                    selected: false,
+                },
+            ],
+        };
+
+        let (_signal_sender, signal_receiver) = std::sync::mpsc::channel();
+        let mut bootstrap = BootstrapRuntime::new(signal_receiver, None);
+        let mut session_state = SessionState::new();
+        let mut ui_shell = UiShellState::default();
+        let mut client_runtime = ClientRuntime::new();
+
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendRoster(roster),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendStateChange(change.clone()),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        let live_roster = bootstrap
+            .friend_roster_snapshot()
+            .expect("friend roster snapshot");
+        assert_eq!(live_roster.friends[0].name, "Astra");
+        assert_eq!(live_roster.friends[0].server, None);
+        assert_eq!(live_roster.friends[0].presence, FriendPresence::Busy);
+        assert_eq!(live_roster.friends[1].server, None);
+        assert_eq!(live_roster.friends[1].presence, FriendPresence::Offline);
+
+        let bulk_packet = friend_state_change_packet(b"Blade", 0xFC);
+        let bulk_frame = decode_packet(&bulk_packet).expect("friend state change frame");
+        let bulk_change = match classify_bootstrap_packet(&bulk_frame) {
+            Some(BootstrapSignal::FriendStateChange(change)) => change,
+            other => panic!("unexpected bootstrap signal: {other:?}"),
+        };
+
+        apply_bootstrap_signal(
+            BootstrapSignal::FriendStateChange(bulk_change),
+            &mut bootstrap,
+            &mut session_state,
+            &mut ui_shell,
+            &mut client_runtime,
+        );
+
+        let live_roster = bootstrap
+            .friend_roster_snapshot()
+            .expect("friend roster snapshot");
+        assert!(live_roster
+            .friends
+            .iter()
+            .all(|friend| friend.server.is_none()));
+        assert!(live_roster
+            .friends
+            .iter()
+            .all(|friend| friend.presence == FriendPresence::Offline));
     }
 
     #[test]

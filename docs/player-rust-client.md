@@ -97,7 +97,8 @@ in the local config file instead of being typed every time.
   `friend-chat-rooms`; `friend-inbox` queues one live `letter_list_request`
   per logged-in activation and overlays the decoded letter rows when they
   arrive, while the live friend list still overlays the roster and
-  server-state data from the session.
+  server-state data from the session, including friend presence changes from
+  `FS_FRIEND_STATE_CHANGE`.
 - The friend control plane also accepts `friend-add` and `friend-delete`
   commands with a friend name in the body or `friend=` so QA can drive the
   existing friend packet helpers through the live session.

@@ -16,6 +16,9 @@ The graphical Rust client now exposes both routes as visible Bevy shells.
 - `POST /command?name=friend` opens the friend shell in `mu_client` and
   mirrors the current `MailManager` snapshot, then overlays decoded friend
   roster data from the live session when it arrives.
+- Friend presence updates from the live session keep that roster synced too:
+  `FS_FRIEND_STATE_CHANGE` updates the matching friend row in place, and the
+  `0xFC` bulk case refreshes every friend to offline.
 - `POST /command?name=friend-roster`, `friend-inbox`, `friend-compose`, and
   `friend-chat-rooms` smoke the matching friend subviews. `friend-inbox`
   also queues one `letter_list_request` per logged-in inbox activation before

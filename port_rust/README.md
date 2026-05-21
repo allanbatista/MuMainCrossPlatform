@@ -110,11 +110,12 @@ sessao de jogo completa.
   `friend-inbox` tambem pede uma vez a letter list live por ativacao logada
   antes de sobrepor as letters decodificadas no mesmo shell. Quando a sessao
   envia as respostas de listagem, o runtime decodifica friend/guild e
-  sobrepoe o roster/score/roles/unions live no mesmo shell. A tela de
-  membros da guild tambem expõe as acoes Appoint, Disband e Fire, e a tela
-  de union tambem expõe as acoes break/banish do fluxo legado e troca as
-  unions placeholder pelos allies decodificados quando o alliance list
-  chega.
+  sobrepoe o roster/score/roles/unions live no mesmo shell. Friend presence
+  updates (`FS_FRIEND_STATE_CHANGE`) tambem atualizam o roster live, e o
+  caso `0xFC` rebaixa todos os amigos para offline. A tela de membros da
+  guild tambem expõe as acoes Appoint, Disband e Fire, e a tela de union
+  tambem expõe as acoes break/banish do fluxo legado e troca as unions
+  placeholder pelos allies decodificados quando o alliance list chega.
 - O control-http tambem aceita `friend-add` e `friend-delete` com o nome do
   friend no body ou em `friend=` para enviar os pacotes de add/delete pela
   sessao viva.
