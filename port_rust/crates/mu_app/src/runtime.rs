@@ -33,7 +33,7 @@ pub fn run(cli: Cli) -> ExitCode {
         }
     }
 
-    if !cli.headless && state == AppState::Boot {
+    if !cli.headless {
         if let Err(error) = write_line(state.as_str()) {
             logging::error(
                 logging::COMPONENT_RUNTIME,
@@ -44,7 +44,7 @@ pub fn run(cli: Cli) -> ExitCode {
             return ExitCode::from(1);
         }
 
-        return run_graphical(&cli, runtime);
+        return run_graphical(&cli, runtime, state);
     }
 
     if let Some(address) = cli.control_http {
@@ -101,7 +101,7 @@ pub fn run(cli: Cli) -> ExitCode {
 
         match state {
             AppState::AssetCheckFailed => ExitCode::from(3),
-            AppState::Boot => run_graphical(&cli, runtime),
+            AppState::Boot => run_graphical(&cli, runtime, state),
             AppState::ReadyForLogin | AppState::Exit => ExitCode::SUCCESS,
         }
     }

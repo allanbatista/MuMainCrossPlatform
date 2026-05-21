@@ -76,9 +76,24 @@ impl GraphicalRuntimeConfig {
     }
 }
 
-pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
+struct GraphicalInitialState {
+    state: AppState,
+}
+
+impl GraphicalInitialState {
+    fn new(state: AppState) -> Self {
+        Self { state }
+    }
+}
+
+pub fn run_graphical(
+    cli: &Cli,
+    client_runtime: ClientRuntime,
+    initial_state: AppState,
+) -> ExitCode {
     let control_http = match cli.control_http {
-        Some(address) => match control_http::spawn(address, AppState::ReadyForLogin) {
+        Some(address) => match control_http::spawn(address, initial_state) {
             Ok(handle) => Some(handle),
             Err(error) => {
                 eprintln!("control-http bind failed: {error}");
@@ -88,7 +103,7 @@ pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
         None => None,
     };
 
-    let mut app = build_graphical_app(cli, client_runtime);
+    let mut app = build_graphical_app(cli, client_runtime, initial_state);
     if let Some(handle) = control_http.as_ref() {
         println!("control-http listening on http://{}", handle.address());
         app.insert_resource(ControlHttpState::new(handle.shared_snapshot()));
@@ -104,10 +119,15 @@ pub fn run_graphical(cli: &Cli, client_runtime: ClientRuntime) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-pub fn build_graphical_app(cli: &Cli, client_runtime: ClientRuntime) -> App {
+pub fn build_graphical_app(
+    cli: &Cli,
+    client_runtime: ClientRuntime,
+    initial_state: AppState,
+) -> App {
     let config = GraphicalRuntimeConfig::from_cli(cli);
     let client_config = load_graphical_config(&config.config_path);
     let mut app = App::new();
+    app.insert_resource(GraphicalInitialState::new(initial_state));
     app.add_plugins(default_plugins(&config));
     configure_project_plugins(&mut app, config, client_config, client_runtime);
     app
@@ -188,7 +208,7 @@ fn configure_project_plugins(
                 save_graphical_config_on_exit_system.after(request_app_exit_when_control_http_exit),
             ),
         )
-        .add_systems(Startup, setup_boot_camera_and_login_route);
+        .add_systems(Startup, setup_boot_camera_and_initial_route);
 }
 
 fn load_graphical_config(path: impl AsRef<Utf8Path>) -> Config {
@@ -246,9 +266,20 @@ fn default_plugins(config: &GraphicalRuntimeConfig) -> impl PluginGroup {
         .disable::<LogPlugin>()
 }
 
-fn setup_boot_camera_and_login_route(mut commands: Commands, mut ui_shell: ResMut<UiShellState>) {
+fn initial_ui_route(state: AppState) -> UiRoute {
+    match state {
+        AppState::AssetCheckFailed | AppState::Exit => UiRoute::Error,
+        AppState::Boot | AppState::ReadyForLogin => UiRoute::Login,
+    }
+}
+
+fn setup_boot_camera_and_initial_route(
+    mut commands: Commands,
+    initial_state: Res<GraphicalInitialState>,
+    mut ui_shell: ResMut<UiShellState>,
+) {
     commands.spawn(Camera2d);
-    ui_shell.set_route(UiRoute::Login);
+    ui_shell.set_route(initial_ui_route(initial_state.state));
 }
 
 fn sync_control_http_snapshot_to_runtime(
@@ -607,8 +638,8 @@ fn request_app_exit_when_control_http_exit(
 mod tests {
     use super::{
         configure_project_plugins, request_app_exit_when_control_http_exit,
-        setup_boot_camera_and_login_route, sync_control_http_snapshot_to_runtime,
-        GraphicalRuntimeConfig,
+        setup_boot_camera_and_initial_route, sync_control_http_snapshot_to_runtime,
+        GraphicalInitialState, GraphicalRuntimeConfig,
     };
     use crate::bootstrap_runtime::BootstrapRuntime;
     use crate::control_http::{ControlCommand, ControlHttpState, ControlSnapshot};
@@ -658,11 +689,24 @@ mod tests {
     fn graphical_app_starts_on_the_login_route() {
         let mut app = App::new();
         app.add_plugins(mu_ui::UiShellPlugin);
-        app.add_systems(bevy::prelude::Startup, setup_boot_camera_and_login_route);
+        app.insert_resource(GraphicalInitialState::new(AppState::Boot));
+        app.add_systems(bevy::prelude::Startup, setup_boot_camera_and_initial_route);
         app.update();
 
         let ui_shell = app.world().resource::<UiShellState>();
         assert_eq!(ui_shell.current(), UiRoute::Login);
+    }
+
+    #[test]
+    fn graphical_app_starts_on_the_error_route_for_asset_failure() {
+        let mut app = App::new();
+        app.add_plugins(mu_ui::UiShellPlugin);
+        app.insert_resource(GraphicalInitialState::new(AppState::AssetCheckFailed));
+        app.add_systems(bevy::prelude::Startup, setup_boot_camera_and_initial_route);
+        app.update();
+
+        let ui_shell = app.world().resource::<UiShellState>();
+        assert_eq!(ui_shell.current(), UiRoute::Error);
     }
 
     #[test]

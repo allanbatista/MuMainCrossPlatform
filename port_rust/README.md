@@ -83,7 +83,8 @@ sessao de jogo completa.
   select e gameplay; detalhes em `docs/options-window.md`.
 - Quando `--asset-root` e informado, o root precisa conter
   `manifest.muasset.json` e os assets convertidos com hashes coerentes; falhas
-  de manifest ou checksum mantem o cliente em `asset-check-failed`.
+  de manifest ou checksum mantem o cliente em `asset-check-failed` e a
+  abertura grafica mostra a shell de erro em vez de encerrar de imediato.
 - Nenhum arquivo de implementacao legado deve ser movido para ca sem uma fase planejada.
 - A progressao de personagem e a curva de master level do port Rust estao
   documentadas em `docs/character-progression.md`.

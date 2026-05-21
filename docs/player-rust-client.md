@@ -19,8 +19,8 @@ in the local config file instead of being typed every time.
 - The client reads `config/client.toml` for local settings.
 - Video, audio, controls, network, and locale settings are persisted there.
 - Passwords, tokens, and raw session IDs are not saved.
-- If the asset root is missing or invalid, the client stops before login and
-  shows the asset validation failure state.
+- If the asset root is missing or invalid, the graphical client still opens
+  the asset validation failure state instead of exiting immediately.
 
 ## What Players See
 
