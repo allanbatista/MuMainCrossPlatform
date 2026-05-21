@@ -18,6 +18,7 @@ use mu_gameplay::{
 };
 use mu_network::{Session, SessionEvent};
 use mu_protocol::chat::public_chat_message;
+use mu_protocol::connect::server_list_request;
 use mu_protocol::events::gens_ranking_request;
 use mu_protocol::events::{
     decode_gens_ranking_info, duel_channel_join_request, duel_channel_quit_request,
@@ -1172,6 +1173,11 @@ fn spawn_bootstrap_worker(
                 }
             };
 
+            if let Err(error) = send_server_list_request(&mut session).await {
+                let _ = sender.send(BootstrapSignal::Error(error));
+                return;
+            }
+
             loop {
                 let previous_event = session.last_event();
                 tokio::select! {
@@ -1253,6 +1259,15 @@ fn legacy_language_byte(locale: &str) -> u8 {
         "es" | "spn" => 2,
         _ => 0,
     }
+}
+
+async fn send_server_list_request(session: &mut Session) -> Result<(), String> {
+    let packet = server_list_request().map_err(|error| error.to_string())?;
+
+    session
+        .send(packet)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 async fn send_character_list_request(
@@ -2039,6 +2054,7 @@ mod tests {
     use mu_network::Session;
     use mu_network::{ConnectionScript, FakeServer, FakeServerScenario};
     use mu_protocol::chat::public_chat_message;
+    use mu_protocol::connect::server_list_request as connect_server_list_request;
     use mu_protocol::decode_packet;
     use mu_protocol::encode_packet;
     use mu_protocol::events::{
@@ -4103,6 +4119,7 @@ mod tests {
             "127.0.0.1:0".parse().unwrap(),
             FakeServerScenario::single(
                 ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
@@ -4330,6 +4347,7 @@ mod tests {
             "127.0.0.1:0".parse().unwrap(),
             FakeServerScenario::single(
                 ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
@@ -4395,6 +4413,14 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buffer = [0u8; 4];
+
+            stream.read_exact(&mut buffer).await.unwrap();
+            assert_eq!(
+                buffer.as_slice(),
+                connect_server_list_request().unwrap().as_slice()
+            );
+
             let mut buffer = [0u8; 3];
 
             stream.read_exact(&mut buffer).await.unwrap();
@@ -4445,6 +4471,7 @@ mod tests {
             "127.0.0.1:0".parse().unwrap(),
             FakeServerScenario::single(
                 ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
@@ -4529,6 +4556,7 @@ mod tests {
             "127.0.0.1:0".parse().unwrap(),
             FakeServerScenario::single(
                 ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())
@@ -4643,6 +4671,7 @@ mod tests {
             "127.0.0.1:0".parse().unwrap(),
             FakeServerScenario::single(
                 ConnectionScript::new()
+                    .expect_packet(connect_server_list_request().unwrap())
                     .send_packet(server_list.clone())
                     .send_packet(login_success.clone())
                     .expect_packet(request_character_list(0).unwrap())

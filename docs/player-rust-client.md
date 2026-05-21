@@ -26,6 +26,9 @@ in the local config file instead of being typed every time.
 
 - A visible Bevy auth shell for login, server selection, and character
   selection while the client boots.
+- On connect, the bootstrap automatically sends the legacy server-list
+  request before waiting for the server-select response, so real servers can
+  drive the same handshake as the original client.
 - The shared Options window is also available as a visible Bevy route and
   through the local control HTTP API with `options`.
 - Character selection and the visible character-create route.
