@@ -5,9 +5,8 @@ status: OPEN
 # Friend Mail Inbox Live Data Progress
 
 Current state: the slice is complete. Live friend inbox letters now flow
-through the mail resource, request-on-open gate, bootstrap packet decode, and
-UI overlay. The only deferred note is the windowed e2e handoff, captured in
-`.memory/TODO.md`.
+through the mail resource, request-on-open gate, bootstrap packet decode, UI
+overlay, and the visible windowed e2e pass.
 
 ## Tasks
 
@@ -21,7 +20,7 @@ UI overlay. The only deferred note is the windowed e2e handoff, captured in
 | F2.S1.T2 | done | local | `port_rust/crates/mu_ui/src/friend.rs`, `port_rust/crates/mu_app/src/friend_shell.rs` | `port_rust/crates/mu_ui/src/friend.rs`, `port_rust/crates/mu_app/src/friend_shell.rs` | live inbox snapshot overlay | live mail rows render when loaded | none |
 | F2.S2.T1 | done | local | `port_rust/crates/mu_app/src/friend_shell.rs`, `port_rust/crates/mu_app/src/bootstrap_runtime.rs` | `port_rust/crates/mu_app/src/friend_shell.rs`, `port_rust/crates/mu_app/src/bootstrap_runtime.rs` | request-gating and overlay tests | request latch + live inbox coverage | none |
 | F2.S3.T1 | done | local | `docs/player-rust-client.md`, `port_rust/README.md`, `docs/friend-guild.md`, `port_rust/docs/control-http.md`, `.codexpotter/kb/README.md`, `.codexpotter/kb/friend-mail-inbox-live-data.md` | `docs/player-rust-client.md`, `port_rust/README.md`, `docs/friend-guild.md`, `port_rust/docs/control-http.md`, `.codexpotter/kb/README.md`, `.codexpotter/kb/friend-mail-inbox-live-data.md` | usage docs and KB index updates | request-on-open inbox behavior documented | none |
-| F3.S1.T1 | done | local | `.codexpotter/projects/2026/05/20/1/MAIN.md`, `.memory/TODO.md` | `.codexpotter/projects/2026/05/20/1/MAIN.md`, `.memory/TODO.md` | fmt/test/build/smoke logs and workflow sync | fmt/test/build/headless smoke passed; windowed e2e handoff deferred | windowed runtime unavailable in this session |
+| F3.S1.T1 | done | local | `.codexpotter/projects/2026/05/20/1/MAIN.md`, `.memory/TODO.md` | `.codexpotter/projects/2026/05/20/1/MAIN.md`, `.memory/TODO.md` | fmt/test/build/smoke logs and workflow sync | fmt/test/build/headless smoke passed; visible client run on `127.0.0.1:45415` showed the `MU Rust Client` window, `friend-inbox` set `ui_route=friend` and `friend_screen_state=inbox`, and `exit` closed the session | none |
 
 ## Files Touched
 
