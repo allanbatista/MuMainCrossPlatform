@@ -131,6 +131,9 @@ sessao de jogo completa.
   enfileira o `consume_item_request`, enquanto `inventory-equip` e
   `inventory-unequip` movem localmente entre inventory/equipment antes de
   reenfileirar o `item_move_request_extended`.
+- Quando o personagem entra no mundo, o nome selecionado no roster vira o
+  label do avatar local e o remetente do chat; sem nome selecionado, o
+  cliente continua usando o placeholder `Player`.
 - Abrir `guild-union` com a sessao logada tambem envia uma vez a requisicao
   de alliance list antes de manter a shell visivel.
 - Quando `friend` ou `guild` abre com a sessao logada, o runtime envia uma

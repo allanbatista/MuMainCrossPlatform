@@ -162,9 +162,16 @@ fn is_printable_char(chr: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{handle_chat_keyboard_input, ChatComposerState, CHAT_DRAFT_CHAR_LIMIT};
+    use crate::bootstrap_runtime::{BootstrapCommand, BootstrapRuntime};
+    use crate::ClientRuntime;
     use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
     use bevy::input::ButtonState;
     use bevy::prelude::Entity;
+    use camino::Utf8PathBuf;
+    use mu_assets::load_terrain_world_bundle;
+    use std::path::Path;
+    use std::sync::mpsc;
+    use tokio::sync::mpsc as tokio_mpsc;
 
     fn keyboard_input(key_code: KeyCode, logical_key: Key, text: Option<&str>) -> KeyboardInput {
         KeyboardInput {
@@ -231,5 +238,37 @@ mod tests {
         );
         assert_eq!(composer.draft(), "");
         assert_eq!(composer.last_status(), Some("Draft cleared."));
+    }
+
+    fn repo_world_root() -> Utf8PathBuf {
+        Utf8PathBuf::from_path_buf(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../port_rust/assets"),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn composer_uses_the_selected_character_as_chat_sender() {
+        let world_root = repo_world_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let mut client_runtime = ClientRuntime::new();
+        client_runtime.load_world_bundle_with_local_player_label(bundle, Some("Selene"));
+
+        let (_signal_sender, signal_receiver) = mpsc::channel();
+        let (command_sender, mut command_receiver) = tokio_mpsc::unbounded_channel();
+        let bootstrap = BootstrapRuntime::new(signal_receiver, Some(command_sender));
+
+        assert!(bootstrap.queue_chat_message_request(
+            client_runtime.local_player_label().unwrap_or("Player"),
+            "hello"
+        ));
+
+        match command_receiver.try_recv().expect("chat command missing") {
+            BootstrapCommand::Chat { sender, message } => {
+                assert_eq!(sender, "Selene");
+                assert_eq!(message, "hello");
+            }
+            other => panic!("unexpected bootstrap command: {other:?}"),
+        }
     }
 }

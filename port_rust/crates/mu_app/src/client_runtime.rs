@@ -152,9 +152,18 @@ impl ClientRuntime {
         asset_root: impl AsRef<Utf8Path>,
         world: u32,
     ) -> Result<(), ClientRuntimeError> {
+        self.load_world_from_assets_with_local_player_label(asset_root, world, None)
+    }
+
+    pub fn load_world_from_assets_with_local_player_label(
+        &mut self,
+        asset_root: impl AsRef<Utf8Path>,
+        world: u32,
+        local_player_label: Option<&str>,
+    ) -> Result<(), ClientRuntimeError> {
         match load_terrain_world_bundle(asset_root.as_ref(), world) {
             Ok(bundle) => {
-                self.load_world_bundle(bundle);
+                self.load_world_bundle_with_local_player_label(bundle, local_player_label);
                 Ok(())
             }
             Err(error) => {
@@ -166,9 +175,17 @@ impl ClientRuntime {
     }
 
     pub fn load_world_bundle(&mut self, bundle: TerrainWorldBundle) {
+        self.load_world_bundle_with_local_player_label(bundle, None);
+    }
+
+    pub fn load_world_bundle_with_local_player_label(
+        &mut self,
+        bundle: TerrainWorldBundle,
+        local_player_label: Option<&str>,
+    ) {
         self.clear_world_projection();
         self.world.set_bundle(bundle);
-        self.seed_local_player();
+        self.seed_local_player(local_player_label);
         self.sync_world_projection();
         self.world_error = None;
     }
@@ -226,13 +243,27 @@ impl ClientRuntime {
         )
     }
 
-    fn seed_local_player(&mut self) {
+    fn seed_local_player(&mut self, local_player_label: Option<&str>) {
         if self.world_entities.local_player().is_some() {
             return;
         }
 
-        self.world_entities
-            .set_local_player(default_local_player_spawn());
+        let local_player_label = local_player_label
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+            .unwrap_or(DEFAULT_LOCAL_PLAYER_LABEL);
+
+        self.world_entities.set_local_player(WorldPlayerSpawn::new(
+            WorldPlayerRole::Local,
+            local_player_label,
+            DEFAULT_LOCAL_PLAYER_KEY,
+            DEFAULT_LOCAL_PLAYER_MODEL,
+            WorldEntityPose::new(
+                DEFAULT_LOCAL_PLAYER_POSITION,
+                DEFAULT_LOCAL_PLAYER_ROTATION,
+                DEFAULT_LOCAL_PLAYER_SCALE,
+            ),
+        ));
     }
 }
 
@@ -265,20 +296,6 @@ impl ClientRuntime {
             .local_player()
             .map(|local_player| local_player.label.as_str())
     }
-}
-
-fn default_local_player_spawn() -> WorldPlayerSpawn {
-    WorldPlayerSpawn::new(
-        WorldPlayerRole::Local,
-        DEFAULT_LOCAL_PLAYER_LABEL,
-        DEFAULT_LOCAL_PLAYER_KEY,
-        DEFAULT_LOCAL_PLAYER_MODEL,
-        WorldEntityPose::new(
-            DEFAULT_LOCAL_PLAYER_POSITION,
-            DEFAULT_LOCAL_PLAYER_ROTATION,
-            DEFAULT_LOCAL_PLAYER_SCALE,
-        ),
-    )
 }
 
 #[cfg(test)]
@@ -473,6 +490,21 @@ mod tests {
         assert!(runtime.snapshot().contains("world=ready"));
         assert!(runtime.snapshot().contains("party_number=0"));
         assert!(runtime.snapshot().contains("render_entities=ready"));
+    }
+
+    #[test]
+    fn runtime_loads_world_bundle_with_selected_character_label() {
+        let world_root = repo_world_root();
+        let bundle = load_terrain_world_bundle(&world_root, 1).unwrap();
+        let mut runtime = ClientRuntime::new();
+
+        runtime.load_world_bundle_with_local_player_label(bundle, Some("Selene"));
+
+        assert_eq!(
+            runtime.world_entities().local_player().unwrap().label,
+            "Selene"
+        );
+        assert_eq!(runtime.local_player_label(), Some("Selene"));
     }
 
     #[test]

@@ -63,6 +63,9 @@ in the local config file instead of being typed every time.
   hotkey surfaces while the 3D scene is active.
 - The world shell now seeds a local avatar marker and keeps it synchronized
   with authoritative movement replies when the live session is active.
+- The selected character name is carried into the world shell, so the local
+  avatar label and chat sender use the chosen roster entry instead of the
+  generic `Player` placeholder when the name is available.
 - If the terrain texture slots, alpha data, or lightmap are unavailable, the
   visible surface falls back safely to the solid shell instead of breaking
   the world route.

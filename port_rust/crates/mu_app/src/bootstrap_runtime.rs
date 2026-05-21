@@ -152,6 +152,7 @@ pub struct BootstrapRuntime {
     pending_world_map: Option<u8>,
     character_list_ready: bool,
     character_select_index: Option<usize>,
+    selected_character_name: Option<String>,
     character_create_state: CharacterCreateScreenState,
     last_error: Option<String>,
     friend_roster: Option<FriendRosterSnapshot>,
@@ -182,6 +183,7 @@ impl BootstrapRuntime {
             pending_world_map: None,
             character_list_ready: false,
             character_select_index: None,
+            selected_character_name: None,
             character_create_state: CharacterCreateScreenState::Ready,
             last_error: None,
             friend_roster: None,
@@ -296,14 +298,24 @@ impl BootstrapRuntime {
             .is_ok()
     }
 
-    pub(crate) fn queue_character_select_request(&self, character_name: impl Into<String>) -> bool {
+    pub(crate) fn queue_character_select_request(
+        &mut self,
+        character_name: impl Into<String>,
+    ) -> bool {
         let Some(command_sender) = self.command_sender.as_ref() else {
             return false;
         };
 
-        command_sender
-            .send(BootstrapCommand::SelectCharacter(character_name.into()))
-            .is_ok()
+        let character_name = character_name.into();
+        let sent = command_sender
+            .send(BootstrapCommand::SelectCharacter(character_name.clone()))
+            .is_ok();
+
+        if sent {
+            self.selected_character_name = Some(character_name);
+        }
+
+        sent
     }
 
     pub(crate) fn queue_character_create_request(
@@ -588,6 +600,7 @@ impl BootstrapRuntime {
 
     pub(crate) fn clear_character_select_selection(&mut self) {
         self.character_select_index = None;
+        self.selected_character_name = None;
     }
 
     pub(crate) fn character_select_index(&self) -> Option<usize> {
@@ -694,7 +707,11 @@ pub(crate) fn finish_world_bootstrap(
         return;
     };
 
-    match client_runtime.load_world_from_assets(asset_root, u32::from(world_map)) {
+    match client_runtime.load_world_from_assets_with_local_player_label(
+        asset_root,
+        u32::from(world_map),
+        bootstrap.selected_character_name.as_deref(),
+    ) {
         Ok(()) => {
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::World);
@@ -781,7 +798,6 @@ fn apply_bootstrap_signal(
         BootstrapSignal::JoinMap(map) => {
             bootstrap.pending_world_map = Some(map);
             bootstrap.set_character_list_ready(false);
-            bootstrap.clear_character_select_selection();
             bootstrap.set_character_create_state(CharacterCreateScreenState::Ready);
             bootstrap.last_error = None;
             ui_shell.set_route(UiRoute::Loading);
@@ -3302,6 +3318,11 @@ mod tests {
             }
             other => panic!("unexpected bootstrap command: {other:?}"),
         }
+
+        assert_eq!(bootstrap.selected_character_name.as_deref(), Some("Selene"));
+
+        bootstrap.clear_character_select_selection();
+        assert!(bootstrap.selected_character_name.is_none());
     }
 
     #[tokio::test]
@@ -3362,6 +3383,12 @@ mod tests {
             Some("Astra"),
         )
         .await;
+
+        assert_eq!(client_runtime.local_player_label(), Some("Astra"));
+        assert!(client_runtime
+            .world_entities()
+            .snapshot()
+            .contains("label=Astra"));
 
         wait_for_session_disconnect(
             &mut bootstrap,
